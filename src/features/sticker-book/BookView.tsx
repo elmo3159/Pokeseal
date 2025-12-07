@@ -984,8 +984,11 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
       }}
     >
       {stickers.map((sticker) => {
-        // 編集中のシールも表示する（以前は非表示にしていたが、見えなくなる問題があったため変更）
-        const isEditing = sticker.id === editingStickerId
+        // 編集中のシールはFloatingEditStickerで表示するため、ここでは非表示
+        if (sticker.id === editingStickerId) {
+          return null
+        }
+        const isEditing = false // 編集中シールは上でフィルタ済み
 
         const stickerSize = 60 * sticker.scale
         const x = sticker.x * 100
@@ -1017,7 +1020,7 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
           <div
             key={sticker.id}
             data-sticker-id={sticker.id}
-            className={`absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105 ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2 rounded-lg' : ''}`}
+            className="absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105"
             style={{
               left: `${x}%`,
               top: `${y}%`,
