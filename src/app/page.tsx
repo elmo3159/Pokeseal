@@ -847,7 +847,6 @@ export default function Home() {
             userCurrency={userCurrency}
             onPullSingle={(bannerId) => handlePullGacha(bannerId, 1)}
             onPullMulti={(bannerId) => handlePullGacha(bannerId, 10)}
-            backgroundImage="/images/Gacha_Tab/Gacha_background.png"
           />
         )
 

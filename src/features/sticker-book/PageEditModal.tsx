@@ -3,19 +3,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { BookPage, PageTheme } from './BookView'
 import { PlacedSticker } from './StickerPlacement'
-
-// 表紙デザインの型定義
-export interface CoverDesign {
-  id: string
-  name: string
-  previewEmoji?: string // プレビュー用の絵文字
-  coverImage: string // 実際に使用される表紙画像
-  backCoverImage?: string // 裏表紙画像
-  category: 'basic' | 'cute' | 'cool' | 'seasonal'
-  isOwned: boolean
-  obtainMethod: 'default' | 'starpoints' | 'gacha' | 'event'
-  starPointCost?: number
-}
+import { CoverDesign } from '@/domain/theme'
 
 // ページテーマのプリセット
 export const pageThemePresets: { id: string; name: string; emoji: string; theme: PageTheme }[] = [

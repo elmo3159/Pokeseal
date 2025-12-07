@@ -19,6 +19,10 @@ export interface CoverDesign {
   // 背表紙の色（画像がないため色で表現）
   spineColor: string
   spineGradientTo?: string
+  // カテゴリ
+  category: 'basic' | 'cute' | 'cool' | 'seasonal'
+  // 所持しているかどうか
+  isOwned: boolean
   // 入手方法
   obtainMethod: 'default' | 'gacha' | 'event' | 'achievement' | 'starpoints'
   starPointCost?: number
@@ -438,6 +442,8 @@ export const defaultCoverDesigns: CoverDesign[] = [
     coverImage: '', // 空 = テーマカラーを使用
     backCoverImage: '',
     spineColor: '#8B5CF6',
+    category: 'basic',
+    isOwned: true,
     obtainMethod: 'default',
   },
   {
@@ -449,6 +455,8 @@ export const defaultCoverDesigns: CoverDesign[] = [
     backCoverImage: '/covers/もっちも/back.png',
     spineColor: '#E8D5B7',
     spineGradientTo: '#F5E6D3',
+    category: 'cute',
+    isOwned: true,
     obtainMethod: 'default',
   },
 ]

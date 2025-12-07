@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo, useEffect, TouchEvent as ReactTouchEvent } from 'react'
+import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import './book.css'
 import { StickerBookTheme, CoverDesign, getCoverDesignById } from '@/domain/theme'
@@ -104,6 +104,7 @@ function ScrollZone({
   heightPercent = 50,
   bookHeight,
 }: ScrollZoneProps) {
+  const zoneRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const startX = useRef<number>(0)
   const scrollStartLeft = useRef<number>(0)
@@ -163,39 +164,52 @@ function ScrollZone({
     return null
   }, [])
 
-  // タッチイベントハンドラ
-  const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0]
-    // シール要素へのタッチはシールに転送
-    const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
-    if (stickerElement) {
-      // シール要素にPointerEventを転送
-      const pointerEvent = new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        pointerId: touch.identifier,
-        pointerType: 'touch',
-        isPrimary: true,
-      })
-      stickerElement.dispatchEvent(pointerEvent)
-      return
+  // タッチイベントリスナーを { passive: false } で登録
+  // React の onTouchMove は passive がデフォルトのため、preventDefault() が効かない
+  useEffect(() => {
+    const zone = zoneRef.current
+    if (!zone) return
+
+    const touchStartHandler = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
+      if (stickerElement) {
+        const pointerEvent = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          pointerId: touch.identifier,
+          pointerType: 'touch',
+          isPrimary: true,
+        })
+        stickerElement.dispatchEvent(pointerEvent)
+        return
+      }
+      handleDragStart(touch.clientX)
     }
 
-    handleDragStart(touch.clientX)
-  }, [handleDragStart, getStickerElementAtPoint])
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (!isDragging.current) return
+      e.preventDefault()
+      const touch = e.touches[0]
+      handleDragMove(touch.clientX)
+    }
 
-  const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    if (!isDragging.current) return
-    e.preventDefault() // デフォルトのスクロールを防止
-    const touch = e.touches[0]
-    handleDragMove(touch.clientX)
-  }, [handleDragMove])
+    const touchEndHandler = () => {
+      handleDragEnd()
+    }
 
-  const handleTouchEnd = useCallback(() => {
-    handleDragEnd()
-  }, [handleDragEnd])
+    zone.addEventListener('touchstart', touchStartHandler, { passive: false })
+    zone.addEventListener('touchmove', touchMoveHandler, { passive: false })
+    zone.addEventListener('touchend', touchEndHandler)
+
+    return () => {
+      zone.removeEventListener('touchstart', touchStartHandler)
+      zone.removeEventListener('touchmove', touchMoveHandler)
+      zone.removeEventListener('touchend', touchEndHandler)
+    }
+  }, [getStickerElementAtPoint, handleDragStart, handleDragMove, handleDragEnd])
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -235,6 +249,7 @@ function ScrollZone({
 
   return (
     <div
+      ref={zoneRef}
       className="scroll-zone absolute left-0 right-0 top-0 z-20 cursor-grab active:cursor-grabbing"
       style={{
         height: `${zoneHeight}px`,
@@ -247,9 +262,6 @@ function ScrollZone({
         // デバッグ用: コメントを外すとゾーンが見える
         // background: 'rgba(0, 255, 0, 0.1)',
       }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
     />
   )
@@ -279,6 +291,7 @@ function SwipeZone({
   isOnCover,
   isOnBackCover
 }: SwipeZoneProps) {
+  const zoneRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
   const dragStartY = useRef(0)
@@ -393,41 +406,54 @@ function SwipeZone({
     }
   }, [bookRef, clientToBookLocal, bookWidth, getPageFlipRect])
 
-  // タッチイベントハンドラ
-  const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0]
-    // シール要素へのタッチはシールに転送
-    const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
-    if (stickerElement) {
-      // シール要素にPointerEventを転送
-      const pointerEvent = new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        pointerId: touch.identifier,
-        pointerType: 'touch',
-        isPrimary: true,
-      })
-      stickerElement.dispatchEvent(pointerEvent)
-      return
+  // タッチイベントリスナーを { passive: false } で登録
+  // React の onTouchMove は passive がデフォルトのため、preventDefault() が効かない
+  useEffect(() => {
+    const zone = zoneRef.current
+    if (!zone) return
+
+    const touchStartHandler = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
+      if (stickerElement) {
+        const pointerEvent = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          pointerId: touch.identifier,
+          pointerType: 'touch',
+          isPrimary: true,
+        })
+        stickerElement.dispatchEvent(pointerEvent)
+        return
+      }
+      e.preventDefault()
+      handleDragStart(touch.clientX, touch.clientY)
     }
 
-    e.preventDefault()
-    handleDragStart(touch.clientX, touch.clientY)
-  }, [handleDragStart, getStickerElementAtPoint])
+    const touchMoveHandler = (e: TouchEvent) => {
+      e.preventDefault()
+      const touch = e.touches[0]
+      handleDragMove(touch.clientX, touch.clientY)
+    }
 
-  const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const touch = e.touches[0]
-    handleDragMove(touch.clientX, touch.clientY)
-  }, [handleDragMove])
+    const touchEndHandler = (e: TouchEvent) => {
+      e.preventDefault()
+      const touch = e.changedTouches[0]
+      handleDragEnd(touch.clientX, touch.clientY)
+    }
 
-  const handleTouchEnd = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const touch = e.changedTouches[0]
-    handleDragEnd(touch.clientX, touch.clientY)
-  }, [handleDragEnd])
+    zone.addEventListener('touchstart', touchStartHandler, { passive: false })
+    zone.addEventListener('touchmove', touchMoveHandler, { passive: false })
+    zone.addEventListener('touchend', touchEndHandler, { passive: false })
+
+    return () => {
+      zone.removeEventListener('touchstart', touchStartHandler)
+      zone.removeEventListener('touchmove', touchMoveHandler)
+      zone.removeEventListener('touchend', touchEndHandler)
+    }
+  }, [getStickerElementAtPoint, handleDragStart, handleDragMove, handleDragEnd])
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -474,6 +500,7 @@ function SwipeZone({
 
   return (
     <div
+      ref={zoneRef}
       className="swipe-zone absolute left-0 right-0 bottom-0 z-30 flex items-end justify-center cursor-grab active:cursor-grabbing select-none"
       style={{
         height: `${zoneHeight}px`,
@@ -486,9 +513,6 @@ function SwipeZone({
         touchAction: 'none', // タッチスクロールを無効化
         pointerEvents: 'auto', // 明示的にポインターイベントを有効化
       }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
     >
       {/* スワイプヒント - 見開きページのみ表示 */}
