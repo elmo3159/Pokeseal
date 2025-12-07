@@ -124,16 +124,6 @@ function SwipeZone({
   // スワイプ開始のしきい値（この距離以上水平移動したらページめくり開始）
   const SWIPE_START_THRESHOLD = 20
 
-  // シール要素かどうかを判定（シールからのイベントは無視してシール側で処理させる）
-  const isStickerElement = useCallback((element: EventTarget | null): boolean => {
-    let el = element as HTMLElement | null
-    while (el) {
-      if (el.dataset?.stickerId) return true
-      el = el.parentElement
-    }
-    return false
-  }, [])
-
   // ブックコンテナの位置を取得
   const getBookRect = useCallback(() => {
     if (!bookContainerRef.current) return null
@@ -228,14 +218,12 @@ function SwipeZone({
   }, [bookRef, clientToBookLocal])
 
   // タッチイベントハンドラ
+  // シールは直接ポインターイベントを受け取るため、SwipeZoneはページめくりのみを処理
   const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    // シール要素からのイベントは無視（シール側の長押し処理を優先）
-    if (isStickerElement(e.target)) return
-
-    e.preventDefault()
     const touch = e.touches[0]
+    e.preventDefault()
     handleDragStart(touch.clientX, touch.clientY)
-  }, [handleDragStart, isStickerElement])
+  }, [handleDragStart])
 
   const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -250,10 +238,8 @@ function SwipeZone({
   }, [handleDragEnd])
 
   // マウスイベントハンドラ
+  // シールは直接ポインターイベントを受け取るため、SwipeZoneはページめくりのみを処理
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // シール要素からのイベントは無視（シール側の長押し処理を優先）
-    if (isStickerElement(e.target)) return
-
     e.preventDefault()
     handleDragStart(e.clientX, e.clientY)
 
@@ -270,7 +256,7 @@ function SwipeZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd, isStickerElement])
+  }, [handleDragStart, handleDragMove, handleDragEnd])
 
   // 高さをピクセルで計算
   const zoneHeight = bookHeight * (heightPercent / 100)
@@ -433,6 +419,8 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
           overflow: (isOnCover || isOnBackCover) ? 'hidden' : 'visible',
           // clipPath は表紙・裏表紙時のみ使用（3D変換との互換性のため）
           clipPath: (isOnCover || isOnBackCover) ? 'inset(0)' : 'none',
+          // シールへのポインターイベントを通過させる（子要素で必要に応じてautoに戻す）
+          pointerEvents: 'none',
         }}
       >
         {/* 本の背表紙（スパイン）- 閉じた状態でのみ表示 */}
@@ -526,6 +514,8 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
             zIndex: 10,
             position: 'relative',
             transition: 'width 0.3s ease-out',
+            // 親のpointer-events: noneを上書きしてSwipeZone等が機能するようにする
+            pointerEvents: 'auto',
           }}
         >
           {/* 内部コンテナ - 表紙表示時は右にシフトして表紙を中央に見せる */}
@@ -737,7 +727,7 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
     <div
       className="absolute inset-0 pointer-events-none"
       style={{
-        zIndex: 20, // ページコンテンツ(z-10)より上に配置してタッチイベントを受け取れるようにする
+        zIndex: 40, // SwipeZone(z-30)より上に配置してシールがポインターイベントを直接受け取れるようにする
         // 3D変形を継承してページと一緒にめくれるように
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
@@ -793,7 +783,12 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
               e.stopPropagation()
               e.preventDefault()
               // ポインターをキャプチャして、要素外に移動してもイベントを受け取れるようにする
-              ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+              // 合成イベント（SwipeZoneからのディスパッチ）の場合はsetPointerCaptureが失敗する可能性があるためtry-catch
+              try {
+                ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+              } catch {
+                // 合成イベントの場合は無視
+              }
               handlePointerDown(sticker)
             }}
             onPointerUp={(e) => {
