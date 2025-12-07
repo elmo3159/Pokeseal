@@ -836,7 +836,7 @@ export default function Home() {
                 />
               </button>
               {/* ページ番号表示 */}
-              <div className="relative w-20 h-10 flex items-center justify-center">
+              <div className="relative w-28 h-14 flex items-center justify-center">
                 <img
                   src="/images/Home_Button/Page_Number.png"
                   alt=""
@@ -844,7 +844,7 @@ export default function Home() {
                   draggable={false}
                 />
                 <span
-                  className="relative z-10 text-sm font-bold text-white"
+                  className="relative z-10 text-base font-bold text-white"
                   style={{
                     fontFamily: "'M PLUS Rounded 1c', sans-serif",
                     textShadow: '0 1px 2px rgba(0,0,0,0.3)',
