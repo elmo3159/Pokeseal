@@ -121,6 +121,9 @@ export function FloatingEditSticker({
     }
   }, [])
 
+  // 前回のスクロール位置を追跡（自動スクロール補正用）
+  const lastScrollLeftRef = useRef(0)
+
   // 画面端での自動スクロール処理
   const handleEdgeScroll = useCallback(() => {
     if (!isDraggingRef.current || !scrollContainerRef?.current) {
@@ -147,17 +150,78 @@ export function FloatingEditSticker({
     }
 
     if (scrollDelta !== 0) {
+      const prevScrollLeft = container.scrollLeft
       container.scrollLeft += scrollDelta
+      const actualScrollDelta = container.scrollLeft - prevScrollLeft
+
+      // スクロールが発生した場合、シールの画面位置とboundsを更新
+      if (actualScrollDelta !== 0) {
+        // シールの画面位置をスクロールに追従させる
+        setPosition(prev => ({
+          x: prev.x - actualScrollDelta,
+          y: prev.y
+        }))
+
+        // ドラッグオフセットも同様に調整
+        dragOffsetRef.current = {
+          x: dragOffsetRef.current.x - actualScrollDelta,
+          y: dragOffsetRef.current.y
+        }
+
+        // 本の領域を再計算
+        bookBoundsRef.current = getActualBookBounds()
+      }
     }
 
     // 次のフレームでも継続
     scrollAnimationRef.current = requestAnimationFrame(handleEdgeScroll)
-  }, [scrollContainerRef])
+  }, [scrollContainerRef, getActualBookBounds])
 
   // ドラッグ開始時の本の領域とタッチオフセットを保存
   const bookBoundsRef = useRef<{ left: number; top: number; width: number; height: number } | null>(null)
   // タッチ位置とシール左上角の差を保存（シンプルなオフセット計算）
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  // スクロールイベントハンドラー（手動スクロール時の補正用）
+  const handleContainerScroll = useCallback(() => {
+    if (!isDraggingRef.current || !scrollContainerRef?.current) return
+
+    const container = scrollContainerRef.current
+    const currentScrollLeft = container.scrollLeft
+    const scrollDelta = currentScrollLeft - lastScrollLeftRef.current
+
+    if (scrollDelta !== 0) {
+      lastScrollLeftRef.current = currentScrollLeft
+
+      // シールの画面位置をスクロールに追従させる
+      setPosition(prev => ({
+        x: prev.x - scrollDelta,
+        y: prev.y
+      }))
+
+      // ドラッグオフセットも同様に調整
+      dragOffsetRef.current = {
+        x: dragOffsetRef.current.x - scrollDelta,
+        y: dragOffsetRef.current.y
+      }
+
+      // 本の領域を再計算
+      bookBoundsRef.current = getActualBookBounds()
+    }
+  }, [scrollContainerRef, getActualBookBounds])
+
+  // ドラッグ中のスクロールイベントを監視
+  useEffect(() => {
+    if (!isDragging || !scrollContainerRef?.current) return
+
+    const container = scrollContainerRef.current
+    lastScrollLeftRef.current = container.scrollLeft
+
+    container.addEventListener('scroll', handleContainerScroll)
+    return () => {
+      container.removeEventListener('scroll', handleContainerScroll)
+    }
+  }, [isDragging, scrollContainerRef, handleContainerScroll])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.stopPropagation()
@@ -166,6 +230,11 @@ export function FloatingEditSticker({
     if (stickerRef.current) {
       // ドラッグ開始時に本の領域を保存
       bookBoundsRef.current = getActualBookBounds()
+
+      // ドラッグ開始時のスクロール位置を保存
+      if (scrollContainerRef?.current) {
+        lastScrollLeftRef.current = scrollContainerRef.current.scrollLeft
+      }
 
       // シンプルなオフセット計算：タッチ位置とシールの左上角の差
       // これにより、シールを掴んだ位置を維持してドラッグできる
@@ -179,7 +248,7 @@ export function FloatingEditSticker({
       activePointerId.current = e.pointerId
       stickerRef.current.setPointerCapture(e.pointerId)
     }
-  }, [getActualBookBounds, position])
+  }, [getActualBookBounds, position, scrollContainerRef])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return
