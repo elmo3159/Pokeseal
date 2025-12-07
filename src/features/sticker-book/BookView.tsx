@@ -1017,13 +1017,13 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
           <div
             key={sticker.id}
             data-sticker-id={sticker.id}
-            className={`absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105 ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2 rounded-lg animate-pulse' : ''}`}
+            className={`absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105 ${isEditing ? 'ring-2 ring-purple-500 ring-offset-2 rounded-lg' : ''}`}
             style={{
               left: `${x}%`,
               top: `${y}%`,
               width: `${stickerSize}px`,
               height: `${stickerSize}px`,
-              zIndex: isEditing ? 100 : (sticker.zIndex ?? 0), // 編集中は最前面
+              zIndex: sticker.zIndex ?? 0, // 実際のzIndexを使用（編集中も重なり順を表示するため）
               // 3D変形継承
               transformStyle: 'preserve-3d',
               backfaceVisibility: 'hidden',

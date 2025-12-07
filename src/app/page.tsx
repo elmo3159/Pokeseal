@@ -14,9 +14,9 @@ import {
   DraggableSticker,
   FloatingEditSticker,
   PageEditModal,
-  CoverDesign,
   CHARM_LIST
 } from '@/features/sticker-book'
+import { CoverDesign } from '@/domain/theme'
 import { CollectionView, CollectionSticker, StickerDetailModal } from '@/features/collection'
 import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker } from '@/features/gacha'
 import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage } from '@/features/trade'
@@ -506,6 +506,66 @@ export default function Home() {
     setEditingSticker(updated)
   }, [editingSticker])
 
+  // 編集中シールの重なり順情報を計算
+  const getLayerInfo = useCallback(() => {
+    if (!editingSticker) return { layerPosition: 1, totalLayers: 1, isAtFront: true, isAtBack: true }
+
+    // 同じページにあるシールだけをフィルタ
+    const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
+    const totalLayers = samePageStickers.length
+
+    if (totalLayers <= 1) {
+      return { layerPosition: 1, totalLayers: 1, isAtFront: true, isAtBack: true }
+    }
+
+    // zIndexでソートして順位を取得
+    const sortedByZIndex = [...samePageStickers].sort((a, b) => (a.zIndex ?? 1) - (b.zIndex ?? 1))
+    const position = sortedByZIndex.findIndex(s => s.id === editingSticker.id) + 1
+    const maxZIndex = Math.max(...samePageStickers.map(s => s.zIndex ?? 1))
+    const minZIndex = Math.min(...samePageStickers.map(s => s.zIndex ?? 1))
+
+    return {
+      layerPosition: position,
+      totalLayers,
+      isAtFront: (editingSticker.zIndex ?? 1) >= maxZIndex,
+      isAtBack: (editingSticker.zIndex ?? 1) <= minZIndex,
+    }
+  }, [editingSticker, placedStickers])
+
+  // Handle bring to front (前面へ)
+  const handleBringToFront = useCallback(() => {
+    if (!editingSticker) return
+
+    // 同じページのシールの最大zIndexを取得
+    const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
+    const maxZIndex = Math.max(...samePageStickers.map(s => s.zIndex ?? 1))
+
+    // 既に最前面なら何もしない
+    if ((editingSticker.zIndex ?? 1) >= maxZIndex) return
+
+    const newZIndex = maxZIndex + 1
+    const updated = { ...editingSticker, zIndex: newZIndex }
+    setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
+    setEditingSticker(updated)
+  }, [editingSticker, placedStickers])
+
+  // Handle send to back (後面へ)
+  const handleSendToBack = useCallback(() => {
+    if (!editingSticker) return
+
+    // 同じページのシールの最小zIndexを取得
+    const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
+    const minZIndex = Math.min(...samePageStickers.map(s => s.zIndex ?? 1))
+
+    // 既に最後面なら何もしない
+    if ((editingSticker.zIndex ?? 1) <= minZIndex) return
+
+    const newZIndex = Math.max(0, minZIndex - 1)
+    const updated = { ...editingSticker, zIndex: newZIndex }
+    setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
+    setEditingSticker(updated)
+  }, [editingSticker, placedStickers])
+
   // Handle sticker update (完全な更新 - 編集モード終了)
   const handleUpdateSticker = useCallback((updated: PlacedSticker) => {
     setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
@@ -726,14 +786,23 @@ export default function Home() {
                   onPageSideChange={handleEditingPageSideChange}
                 />
               )}
-              {editingSticker && (
-                <EditControls
-                  sticker={editingSticker}
-                  onRotate={handleEditingRotate}
-                  onRemove={() => handleDeleteSticker(editingSticker.id)}
-                  onClose={() => setEditingSticker(null)}
-                />
-              )}
+              {editingSticker && (() => {
+                const layerInfo = getLayerInfo()
+                return (
+                  <EditControls
+                    sticker={editingSticker}
+                    onRotate={handleEditingRotate}
+                    onRemove={() => handleDeleteSticker(editingSticker.id)}
+                    onClose={() => setEditingSticker(null)}
+                    onBringToFront={handleBringToFront}
+                    onSendToBack={handleSendToBack}
+                    layerPosition={layerInfo.layerPosition}
+                    totalLayers={layerInfo.totalLayers}
+                    isAtFront={layerInfo.isAtFront}
+                    isAtBack={layerInfo.isAtBack}
+                  />
+                )
+              })()}
             </div>
             {/* StickerTray - シール操作中は非表示 */}
             {!shouldHideUI && (

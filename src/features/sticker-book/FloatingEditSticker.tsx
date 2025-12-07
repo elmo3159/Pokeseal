@@ -333,10 +333,12 @@ export function FloatingEditSticker({
         height: stickerSize,
         transform: `rotate(${sticker.rotation}deg) ${isDragging ? 'scale(1.1)' : ''}`,
         touchAction: 'none',
+        // ドラッグ中でない時は半透明にして、ページ上の実際のz-orderが見えるようにする
+        opacity: isDragging ? 1 : 0.4,
         filter: isDragging
           ? 'drop-shadow(0 8px 16px rgba(139, 92, 246, 0.4))'
           : 'drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3))',
-        transition: isDragging ? 'none' : 'filter 0.15s ease-out',
+        transition: isDragging ? 'none' : 'opacity 0.2s ease-out, filter 0.15s ease-out',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

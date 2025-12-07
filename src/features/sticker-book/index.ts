@@ -15,4 +15,4 @@ export type { PlacedSticker, PlacementMode } from './StickerPlacement'
 export { DraggableSticker } from './DraggableSticker'
 export { FloatingEditSticker } from './FloatingEditSticker'
 export { PageEditModal, pageThemePresets } from './PageEditModal'
-export type { CoverDesign } from './PageEditModal'
+// CoverDesign は @/domain/theme からエクスポートされています
