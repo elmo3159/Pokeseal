@@ -819,8 +819,8 @@ export default function Home() {
             )}
             {/* Page toolbar - 画像ボタン (StickerTrayの上に固定配置) - シール操作中・モーダル表示中は非表示 */}
             {!shouldHideUI && (
-            <div className="fixed bottom-[248px] left-0 right-0 z-[200] flex justify-center items-center gap-2 py-2 pointer-events-none">
-              <div className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg pointer-events-auto">
+            <div className="fixed bottom-[230px] left-0 right-0 z-[200] flex justify-center items-center gap-2 py-0 pointer-events-none">
+              <div className="flex items-center gap-2 px-4 py-0 bg-white/80 backdrop-blur-md rounded-full shadow-lg pointer-events-auto">
               {/* 左ページボタン */}
               <button
                 onClick={() => bookRef.current?.flipPrev()}
@@ -850,7 +850,32 @@ export default function Home() {
                     textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                   }}
                 >
-                  {currentPage + 1} / {pages.length}
+                  {(() => {
+                    const currentPageData = pages[currentPage]
+                    // 表紙の場合
+                    if (currentPageData?.type === 'cover') {
+                      return 'ひょうし'
+                    }
+                    // 裏表紙の場合
+                    if (currentPageData?.type === 'back-cover') {
+                      return 'うら'
+                    }
+                    // 通常ページの場合：表紙と裏表紙を除いたページ番号を計算
+                    const regularPages = pages.filter(p => p.type === 'page')
+                    const pageIndex = regularPages.findIndex(p => p.id === currentPageData?.id)
+                    const totalRegularPages = regularPages.length
+                    if (pageIndex >= 0) {
+                      // 見開きモードの場合、左右のページ番号を表示
+                      if (isSpreadView && currentPageData?.side === 'left') {
+                        const rightPageNum = pageIndex + 2
+                        if (rightPageNum <= totalRegularPages) {
+                          return `${pageIndex + 1}-${rightPageNum}`
+                        }
+                      }
+                      return `${pageIndex + 1}/${totalRegularPages}`
+                    }
+                    return ''
+                  })()}
                 </span>
               </div>
               {/* 右ページボタン */}
