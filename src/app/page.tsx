@@ -111,8 +111,8 @@ const demoPlacedStickers: PlacedSticker[] = [
   },
 ]
 
-// Demo book pages
-const demoPages: BookPage[] = [
+// Demo book pages (initial value)
+const initialDemoPages: BookPage[] = [
   { id: 'cover', type: 'cover', side: 'right' },
   { id: 'page-1', type: 'page', side: 'left' },
   { id: 'page-2', type: 'page', side: 'right' },
@@ -380,6 +380,7 @@ export default function Home() {
   const bookContainerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentPage, setCurrentPage] = useState(0)
+  const [pages, setPages] = useState<BookPage[]>(initialDemoPages)
   const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>(demoPlacedStickers)
   const [selectedCharm, setSelectedCharm] = useState<CharmData>(CHARM_LIST[0])
   const [isSpreadView, setIsSpreadView] = useState(true)
@@ -457,10 +458,10 @@ export default function Home() {
   // Handle sticker edit
   const handleEditSticker = useCallback((sticker: PlacedSticker) => {
     // シールがあるページのsideを判定
-    const page = demoPages.find(p => p.id === sticker.pageId)
+    const page = pages.find(p => p.id === sticker.pageId)
     setEditingStickerPageSide(page?.side || 'left')
     setEditingSticker(sticker)
-  }, [demoPages])
+  }, [pages])
 
   // Handle sticker update (位置のリアルタイム更新用 - 編集モードは継続)
   const handleEditingDrag = useCallback((x: number, y: number) => {
@@ -477,18 +478,18 @@ export default function Home() {
     setEditingStickerPageSide(newSide)
 
     // ページを跨いだ場合、pageIdを更新
-    const currentPageData = demoPages[currentPage]
+    const currentPageData = pages[currentPage]
     let newPageId: string
 
     if (currentPageData?.side === 'left') {
       // 現在左ページを表示中: newSideがrightなら次のページに移動
       newPageId = newSide === 'right'
-        ? (demoPages[currentPage + 1]?.id || currentPageData.id)
+        ? (pages[currentPage + 1]?.id || currentPageData.id)
         : currentPageData.id
     } else {
       // 現在右ページを表示中: newSideがleftなら前のページに移動
       newPageId = newSide === 'left'
-        ? (demoPages[currentPage - 1]?.id || currentPageData?.id || '')
+        ? (pages[currentPage - 1]?.id || currentPageData?.id || '')
         : (currentPageData?.id || '')
     }
 
@@ -496,7 +497,7 @@ export default function Home() {
       s.id === editingSticker.id ? { ...s, pageId: newPageId } : s
     ))
     setEditingSticker(prev => prev ? { ...prev, pageId: newPageId } : null)
-  }, [editingSticker, currentPage, demoPages])
+  }, [editingSticker, currentPage, pages])
 
   // Handle sticker rotation (回転のみ更新 - 編集モード継続)
   const handleEditingRotate = useCallback((rotation: number) => {
@@ -679,7 +680,7 @@ export default function Home() {
     switch (activeTab) {
       case 'home':
         // 現在のページが裏表紙かどうかを判定
-        const isBackCover = demoPages[currentPage]?.type === 'back-cover'
+        const isBackCover = pages[currentPage]?.type === 'back-cover'
         // シール操作中かどうか（貼り付け中または編集中）
         const isStickerOperating = (selectedSticker && isDragging) || editingSticker
         // UIを隠すべきかどうか（モーダル表示中またはシール操作中）
@@ -707,7 +708,7 @@ export default function Home() {
               >
                 <BookView
                   ref={bookRef}
-                  pages={demoPages}
+                  pages={pages}
                   placedStickers={placedStickers}
                   onPageChange={handlePageTurn}
                   onStickerLongPress={handleEditSticker}
@@ -721,7 +722,7 @@ export default function Home() {
                   sticker={selectedSticker}
                   onPlace={(x, y, rotation) => {
                     // 見開きモードかつ表紙・裏表紙でない場合、左右ページを判定
-                    const currentPageData = demoPages[currentPage]
+                    const currentPageData = pages[currentPage]
                     const isOnCoverOrBack = currentPageData?.type === 'cover' || currentPageData?.type === 'back-cover'
 
                     if (isSpreadView && !isOnCoverOrBack) {
@@ -744,13 +745,13 @@ export default function Home() {
                       // ドロップ位置に基づいて配置先ページを決定
                       if (x >= 0.5) {
                         // 右ページに配置
-                        const rightPageId = demoPages[rightPageIndex]?.id || currentPageData?.id || ''
+                        const rightPageId = pages[rightPageIndex]?.id || currentPageData?.id || ''
                         // x座標を0-1に正規化（0.5-1 → 0-1）
                         const adjustedX = (x - 0.5) * 2
                         handlePlaceSticker(rightPageId, adjustedX, y, rotation)
                       } else {
                         // 左ページに配置
-                        const leftPageId = demoPages[leftPageIndex]?.id || currentPageData?.id || ''
+                        const leftPageId = pages[leftPageIndex]?.id || currentPageData?.id || ''
                         // x座標を0-1に正規化（0-0.5 → 0-1）
                         const adjustedX = x * 2
                         handlePlaceSticker(leftPageId, adjustedX, y, rotation)
@@ -849,13 +850,13 @@ export default function Home() {
                     textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                   }}
                 >
-                  {currentPage + 1} / {demoPages.length}
+                  {currentPage + 1} / {pages.length}
                 </span>
               </div>
               {/* 右ページボタン */}
               <button
                 onClick={() => bookRef.current?.flipNext()}
-                disabled={currentPage >= demoPages.length - 1}
+                disabled={currentPage >= pages.length - 1}
                 className="relative w-11 h-11 active:scale-95 transition-transform disabled:opacity-40"
                 aria-label="次のページ"
               >
@@ -990,7 +991,7 @@ export default function Home() {
       {isPageEditModalOpen && (
         <PageEditModal
           isOpen={isPageEditModalOpen}
-          pages={demoPages}
+          pages={pages}
           placedStickers={placedStickers}
           currentCoverId={coverDesignId}
           availableCovers={defaultCoverDesigns}
@@ -1002,7 +1003,7 @@ export default function Home() {
             isOwned: true,
           }))}
           onClose={() => setIsPageEditModalOpen(false)}
-          onPagesChange={(newPages) => console.log('Pages changed:', newPages)}
+          onPagesChange={setPages}
           onCoverChange={(coverId) => setCoverDesignId(coverId)}
           onCharmChange={(charmId) => {
             const charm = CHARM_LIST.find(c => c.id === charmId)
@@ -1098,7 +1099,7 @@ export default function Home() {
       {isCreatePostModalOpen && (
         <CreatePostModal
           isOpen={isCreatePostModalOpen}
-          pages={demoPages.filter(p => p.type === 'page').map((p, index) => ({
+          pages={pages.filter(p => p.type === 'page').map((p, index) => ({
             id: p.id,
             pageNumber: index + 1,
             thumbnailUrl: '/images/demo-page.png',

@@ -91,14 +91,29 @@ const PageCard: React.FC<{
       onTouchEnd={onTouchEnd}
       className={`
         bg-white rounded-2xl p-3 shadow-sm border-2 transition-all duration-200 cursor-grab active:cursor-grabbing
-        ${isDragging ? 'opacity-50 scale-95 border-purple-400' : ''}
-        ${isDragOver ? 'border-purple-500 bg-purple-50 scale-102' : 'border-purple-100'}
+        ${isDragging
+          ? 'opacity-70 scale-105 border-purple-500 shadow-xl ring-4 ring-purple-300 ring-opacity-50 z-50 rotate-2'
+          : ''}
+        ${isDragOver && !isDragging
+          ? 'border-purple-500 bg-purple-100 scale-[1.02] border-dashed'
+          : 'border-purple-100'}
       `}
+      style={{
+        // ドラッグ中はより目立つシャドウを追加
+        ...(isDragging ? {
+          boxShadow: '0 20px 40px rgba(139, 92, 246, 0.4), 0 8px 16px rgba(0, 0, 0, 0.15)',
+        } : {}),
+      }}
     >
       <div className="flex items-center gap-3">
         {/* ドラッグハンドル */}
-        <div className="flex flex-col items-center justify-center text-purple-300 select-none">
-          <span className="text-lg">⋮⋮</span>
+        <div className={`
+          flex flex-col items-center justify-center select-none px-1 py-2 rounded-lg
+          ${isDragging ? 'text-purple-600 bg-purple-200' : 'text-purple-400 hover:text-purple-600 hover:bg-purple-50'}
+          transition-colors duration-150
+        `}>
+          <span className="text-xl font-bold">⋮⋮</span>
+          <span className="text-[10px] whitespace-nowrap">ドラッグ</span>
         </div>
 
         {/* 見開きプレビュー - 左右ページとシール */}
