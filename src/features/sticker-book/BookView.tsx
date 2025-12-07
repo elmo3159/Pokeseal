@@ -124,6 +124,16 @@ function SwipeZone({
   // スワイプ開始のしきい値（この距離以上水平移動したらページめくり開始）
   const SWIPE_START_THRESHOLD = 20
 
+  // シール要素かどうかを判定（シールからのイベントは無視してシール側で処理させる）
+  const isStickerElement = useCallback((element: EventTarget | null): boolean => {
+    let el = element as HTMLElement | null
+    while (el) {
+      if (el.dataset?.stickerId) return true
+      el = el.parentElement
+    }
+    return false
+  }, [])
+
   // ブックコンテナの位置を取得
   const getBookRect = useCallback(() => {
     if (!bookContainerRef.current) return null
@@ -219,10 +229,13 @@ function SwipeZone({
 
   // タッチイベントハンドラ
   const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    // シール要素からのイベントは無視（シール側の長押し処理を優先）
+    if (isStickerElement(e.target)) return
+
     e.preventDefault()
     const touch = e.touches[0]
     handleDragStart(touch.clientX, touch.clientY)
-  }, [handleDragStart])
+  }, [handleDragStart, isStickerElement])
 
   const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -238,6 +251,9 @@ function SwipeZone({
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // シール要素からのイベントは無視（シール側の長押し処理を優先）
+    if (isStickerElement(e.target)) return
+
     e.preventDefault()
     handleDragStart(e.clientX, e.clientY)
 
@@ -254,7 +270,7 @@ function SwipeZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd])
+  }, [handleDragStart, handleDragMove, handleDragEnd, isStickerElement])
 
   // 高さをピクセルで計算
   const zoneHeight = bookHeight * (heightPercent / 100)
