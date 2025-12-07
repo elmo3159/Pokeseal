@@ -92,9 +92,139 @@ const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookThem
 })
 Page.displayName = 'Page'
 
+// 上部スクロールゾーンコンポーネント - 横スクロール用
+// 本の上半分を占め、ここをドラッグすると横スクロールができる
+// SwipeZoneが下半分でページめくりを担当するのに対し、こちらは横スクロール専用
+interface ScrollZoneProps {
+  heightPercent?: number // 本の何%を占めるか（デフォルト50%）
+  bookHeight: number
+}
+
+function ScrollZone({
+  heightPercent = 50,
+  bookHeight,
+}: ScrollZoneProps) {
+  const isDragging = useRef(false)
+  const startX = useRef<number>(0)
+  const scrollStartLeft = useRef<number>(0)
+
+  // 高さをピクセルで計算
+  const zoneHeight = bookHeight * (heightPercent / 100)
+
+  // 親のスクロールコンテナを検索
+  const findScrollContainer = useCallback(() => {
+    // .overflow-x-auto クラスを持つ親要素を探す
+    let element: HTMLElement | null = document.querySelector('.scroll-zone')
+    while (element) {
+      element = element.parentElement
+      if (element && element.classList.contains('overflow-x-auto')) {
+        return element
+      }
+    }
+    return null
+  }, [])
+
+  // ドラッグ開始
+  const handleDragStart = useCallback((clientX: number) => {
+    const scrollContainer = findScrollContainer()
+    if (!scrollContainer) return
+
+    isDragging.current = true
+    startX.current = clientX
+    scrollStartLeft.current = scrollContainer.scrollLeft
+  }, [findScrollContainer])
+
+  // ドラッグ中 - スクロール位置を更新
+  const handleDragMove = useCallback((clientX: number) => {
+    if (!isDragging.current) return
+
+    const scrollContainer = findScrollContainer()
+    if (!scrollContainer) return
+
+    const deltaX = startX.current - clientX
+    scrollContainer.scrollLeft = scrollStartLeft.current + deltaX
+  }, [findScrollContainer])
+
+  // ドラッグ終了
+  const handleDragEnd = useCallback(() => {
+    isDragging.current = false
+  }, [])
+
+  // シール要素かどうかを判定
+  const isStickerElement = useCallback((target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false
+    // data-sticker-id属性を持つ要素、またはその子孫かチェック
+    return target.closest('[data-sticker-id]') !== null
+  }, [])
+
+  // タッチイベントハンドラ
+  const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    // シール要素へのタッチは無視（シールのイベントハンドラに任せる）
+    if (isStickerElement(e.target)) return
+
+    const touch = e.touches[0]
+    handleDragStart(touch.clientX)
+  }, [handleDragStart, isStickerElement])
+
+  const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return
+    e.preventDefault() // デフォルトのスクロールを防止
+    const touch = e.touches[0]
+    handleDragMove(touch.clientX)
+  }, [handleDragMove])
+
+  const handleTouchEnd = useCallback(() => {
+    handleDragEnd()
+  }, [handleDragEnd])
+
+  // マウスイベントハンドラ
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // シール要素へのクリックは無視（シールのイベントハンドラに任せる）
+    if (isStickerElement(e.target)) return
+
+    e.preventDefault()
+    handleDragStart(e.clientX)
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      handleDragMove(moveEvent.clientX)
+    }
+
+    const handleMouseUp = () => {
+      handleDragEnd()
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [handleDragStart, handleDragMove, handleDragEnd])
+
+  return (
+    <div
+      className="scroll-zone absolute left-0 right-0 top-0 z-20 cursor-grab active:cursor-grabbing"
+      style={{
+        height: `${zoneHeight}px`,
+        // タッチ操作を無効化してカスタムハンドラで処理
+        touchAction: 'none',
+        // ポインターイベントを有効化
+        pointerEvents: 'auto',
+        // 透明（視覚的に見えない）
+        background: 'transparent',
+        // デバッグ用: コメントを外すとゾーンが見える
+        // background: 'rgba(0, 255, 0, 0.1)',
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+    />
+  )
+}
+
 // 下部スワイプゾーンコンポーネント - リアルな指追従ページめくり
 // 本の下半分を占め、ここをスワイプするとページがめくれる
 // 上半分は横スクロール用にイベントを通過させる
+// page-flipライブラリのネイティブメソッドを使用して指に追従するページめくりを実現
 interface SwipeZoneProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bookRef: React.RefObject<any>
@@ -116,114 +246,122 @@ function SwipeZone({
   isOnBackCover
 }: SwipeZoneProps) {
   const isDragging = useRef(false)
-  const isFlipStarted = useRef(false) // ページめくりが実際に開始されたか
-  const startX = useRef<number>(0)
-  const startY = useRef<number>(0)
-  const dragDirection = useRef<'left' | 'right' | null>(null)
+  const dragStartX = useRef(0)
+  const dragStartY = useRef(0)
 
-  // スワイプ開始のしきい値（この距離以上水平移動したらページめくり開始）
-  const SWIPE_START_THRESHOLD = 20
+  // シール要素かどうかを判定
+  const isStickerElement = useCallback((target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false
+    // data-sticker-id属性を持つ要素、またはその子孫かチェック
+    return target.closest('[data-sticker-id]') !== null
+  }, [])
 
-  // ブックコンテナの位置を取得
-  const getBookRect = useCallback(() => {
-    if (!bookContainerRef.current) return null
-    return bookContainerRef.current.getBoundingClientRect()
-  }, [bookContainerRef])
+  // page-flipの内部要素（.stf__block）の位置を取得
+  // これはpage-flipのUI.tsのgetMousePosと同じ要素を使う必要がある
+  const getPageFlipRect = useCallback(() => {
+    // page-flipのdistElement（.stf__block）を直接取得
+    const stfBlock = document.querySelector('.stf__block')
+    if (!stfBlock) return null
+    return stfBlock.getBoundingClientRect()
+  }, [])
 
-  // クライアント座標をブック内ローカル座標に変換
+  // クライアント座標をブック内ローカル座標に変換（page-flipのUIクラスと同じ方式）
   const clientToBookLocal = useCallback((clientX: number, clientY: number) => {
-    const rect = getBookRect()
+    const rect = getPageFlipRect()
     if (!rect) return { x: 0, y: 0 }
 
     return {
       x: clientX - rect.left,
       y: clientY - rect.top
     }
-  }, [getBookRect])
+  }, [getPageFlipRect])
 
-  // ドラッグ開始（位置記録のみ、ページめくりはまだ開始しない）
+  // ドラッグ開始 - page-flipのstartUserTouchを呼ぶ
   const handleDragStart = useCallback((clientX: number, clientY: number) => {
     const pageFlip = bookRef.current?.pageFlip()
     if (!pageFlip) return
 
     isDragging.current = true
-    isFlipStarted.current = false // まだページめくりは開始していない
-    startX.current = clientX
-    startY.current = clientY
-    dragDirection.current = null
+    dragStartX.current = clientX
+    dragStartY.current = clientY
 
-    // 注意: ここではstartUserTouch()を呼ばない
-    // 十分な水平移動があった場合のみhandleDragMoveで開始する
-  }, [bookRef])
+    // 本に対する相対座標に変換してstartUserTouchを呼ぶ
+    const bookPos = clientToBookLocal(clientX, clientY)
+    pageFlip.startUserTouch(bookPos)
+  }, [bookRef, clientToBookLocal])
 
-  // ドラッグ中
+  // ドラッグ中 - page-flipのuserMoveを呼ぶ（ページが指に追従する）
   const handleDragMove = useCallback((clientX: number, clientY: number) => {
     if (!isDragging.current) return
 
     const pageFlip = bookRef.current?.pageFlip()
     if (!pageFlip) return
 
-    const deltaX = clientX - startX.current
-
-    // 十分な水平移動があった場合のみページめくりを開始
-    if (!isFlipStarted.current && Math.abs(deltaX) >= SWIPE_START_THRESHOLD) {
-      // ページめくりを開始
-      const startLocalPos = clientToBookLocal(startX.current, startY.current)
-      try {
-        pageFlip.startUserTouch(startLocalPos)
-        isFlipStarted.current = true
-        dragDirection.current = deltaX < 0 ? 'left' : 'right'
-      } catch {
-        // エラーは無視（ページめくり不可の状態など）
-      }
-    }
-
-    // ページめくりが開始されている場合のみ更新
-    if (isFlipStarted.current) {
-      const localPos = clientToBookLocal(clientX, clientY)
-      try {
-        pageFlip.userMove(localPos, false)
-      } catch {
-        // エラーは無視
-      }
-    }
+    // 本に対する相対座標に変換してuserMoveを呼ぶ
+    const bookPos = clientToBookLocal(clientX, clientY)
+    pageFlip.userMove(bookPos, true) // true = タッチイベント
   }, [bookRef, clientToBookLocal])
 
-  // ドラッグ終了
+  // ドラッグ終了 - ドラッグ距離に基づいてフリップを完了またはキャンセル
   const handleDragEnd = useCallback((clientX: number, clientY: number) => {
     if (!isDragging.current) return
 
     const pageFlip = bookRef.current?.pageFlip()
     if (!pageFlip) {
       isDragging.current = false
-      isFlipStarted.current = false
       return
     }
 
-    // ページめくりが開始されている場合のみ終了処理
-    if (isFlipStarted.current) {
-      const localPos = clientToBookLocal(clientX, clientY)
-      try {
-        // ユーザー操作終了 - ライブラリが自動的にフリップ完了または戻りを判断
-        pageFlip.userStop(localPos, false)
-      } catch {
-        // エラーは無視
-      }
-    }
-    // ページめくりが開始されていない場合（長押しやタップ）は何もしない
+    // ドラッグ距離を計算
+    const dragDeltaX = clientX - dragStartX.current
+    const dragThreshold = bookWidth * 0.3 // ページ幅の30%以上ドラッグでフリップ
 
+    // まずドラッグ状態を解除
     isDragging.current = false
-    isFlipStarted.current = false
-    dragDirection.current = null
-  }, [bookRef, clientToBookLocal])
+
+    // page-flipの内部座標を取得
+    const rect = getPageFlipRect()
+    if (!rect) {
+      pageFlip.userStop(clientToBookLocal(clientX, clientY), false)
+      return
+    }
+
+    // 水平方向のドラッグ距離で判定
+    if (Math.abs(dragDeltaX) > dragThreshold) {
+      // 十分にドラッグした
+      // フリップを完了させるため、ページの端を超えた位置に最終移動
+      // これによりstopMove()がフリップを完了する判定をする
+      let finalX: number
+      if (dragDeltaX < 0) {
+        // 左にドラッグ = 次のページへ
+        // ページの左端を超えた位置（負の値）に移動
+        finalX = rect.left - 50
+      } else {
+        // 右にドラッグ = 前のページへ
+        // ページの右端を超えた位置に移動
+        finalX = rect.right + 50
+      }
+
+      // 最終位置でuserMoveを呼び、その後userStopで完了させる
+      const finalBookPos = { x: finalX - rect.left, y: clientY - rect.top }
+      pageFlip.userMove(finalBookPos, true)
+      pageFlip.userStop(finalBookPos, false)
+    } else {
+      // ドラッグが足りない - 元に戻す
+      const bookPos = clientToBookLocal(clientX, clientY)
+      pageFlip.userStop(bookPos, false)
+    }
+  }, [bookRef, clientToBookLocal, bookWidth, getPageFlipRect])
 
   // タッチイベントハンドラ
-  // シールは直接ポインターイベントを受け取るため、SwipeZoneはページめくりのみを処理
   const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    // シール要素へのタッチは無視（シールのイベントハンドラに任せる）
+    if (isStickerElement(e.target)) return
+
     const touch = e.touches[0]
     e.preventDefault()
     handleDragStart(touch.clientX, touch.clientY)
-  }, [handleDragStart])
+  }, [handleDragStart, isStickerElement])
 
   const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -238,8 +376,10 @@ function SwipeZone({
   }, [handleDragEnd])
 
   // マウスイベントハンドラ
-  // シールは直接ポインターイベントを受け取るため、SwipeZoneはページめくりのみを処理
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // シール要素へのクリックは無視（シールのイベントハンドラに任せる）
+    if (isStickerElement(e.target)) return
+
     e.preventDefault()
     handleDragStart(e.clientX, e.clientY)
 
@@ -256,17 +396,23 @@ function SwipeZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd])
+  }, [handleDragStart, handleDragMove, handleDragEnd, isStickerElement])
 
   // 高さをピクセルで計算
   const zoneHeight = bookHeight * (heightPercent / 100)
+
+  // 表紙・裏表紙では全面カバーなのでヒントを非表示
+  const isFullPage = isOnCover || isOnBackCover
 
   return (
     <div
       className="swipe-zone absolute left-0 right-0 bottom-0 z-30 flex items-end justify-center cursor-grab active:cursor-grabbing select-none"
       style={{
         height: `${zoneHeight}px`,
-        background: 'linear-gradient(180deg, rgba(139, 92, 246, 0) 0%, rgba(139, 92, 246, 0.08) 50%, rgba(139, 92, 246, 0.15) 100%)',
+        // 表紙・裏表紙では透明、見開きページでは下部にグラデーション
+        background: isFullPage
+          ? 'transparent'
+          : 'linear-gradient(180deg, rgba(139, 92, 246, 0) 0%, rgba(139, 92, 246, 0.08) 50%, rgba(139, 92, 246, 0.15) 100%)',
         borderBottomLeftRadius: '8px',
         borderBottomRightRadius: '8px',
         touchAction: 'none', // タッチスクロールを無効化
@@ -277,21 +423,23 @@ function SwipeZone({
       onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
     >
-      {/* スワイプヒント - 下部に配置 */}
-      <div className="flex items-center gap-2 opacity-50 pointer-events-none pb-3">
-        <span className="text-sm" style={{ color: '#8B5CF6' }}>👈</span>
-        <span
-          className="text-xs font-medium px-3 py-1 rounded-full"
-          style={{
-            color: '#8B5CF6',
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            background: 'rgba(139, 92, 246, 0.1)',
-          }}
-        >
-          ここをスワイプでめくる
-        </span>
-        <span className="text-sm" style={{ color: '#8B5CF6' }}>👉</span>
-      </div>
+      {/* スワイプヒント - 見開きページのみ表示 */}
+      {!isFullPage && (
+        <div className="flex items-center gap-2 opacity-50 pointer-events-none pb-3">
+          <span className="text-sm" style={{ color: '#8B5CF6' }}>👈</span>
+          <span
+            className="text-xs font-medium px-3 py-1 rounded-full"
+            style={{
+              color: '#8B5CF6',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+              background: 'rgba(139, 92, 246, 0.1)',
+            }}
+          >
+            ここをスワイプでめくる
+          </span>
+          <span className="text-sm" style={{ color: '#8B5CF6' }}>👉</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -514,8 +662,9 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
             zIndex: 10,
             position: 'relative',
             transition: 'width 0.3s ease-out',
-            // 親のpointer-events: noneを上書きしてSwipeZone等が機能するようにする
-            pointerEvents: 'auto',
+            // pointer-events: noneにして上部タッチが横スクロールコンテナに届くようにする
+            // SwipeZoneとシールは個別にpointer-events: autoを設定
+            pointerEvents: 'none',
           }}
         >
           {/* 内部コンテナ - 表紙表示時は右にシフトして表紙を中央に見せる */}
@@ -577,8 +726,17 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
           </HTMLFlipBook>
           </div>
 
-          {/* 下部スワイプゾーン - 本の下半分をカバーしページめくり用 */}
-          {/* 上半分は横スクロールのためにイベントを通過させる */}
+          {/* スクロールゾーン - 横スクロール用（見開きページの上半分） */}
+          {/* 表紙・裏表紙では非表示（SwipeZoneが全面をカバー） */}
+          {!(isOnCover || isOnBackCover) && (
+            <ScrollZone
+              bookHeight={height}
+              heightPercent={50}
+            />
+          )}
+
+          {/* スワイプゾーン - ページめくり用 */}
+          {/* 表紙・裏表紙では全面、見開きページでは下半分のみ（上半分は横スクロール用） */}
           <SwipeZone
             bookRef={bookRef}
             bookContainerRef={bookContainerRef}
@@ -586,7 +744,7 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
             bookHeight={height}
             isOnCover={isOnCover}
             isOnBackCover={isOnBackCover}
-            heightPercent={50}
+            heightPercent={(isOnCover || isOnBackCover) ? 100 : 50}
           />
         </div>
 
