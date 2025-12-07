@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ポケシル</string>
+    <string name="title_activity_main">ポケシル</string>
+    <string name="package_name">com.pokeseal.app</string>
+    <string name="custom_url_scheme">com.pokeseal.app</string>
+</resources>

@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "echo '[Hook] File modified - consider refreshing Unity assets'"
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(git:*)",
+      "Bash(unity:*)",
+      "mcp__UnityMCP:*",
+      "mcp__supabase:*",
+      "mcp__github:*",
+      "mcp__stability-ai:*"
+    ]
+  }
+}

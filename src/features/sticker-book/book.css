@@ -1,0 +1,408 @@
+/* シール帳のスタイル - モダン＆パステル */
+.book-container {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+/* react-pageflip のコンテナスタイル */
+.book-flip-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* react-pageflip が生成するページ要素 */
+.book-flip-container > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* PageFlipライブラリが生成するコンテナ */
+.book-container .stf__wrapper {
+  perspective: 2000px !important;
+  position: relative !important;
+  z-index: 10 !important;
+  /* ページめくりは下部スワイプゾーンと矢印ボタンで行うため、カーソルをデフォルトに */
+  cursor: default;
+}
+
+.book-container .stf__parent {
+  transform-style: preserve-3d !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.book-container .stf__block {
+  position: relative !important;
+  z-index: 10 !important;
+  transform-style: preserve-3d !important;
+  -webkit-transform-style: preserve-3d !important;
+}
+
+/* ページエリア - シール編集用のカーソル設定 */
+.book-container .stf__item {
+  /* ページめくりは下部スワイプゾーンで行うため、カーソルをデフォルトに */
+  cursor: default;
+  z-index: 10 !important;
+  /* 3D変形をページ内容に伝播させる */
+  transform-style: preserve-3d !important;
+  -webkit-transform-style: preserve-3d !important;
+}
+
+/* めくり中のページ（左右両方）で3D継承を確実に */
+.stf__item.--left,
+.stf__item.--right {
+  transform-style: preserve-3d !important;
+  -webkit-transform-style: preserve-3d !important;
+}
+
+/*
+ * 重要: すべてのページ関連要素とその子孫に強制的に3D継承を適用
+ * これによりシールがページめくりに正しく追従する
+ */
+.stf__wrapper *,
+.stf__parent *,
+.stf__block *,
+.stf__item * {
+  transform-style: preserve-3d !important;
+  -webkit-transform-style: preserve-3d !important;
+}
+
+/* ハードページのめくり方向を前面に修正 */
+.stf__item.--hard {
+  transform-style: preserve-3d !important;
+  -webkit-transform-style: preserve-3d !important;
+}
+
+/* ハードページめくり中のz-index - 前面に表示 */
+.stf__item.--hard.--flipping {
+  z-index: 1000 !important;
+}
+
+/* 左側のページがめくられる時（後方めくり）*/
+.stf__item.--hard.--left.--flipping {
+  z-index: 1001 !important;
+}
+
+/* 右側のページがめくられる時（前方めくり）*/
+.stf__item.--hard.--right.--flipping {
+  z-index: 1001 !important;
+}
+
+.book-page {
+  background-color: white;
+  /* overflow: hiddenの代わりにclip-pathを使用（3D変形継承を妨げない） */
+  overflow: visible;
+  clip-path: inset(0);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  /* 3D変形を継承する - シールがページと一緒にめくれるように */
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  /* ページめくり時に裏面を隠す */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* ページ内の全要素が3D変形に追従するように */
+.book-page > div {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* シールコンテナとシール自体も3D継承を確実に */
+.book-page > div > div {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+/* overflow-hiddenがある要素でも3D変形を維持 */
+.book-page [class*="overflow-hidden"] {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+/* ページの影効果 - ソフトシャドウ */
+.book-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    rgba(139, 92, 246, 0.06) 0%,
+    transparent 5%,
+    transparent 95%,
+    rgba(139, 92, 246, 0.03) 100%
+  );
+  z-index: 1;
+}
+
+/* ページコンテンツを前面に */
+.book-page > * {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+}
+
+/* ハードカバー（表紙・裏表紙）のスタイル - パステルグラデーション */
+.book-page[data-density="hard"] {
+  background: linear-gradient(135deg, #C4B5FD 0%, #A78BFA 50%, #8B5CF6 100%);
+}
+
+/* ページめくり時のアニメーション調整 */
+.stf__wrapper {
+  perspective: 2000px !important;
+}
+
+.stf__parent {
+  transform-style: preserve-3d !important;
+}
+
+/* 表紙（hard page）のめくり方向を修正 */
+/* StPageFlipのhard pageは通常、本の後ろ側を通ってめくれる */
+/* これを前方を通るように修正 */
+.stf__item.--hard {
+  transform-style: preserve-3d !important;
+}
+
+/* 最初のページ（表紙）のめくりアニメーションを反転 */
+.stf__item:first-child.--hard {
+  /* デフォルトのtransform-originを右端に変更して正しい方向にめくる */
+}
+
+/* hard pageめくり時のz-indexを調整して前面に表示 */
+.stf__item.--hard.--flipping {
+  z-index: 100 !important;
+}
+
+/* 表紙めくり時に前面を通るようにする */
+.stf__block {
+  transform-style: preserve-3d !important;
+}
+
+/* ページの角の装飾 - パステルカラー */
+.page-corner {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  opacity: 0.2;
+}
+
+.page-corner-top-right {
+  top: 0;
+  right: 0;
+  border-width: 0 20px 20px 0;
+  border-color: transparent #A78BFA transparent transparent;
+}
+
+.page-corner-bottom-right {
+  bottom: 0;
+  right: 0;
+  border-width: 0 0 20px 20px;
+  border-color: transparent transparent #A78BFA transparent;
+}
+
+/* シールが貼られているエリア */
+.sticker-area {
+  position: absolute;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sticker-area:active {
+  cursor: grabbing;
+}
+
+.sticker-area.selected {
+  z-index: 100;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.5), 0 8px 24px rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+}
+
+/* シールの種類別エフェクト */
+.sticker-normal {
+  filter: drop-shadow(2px 2px 6px rgba(139, 92, 246, 0.15));
+}
+
+.sticker-puffy {
+  filter: drop-shadow(3px 3px 8px rgba(139, 92, 246, 0.2));
+  transform: scale(1.02);
+}
+
+.sticker-sparkle {
+  position: relative;
+}
+
+.sticker-sparkle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 100%
+  );
+  animation: sparkle-shine 2s infinite;
+  pointer-events: none;
+}
+
+@keyframes sparkle-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* チャーム装飾 */
+.charm-container {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.charm {
+  animation: charm-swing 3s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+@keyframes charm-swing {
+  0%, 100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+
+/* ランクエフェクト - パステルカラー */
+.rank-effect-1 {
+  /* 通常 - エフェクトなし */
+}
+
+.rank-effect-2 {
+  box-shadow: 0 0 12px rgba(252, 211, 77, 0.3);
+}
+
+.rank-effect-3 {
+  box-shadow: 0 0 18px rgba(252, 211, 77, 0.5);
+  animation: glow-pulse 2s infinite;
+}
+
+.rank-effect-4 {
+  box-shadow: 0 0 24px rgba(252, 211, 77, 0.6);
+  animation: rainbow-glow 3s infinite;
+}
+
+.rank-effect-max {
+  box-shadow:
+    0 0 30px rgba(252, 211, 77, 0.7),
+    0 0 60px rgba(249, 168, 212, 0.4);
+  animation: legendary-glow 2s infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes rainbow-glow {
+  0% {
+    box-shadow: 0 0 24px rgba(196, 181, 253, 0.5);
+  }
+  33% {
+    box-shadow: 0 0 24px rgba(249, 168, 212, 0.5);
+  }
+  66% {
+    box-shadow: 0 0 24px rgba(147, 197, 253, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 24px rgba(196, 181, 253, 0.5);
+  }
+}
+
+@keyframes legendary-glow {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.03);
+    filter: brightness(1.1);
+  }
+}
+
+/* キラキラシールのシマーエフェクト */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* 下部スワイプゾーン - ページめくり専用エリア */
+.swipe-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: background 0.2s ease;
+  pointer-events: auto !important;
+  touch-action: none;
+}
+
+.swipe-zone:active {
+  cursor: grabbing;
+  background: rgba(139, 92, 246, 0.15) !important;
+}
+
+/* ページコンテンツのポインターイベントを制御 */
+/* スワイプゾーン以外ではページめくりを無効化し、シールの長押しを可能にする */
+.book-container .stf__wrapper {
+  /* ライブラリのタッチハンドリングを無効化 */
+  pointer-events: none !important;
+}
+
+/* ページ内のシール部分はポインターイベントを有効に */
+.book-page .pointer-events-auto {
+  pointer-events: auto !important;
+}
+
+/* シール自体のポインターイベントを確実に有効化 */
+.book-page [class*="cursor-pointer"] {
+  pointer-events: auto !important;
+}
