@@ -150,21 +150,41 @@ function ScrollZone({
     isDragging.current = false
   }, [])
 
-  // シール要素かどうかを判定
-  const isStickerElement = useCallback((target: EventTarget | null): boolean => {
-    if (!target || !(target instanceof HTMLElement)) return false
-    // data-sticker-id属性を持つ要素、またはその子孫かチェック
-    return target.closest('[data-sticker-id]') !== null
+  // 指定座標にあるシール要素を取得（座標ベースでチェック）
+  const getStickerElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
+    // その座標にある全要素を取得
+    const elements = document.elementsFromPoint(clientX, clientY)
+    // data-sticker-id属性を持つ要素を探す
+    for (const el of elements) {
+      if (el.hasAttribute('data-sticker-id')) return el
+      const parent = el.closest('[data-sticker-id]')
+      if (parent) return parent
+    }
+    return null
   }, [])
 
   // タッチイベントハンドラ
   const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    // シール要素へのタッチは無視（シールのイベントハンドラに任せる）
-    if (isStickerElement(e.target)) return
-
     const touch = e.touches[0]
+    // シール要素へのタッチはシールに転送
+    const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
+    if (stickerElement) {
+      // シール要素にPointerEventを転送
+      const pointerEvent = new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        pointerId: touch.identifier,
+        pointerType: 'touch',
+        isPrimary: true,
+      })
+      stickerElement.dispatchEvent(pointerEvent)
+      return
+    }
+
     handleDragStart(touch.clientX)
-  }, [handleDragStart, isStickerElement])
+  }, [handleDragStart, getStickerElementAtPoint])
 
   const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     if (!isDragging.current) return
@@ -179,8 +199,22 @@ function ScrollZone({
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // シール要素へのクリックは無視（シールのイベントハンドラに任せる）
-    if (isStickerElement(e.target)) return
+    // シール要素へのクリックはシールに転送
+    const stickerElement = getStickerElementAtPoint(e.clientX, e.clientY)
+    if (stickerElement) {
+      // シール要素にPointerEventを転送
+      const pointerEvent = new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+      })
+      stickerElement.dispatchEvent(pointerEvent)
+      return
+    }
 
     e.preventDefault()
     handleDragStart(e.clientX)
@@ -197,7 +231,7 @@ function ScrollZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd])
+  }, [handleDragStart, handleDragMove, handleDragEnd, getStickerElementAtPoint])
 
   return (
     <div
@@ -249,11 +283,17 @@ function SwipeZone({
   const dragStartX = useRef(0)
   const dragStartY = useRef(0)
 
-  // シール要素かどうかを判定
-  const isStickerElement = useCallback((target: EventTarget | null): boolean => {
-    if (!target || !(target instanceof HTMLElement)) return false
-    // data-sticker-id属性を持つ要素、またはその子孫かチェック
-    return target.closest('[data-sticker-id]') !== null
+  // 指定座標にあるシール要素を取得（座標ベースでチェック）
+  const getStickerElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
+    // その座標にある全要素を取得
+    const elements = document.elementsFromPoint(clientX, clientY)
+    // data-sticker-id属性を持つ要素を探す
+    for (const el of elements) {
+      if (el.hasAttribute('data-sticker-id')) return el
+      const parent = el.closest('[data-sticker-id]')
+      if (parent) return parent
+    }
+    return null
   }, [])
 
   // page-flipの内部要素（.stf__block）の位置を取得
@@ -355,13 +395,27 @@ function SwipeZone({
 
   // タッチイベントハンドラ
   const handleTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    // シール要素へのタッチは無視（シールのイベントハンドラに任せる）
-    if (isStickerElement(e.target)) return
-
     const touch = e.touches[0]
+    // シール要素へのタッチはシールに転送
+    const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
+    if (stickerElement) {
+      // シール要素にPointerEventを転送
+      const pointerEvent = new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        pointerId: touch.identifier,
+        pointerType: 'touch',
+        isPrimary: true,
+      })
+      stickerElement.dispatchEvent(pointerEvent)
+      return
+    }
+
     e.preventDefault()
     handleDragStart(touch.clientX, touch.clientY)
-  }, [handleDragStart, isStickerElement])
+  }, [handleDragStart, getStickerElementAtPoint])
 
   const handleTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -377,8 +431,22 @@ function SwipeZone({
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // シール要素へのクリックは無視（シールのイベントハンドラに任せる）
-    if (isStickerElement(e.target)) return
+    // シール要素へのクリックはシールに転送
+    const stickerElement = getStickerElementAtPoint(e.clientX, e.clientY)
+    if (stickerElement) {
+      // シール要素にPointerEventを転送
+      const pointerEvent = new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+      })
+      stickerElement.dispatchEvent(pointerEvent)
+      return
+    }
 
     e.preventDefault()
     handleDragStart(e.clientX, e.clientY)
@@ -396,7 +464,7 @@ function SwipeZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd, isStickerElement])
+  }, [handleDragStart, handleDragMove, handleDragEnd, getStickerElementAtPoint])
 
   // 高さをピクセルで計算
   const zoneHeight = bookHeight * (heightPercent / 100)
