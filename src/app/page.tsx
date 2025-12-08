@@ -19,7 +19,7 @@ import {
 import { CoverDesign } from '@/domain/theme'
 import { CollectionView, CollectionSticker, StickerDetailModal } from '@/features/collection'
 import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker } from '@/features/gacha'
-import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage } from '@/features/trade'
+import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage, TradeSessionFull, TradeUser, TradeBookPageFull } from '@/features/trade'
 import { TimelineView, Post, ReactionType, CreatePostModal, CommentModal, StickerBookPage, Comment } from '@/features/timeline'
 import { ProfileView, UserProfile, UserStats, Achievement } from '@/features/profile'
 import { TutorialOverlay, defaultTutorialSteps } from '@/features/tutorial'
@@ -264,17 +264,36 @@ const demoSettings: SettingsData = {
   },
 }
 
-// Demo book pages for trade session - 実際のシールを使用
-const demoMyBookPages: TradeBookPage[] = [
+// 架空のユーザーデータ
+const demoPartnerUserData: TradeUser = {
+  id: 'partner-sakura',
+  name: 'さくら',
+  avatarUrl: undefined,
+  level: 12,
+  bio: 'シール集め大好き！✨ もっちもが推しです💕',
+  totalStickers: 156,
+  totalTrades: 28,
+}
+
+// Demo book pages for trade session - 自分のシール帳（表紙・ページ・裏表紙を含む）
+const demoMyTradePages: TradeBookPageFull[] = [
   {
-    id: 'my-page-1',
+    id: 'my-trade-cover',
+    type: 'cover',
+    pageNumber: 0,
+    stickers: [],
+  },
+  {
+    id: 'my-trade-page-1',
+    type: 'page',
     pageNumber: 1,
+    side: 'left',
     stickers: [
       {
         id: 'my-placed-1',
         stickerId: demoStickers[0].id,
         sticker: demoStickers[0],
-        pageId: 'my-page-1',
+        pageId: 'my-trade-page-1',
         x: 0.25,
         y: 0.3,
         rotation: 5,
@@ -286,48 +305,97 @@ const demoMyBookPages: TradeBookPage[] = [
         id: 'my-placed-2',
         stickerId: demoStickers[15].id,
         sticker: demoStickers[15],
-        pageId: 'my-page-1',
-        x: 0.65,
-        y: 0.5,
+        pageId: 'my-trade-page-1',
+        x: 0.7,
+        y: 0.6,
         rotation: -10,
-        scale: 1.1,
+        scale: 1,
         zIndex: 2,
         placedAt: new Date().toISOString(),
       },
     ],
   },
   {
-    id: 'my-page-2',
+    id: 'my-trade-page-2',
+    type: 'page',
     pageNumber: 2,
+    side: 'right',
     stickers: [
       {
         id: 'my-placed-3',
         stickerId: demoStickers[30].id,
         sticker: demoStickers[30],
-        pageId: 'my-page-2',
+        pageId: 'my-trade-page-2',
         x: 0.5,
         y: 0.4,
         rotation: 0,
-        scale: 1.2,
+        scale: 1,
+        zIndex: 1,
+        placedAt: new Date().toISOString(),
+      },
+      {
+        id: 'my-placed-4',
+        stickerId: demoStickers[35].id,
+        sticker: demoStickers[35],
+        pageId: 'my-trade-page-2',
+        x: 0.3,
+        y: 0.7,
+        rotation: 8,
+        scale: 1,
+        zIndex: 2,
+        placedAt: new Date().toISOString(),
+      },
+    ],
+  },
+  {
+    id: 'my-trade-page-3',
+    type: 'page',
+    pageNumber: 3,
+    side: 'left',
+    stickers: [
+      {
+        id: 'my-placed-5',
+        stickerId: demoStickers[50].id,
+        sticker: demoStickers[50],
+        pageId: 'my-trade-page-3',
+        x: 0.4,
+        y: 0.35,
+        rotation: -5,
+        scale: 1,
         zIndex: 1,
         placedAt: new Date().toISOString(),
       },
     ],
   },
+  {
+    id: 'my-trade-back',
+    type: 'back-cover',
+    pageNumber: 4,
+    stickers: [],
+  },
 ]
 
-const demoPartnerBookPages: TradeBookPage[] = [
+// 相手（さくら）のシール帳データ
+const demoPartnerTradePages: TradeBookPageFull[] = [
   {
-    id: 'partner-page-1',
+    id: 'partner-trade-cover',
+    type: 'cover',
+    pageNumber: 0,
+    stickers: [],
+  },
+  {
+    id: 'partner-trade-page-1',
+    type: 'page',
     pageNumber: 1,
+    side: 'left',
     stickers: [
       {
         id: 'partner-placed-1',
         stickerId: demoStickers[45].id,
         sticker: demoStickers[45],
-        pageId: 'partner-page-1',
+        pageId: 'partner-trade-page-1',
         x: 0.3,
-        y: 0.35,
+        y: 0.3,
         rotation: 8,
         scale: 1,
         zIndex: 1,
@@ -337,33 +405,117 @@ const demoPartnerBookPages: TradeBookPage[] = [
         id: 'partner-placed-2',
         stickerId: demoStickers[60].id,
         sticker: demoStickers[60],
-        pageId: 'partner-page-1',
+        pageId: 'partner-trade-page-1',
         x: 0.7,
-        y: 0.6,
+        y: 0.5,
         rotation: -5,
-        scale: 0.9,
+        scale: 1,
+        zIndex: 2,
+        placedAt: new Date().toISOString(),
+      },
+      {
+        id: 'partner-placed-3',
+        stickerId: demoStickers[10].id,
+        sticker: demoStickers[10],
+        pageId: 'partner-trade-page-1',
+        x: 0.5,
+        y: 0.75,
+        rotation: 12,
+        scale: 1,
+        zIndex: 3,
+        placedAt: new Date().toISOString(),
+      },
+    ],
+  },
+  {
+    id: 'partner-trade-page-2',
+    type: 'page',
+    pageNumber: 2,
+    side: 'right',
+    stickers: [
+      {
+        id: 'partner-placed-4',
+        stickerId: demoStickers[75].id,
+        sticker: demoStickers[75],
+        pageId: 'partner-trade-page-2',
+        x: 0.45,
+        y: 0.4,
+        rotation: 0,
+        scale: 1,
+        zIndex: 1,
+        placedAt: new Date().toISOString(),
+      },
+      {
+        id: 'partner-placed-5',
+        stickerId: demoStickers[80].id,
+        sticker: demoStickers[80],
+        pageId: 'partner-trade-page-2',
+        x: 0.25,
+        y: 0.65,
+        rotation: -8,
+        scale: 1,
         zIndex: 2,
         placedAt: new Date().toISOString(),
       },
     ],
   },
   {
-    id: 'partner-page-2',
-    pageNumber: 2,
+    id: 'partner-trade-page-3',
+    type: 'page',
+    pageNumber: 3,
+    side: 'left',
     stickers: [
       {
-        id: 'partner-placed-3',
-        stickerId: demoStickers[75].id,
-        sticker: demoStickers[75],
-        pageId: 'partner-page-2',
-        x: 0.45,
+        id: 'partner-placed-6',
+        stickerId: demoStickers[25].id,
+        sticker: demoStickers[25],
+        pageId: 'partner-trade-page-3',
+        x: 0.5,
+        y: 0.35,
+        rotation: 5,
+        scale: 1,
+        zIndex: 1,
+        placedAt: new Date().toISOString(),
+      },
+      {
+        id: 'partner-placed-7',
+        stickerId: demoStickers[55].id,
+        sticker: demoStickers[55],
+        pageId: 'partner-trade-page-3',
+        x: 0.35,
+        y: 0.7,
+        rotation: -3,
+        scale: 1,
+        zIndex: 2,
+        placedAt: new Date().toISOString(),
+      },
+    ],
+  },
+  {
+    id: 'partner-trade-page-4',
+    type: 'page',
+    pageNumber: 4,
+    side: 'right',
+    stickers: [
+      {
+        id: 'partner-placed-8',
+        stickerId: demoStickers[90].id,
+        sticker: demoStickers[90],
+        pageId: 'partner-trade-page-4',
+        x: 0.6,
         y: 0.45,
-        rotation: 12,
-        scale: 1.1,
+        rotation: 10,
+        scale: 1,
         zIndex: 1,
         placedAt: new Date().toISOString(),
       },
     ],
+  },
+  {
+    id: 'partner-trade-back',
+    type: 'back-cover',
+    pageNumber: 5,
+    stickers: [],
   },
 ]
 
@@ -1076,37 +1228,19 @@ export default function Home() {
       )}
 
       {isTradeSessionOpen && tradePartner && (
-        <TradeSessionEnhanced
+        <TradeSessionFull
           myUser={{
             id: 'my-user',
             name: 'プレイヤー',
-            avatarUrl: '/avatars/default.png',
+            avatarUrl: undefined,
             level: 5,
+            bio: 'シール交換はじめました！',
+            totalStickers: 42,
+            totalTrades: 3,
           }}
-          partnerUser={{
-            id: tradePartner.id,
-            name: tradePartner.name,
-            avatarUrl: tradePartner.avatarUrl,
-            level: tradePartner.level,
-          }}
-          myPages={demoMyBookPages}
-          partnerPages={demoPartnerBookPages}
-          myStickers={demoStickers.map(s => ({
-            id: s.id,
-            name: s.name,
-            imageUrl: s.imageUrl,
-            rarity: s.rarity as 1 | 2 | 3 | 4 | 5,
-            type: s.type,
-            rate: s.rarity * 10,
-          }))}
-          partnerStickers={demoStickers.slice(3).map(s => ({
-            id: `partner-${s.id}`,
-            name: s.name,
-            imageUrl: s.imageUrl,
-            rarity: s.rarity as 1 | 2 | 3 | 4 | 5,
-            type: s.type,
-            rate: s.rarity * 10,
-          }))}
+          partnerUser={demoPartnerUserData}
+          myPages={demoMyTradePages}
+          partnerPages={demoPartnerTradePages}
           onTradeComplete={(myOffers, partnerOffers) => {
             console.log('Trade complete:', myOffers, partnerOffers)
             setIsTradeSessionOpen(false)
@@ -1117,6 +1251,9 @@ export default function Home() {
             setIsTradeSessionOpen(false)
             setTradePartner(null)
             setMatchedUser(null)
+          }}
+          onFollowPartner={(partnerId) => {
+            console.log('Follow partner:', partnerId)
           }}
         />
       )}
