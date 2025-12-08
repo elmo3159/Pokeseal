@@ -540,22 +540,22 @@ const TradeBookPageComponent = React.forwardRef<
       }}
     >
       {page.type === 'cover' ? (
-        // 表紙 - ユーザーのテーマを反映（下寄せ配置）
-        <div className={`w-full h-full flex flex-col items-center justify-end pb-6 ${getCoverBackground(page.theme)}`}>
+        // 表紙 - ユーザーのテーマを反映
+        <div className={`w-full h-full flex flex-col items-center justify-center ${getCoverBackground(page.theme)}`}>
           {page.theme?.pattern && (
             <div
               className="absolute inset-0 opacity-20"
               style={{ backgroundImage: page.theme.pattern }}
             />
           )}
-          <div className="text-3xl mb-1 drop-shadow-lg">📘</div>
-          <p className="text-white font-bold text-xs drop-shadow-lg">シール帳</p>
+          <div className="text-4xl mb-2 drop-shadow-lg">📘</div>
+          <p className="text-white font-bold text-sm drop-shadow-lg">シール帳</p>
         </div>
       ) : page.type === 'back-cover' ? (
-        // 裏表紙（下寄せ配置）
-        <div className={`w-full h-full flex flex-col items-center justify-end pb-6 ${getCoverBackground(page.theme)} opacity-90`}>
-          <div className="text-2xl mb-1">📕</div>
-          <p className="text-white/80 text-[10px]">おわり</p>
+        // 裏表紙
+        <div className={`w-full h-full flex flex-col items-center justify-center ${getCoverBackground(page.theme)} opacity-90`}>
+          <div className="text-3xl mb-2">📕</div>
+          <p className="text-white/80 text-xs">おわり</p>
         </div>
       ) : (
         // 通常ページ - シール配置エリアは padding なしで全面使用
@@ -733,37 +733,38 @@ const TradeBookViewer: React.FC<{
             height: pageHeight,
           }}
         >
-          {/* FlipBook を中央に配置するためのラッパー */}
-          <div
-            className="absolute inset-0 flex items-center justify-center"
+          <HTMLFlipBook
+            ref={bookRef}
+            width={pageWidth}
+            height={pageHeight}
+            size="fixed"
+            minWidth={pageWidth}
+            maxWidth={pageWidth}
+            minHeight={pageHeight}
+            maxHeight={pageHeight}
+            showCover={true}
+            mobileScrollSupport={false}
+            onFlip={handleFlip}
+            className="trade-book"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
+            startPage={0}
+            drawShadow={true}
+            flippingTime={400}
+            usePortrait={false}
+            startZIndex={0}
+            autoSize={false}
+            maxShadowOpacity={0.3}
+            showPageCorners={true}
+            disableFlipByClick={false}
+            swipeDistance={10}
+            clickEventForward={true}
+            useMouseEvents={true}
           >
-            <HTMLFlipBook
-              ref={bookRef}
-              width={pageWidth}
-              height={pageHeight}
-              size="fixed"
-              minWidth={pageWidth}
-              maxWidth={pageWidth}
-              minHeight={pageHeight}
-              maxHeight={pageHeight}
-              showCover={true}
-              mobileScrollSupport={false}
-              onFlip={handleFlip}
-              className="trade-book"
-              style={{}}
-              startPage={0}
-              drawShadow={true}
-              flippingTime={400}
-              usePortrait={false}
-              startZIndex={0}
-              autoSize={false}
-              maxShadowOpacity={0.3}
-              showPageCorners={true}
-              disableFlipByClick={false}
-              swipeDistance={10}
-              clickEventForward={true}
-              useMouseEvents={true}
-            >
             {pages.map((page) => (
               <TradeBookPageComponent
                 key={page.id}
@@ -775,7 +776,6 @@ const TradeBookViewer: React.FC<{
               />
             ))}
           </HTMLFlipBook>
-          </div>
         </div>
       </div>
 
