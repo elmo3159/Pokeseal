@@ -293,51 +293,74 @@ const MessagePanel: React.FC<{
 }
 
 // ============================================
-// 希望シール枠（コンパクト版）
+// 希望シール枠（レート警告付き）
 // ============================================
 const CompactWishlist: React.FC<{
   myWants: PlacedSticker[]
   partnerWants: PlacedSticker[]
   onRemoveMyWant: (id: string) => void
+  onRemovePartnerWant: (id: string) => void
   myConfirmed: boolean
   partnerConfirmed: boolean
   canConfirm: boolean
   onConfirm: () => void
-}> = ({ myWants, partnerWants, onRemoveMyWant, myConfirmed, partnerConfirmed, canConfirm, onConfirm }) => {
+}> = ({ myWants, partnerWants, onRemoveMyWant, onRemovePartnerWant, myConfirmed, partnerConfirmed, canConfirm, onConfirm }) => {
+  // レート計算（★の数 × 10pt）
   const myRate = myWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
   const partnerRate = partnerWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
-  const isBalanced = Math.abs(myRate - partnerRate) <= 20
+  const rateDiff = partnerRate - myRate
+  const isBalanced = Math.abs(rateDiff) <= 20
+  const isLosingTrade = rateDiff > 20 // 自分が損する交換
+
+  // 高レートシール（★4以上）があるかチェック
+  const hasHighRarityOffer = partnerWants.some(s => s.sticker.rarity >= 4)
 
   return (
-    <div className="bg-white/95 rounded-xl p-2 shadow-sm border border-purple-100">
+    <div className={`rounded-xl p-2 shadow-sm border ${
+      isLosingTrade ? 'bg-red-50/95 border-red-200' : 'bg-white/95 border-purple-100'
+    }`}>
+      {/* 警告バナー（損する交換の場合） */}
+      {isLosingTrade && (
+        <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg mb-2 flex items-center justify-center gap-1">
+          <span>⚠️</span>
+          <span>あなたが {rateDiff}pt 多く渡す交換です！</span>
+        </div>
+      )}
+
       <div className="flex gap-2 items-stretch">
-        {/* 希望シール（もらう） */}
+        {/* 希望シール（もらう） - 相手のシールをタップで追加 */}
         <div className="flex-1 bg-purple-50/80 rounded-lg p-1.5 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-purple-500">👤→わたし</span>
-            <span className="text-[10px] font-bold text-purple-600">{myRate}pt</span>
+            <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1 rounded">+{myRate}pt</span>
           </div>
           <div className="flex gap-1 flex-wrap">
             {myWants.length > 0 ? (
               myWants.slice(0, 3).map((s) => (
                 <div key={s.id} className="relative group">
-                  <div className="w-8 h-8 rounded-md overflow-hidden border border-purple-300 bg-white">
+                  <div className={`w-9 h-9 rounded-md overflow-hidden border-2 bg-white ${
+                    s.sticker.rarity >= 4 ? 'border-yellow-400' : 'border-purple-300'
+                  }`}>
                     {s.sticker.imageUrl ? (
                       <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-sm flex items-center justify-center h-full">⭐</span>
                     )}
+                    {/* レア度バッジ */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[6px] text-yellow-300 text-center">
+                      {'★'.repeat(s.sticker.rarity)}
+                    </div>
                   </div>
                   <button
                     onClick={() => onRemoveMyWant(s.id)}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center shadow-sm"
                   >
                     ×
                   </button>
                 </div>
               ))
             ) : (
-              <span className="text-[9px] text-purple-300">タップで選択</span>
+              <span className="text-[9px] text-purple-300">相手のシールをタップ</span>
             )}
             {myWants.length > 3 && (
               <span className="text-[10px] text-purple-400 self-center">+{myWants.length - 3}</span>
@@ -346,27 +369,58 @@ const CompactWishlist: React.FC<{
         </div>
 
         {/* 交換アイコン */}
-        <div className="flex items-center">
-          <div className={`text-lg ${isBalanced ? 'text-green-500' : 'text-orange-400'}`}>
+        <div className="flex flex-col items-center justify-center">
+          <div className={`text-xl ${isBalanced ? 'text-green-500' : isLosingTrade ? 'text-red-500' : 'text-orange-400'}`}>
             ⇄
           </div>
+          {!isBalanced && (
+            <span className={`text-[8px] font-bold ${isLosingTrade ? 'text-red-500' : 'text-orange-500'}`}>
+              {isLosingTrade ? '損!' : '得!'}
+            </span>
+          )}
         </div>
 
-        {/* 提供シール（あげる） */}
-        <div className="flex-1 bg-pink-50/80 rounded-lg p-1.5 min-h-[52px]">
-          <div className="flex items-center gap-1 mb-1">
+        {/* 提供シール（あげる） - 相手が欲しがっている私のシール */}
+        <div className={`flex-1 rounded-lg p-1.5 min-h-[52px] ${
+          hasHighRarityOffer ? 'bg-red-100/80 border border-red-300' : 'bg-pink-50/80'
+        }`}>
+          <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-pink-500">わたし→👤</span>
-            <span className="text-[10px] font-bold text-pink-600">{partnerRate}pt</span>
+            <span className={`text-[10px] font-bold px-1 rounded ${
+              partnerRate > myRate ? 'text-red-600 bg-red-100' : 'text-pink-600 bg-pink-100'
+            }`}>-{partnerRate}pt</span>
           </div>
           <div className="flex gap-1 flex-wrap">
             {partnerWants.length > 0 ? (
               partnerWants.slice(0, 3).map((s) => (
-                <div key={s.id} className="w-8 h-8 rounded-md overflow-hidden border border-pink-300 bg-white">
-                  {s.sticker.imageUrl ? (
-                    <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                  ) : (
-                    <span className="text-sm flex items-center justify-center h-full">⭐</span>
+                <div key={s.id} className="relative group">
+                  <div className={`w-9 h-9 rounded-md overflow-hidden border-2 bg-white ${
+                    s.sticker.rarity >= 4 ? 'border-red-400 ring-2 ring-red-300 ring-offset-1' : 'border-pink-300'
+                  }`}>
+                    {s.sticker.imageUrl ? (
+                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-sm flex items-center justify-center h-full">⭐</span>
+                    )}
+                    {/* レア度バッジ */}
+                    <div className={`absolute bottom-0 left-0 right-0 text-[6px] text-center ${
+                      s.sticker.rarity >= 4 ? 'bg-red-500/80 text-white' : 'bg-black/50 text-yellow-300'
+                    }`}>
+                      {'★'.repeat(s.sticker.rarity)}
+                    </div>
+                  </div>
+                  {/* 高レアシール警告マーク */}
+                  {s.sticker.rarity >= 4 && (
+                    <div className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center shadow-sm animate-pulse">
+                      !
+                    </div>
                   )}
+                  <button
+                    onClick={() => onRemovePartnerWant(s.id)}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full text-white text-[8px] flex items-center justify-center shadow-sm"
+                  >
+                    ×
+                  </button>
                 </div>
               ))
             ) : (
@@ -384,12 +438,14 @@ const CompactWishlist: React.FC<{
           disabled={!canConfirm || myConfirmed}
           whileTap={canConfirm && !myConfirmed ? { scale: 0.95 } : {}}
           className={`
-            w-16 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all
+            w-14 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all
             ${myConfirmed
               ? 'bg-green-500 text-white'
               : !canConfirm
                 ? 'bg-gray-200 text-gray-400'
-                : 'bg-gradient-to-b from-pink-400 to-purple-500 text-white shadow-lg'}
+                : isLosingTrade
+                  ? 'bg-gradient-to-b from-orange-400 to-red-500 text-white shadow-lg'
+                  : 'bg-gradient-to-b from-pink-400 to-purple-500 text-white shadow-lg'}
           `}
         >
           {myConfirmed ? (
@@ -413,7 +469,7 @@ const CompactWishlist: React.FC<{
       </div>
 
       {/* ステータス表示 */}
-      <div className="flex justify-center gap-3 mt-1.5">
+      <div className="flex justify-center items-center gap-2 mt-1.5">
         <div className={`flex items-center gap-1 text-[10px] ${myConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
           <span>{myConfirmed ? '✓' : '○'}</span>
           <span>わたし</span>
@@ -422,10 +478,18 @@ const CompactWishlist: React.FC<{
           <span>{partnerConfirmed ? '✓' : '○'}</span>
           <span>相手</span>
         </div>
-        {!isBalanced && (
-          <span className="text-[10px] text-orange-500">⚠️ レート差あり</span>
-        )}
       </div>
+
+      {/* 高レアシール警告 */}
+      {hasHighRarityOffer && !myConfirmed && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-1.5 bg-yellow-100 border border-yellow-400 rounded-lg px-2 py-1 text-[10px] text-yellow-800 text-center"
+        >
+          ⚠️ <strong>★4以上のレアシール</strong>をあげようとしています。本当に交換しますか？
+        </motion.div>
+      )}
     </div>
   )
 }
@@ -590,7 +654,7 @@ const TradeBookPageComponent = React.forwardRef<
 TradeBookPageComponent.displayName = 'TradeBookPageComponent'
 
 // ============================================
-// シール帳ビューワー（サイズ拡大版）
+// シール帳ビューワー（位置修正版）
 // ============================================
 const TradeBookViewer: React.FC<{
   pages: TradeBookPageFull[]
@@ -617,9 +681,12 @@ const TradeBookViewer: React.FC<{
     bookRef.current?.pageFlip()?.flipNext()
   }, [])
 
-  // シール帳サイズを大きく (iPhone 12: 390px幅想定)
-  const pageWidth = 165
-  const pageHeight = 215
+  // シール帳サイズ (iPhone 12: 390px幅想定)
+  const pageWidth = 160
+  const pageHeight = 200
+
+  // 表紙・裏表紙表示中かどうか（単ページ表示）
+  const isSinglePageView = currentPage === 0 || currentPage === pages.length - 1
 
   return (
     <div className={`
@@ -641,7 +708,7 @@ const TradeBookViewer: React.FC<{
             ◀
           </button>
           <span className="text-xs text-purple-500 min-w-[32px] text-center font-medium">
-            {currentPage + 1}/{pages.length}
+            {currentPage === 0 ? '表紙' : currentPage === pages.length - 1 ? '裏' : `${currentPage}/${pages.length - 2}`}
           </span>
           <button
             onClick={goToNext}
@@ -653,46 +720,50 @@ const TradeBookViewer: React.FC<{
         </div>
       </div>
 
-      {/* シール帳（大きく表示） */}
+      {/* シール帳 - 中央配置 */}
       <div
         ref={containerRef}
-        className="flex justify-center overflow-x-auto"
+        className="flex justify-center items-center"
         style={{ touchAction: 'pan-x pan-y' }}
       >
         <div
-          className="relative bg-white rounded-lg shadow-lg overflow-hidden border border-purple-200"
+          className="relative rounded-lg shadow-lg overflow-hidden border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
           style={{
             width: pageWidth * 2,
             height: pageHeight,
           }}
         >
-          <HTMLFlipBook
-            ref={bookRef}
-            width={pageWidth}
-            height={pageHeight}
-            size="fixed"
-            minWidth={pageWidth}
-            maxWidth={pageWidth}
-            minHeight={pageHeight}
-            maxHeight={pageHeight}
-            showCover={true}
-            mobileScrollSupport={false}
-            onFlip={handleFlip}
-            className="trade-book"
-            style={{}}
-            startPage={0}
-            drawShadow={true}
-            flippingTime={300}
-            usePortrait={false}
-            startZIndex={0}
-            autoSize={false}
-            maxShadowOpacity={0.25}
-            showPageCorners={true}
-            disableFlipByClick={false}
-            swipeDistance={15}
-            clickEventForward={true}
-            useMouseEvents={true}
+          {/* FlipBook を中央に配置するためのラッパー */}
+          <div
+            className="absolute inset-0 flex items-center justify-center"
           >
+            <HTMLFlipBook
+              ref={bookRef}
+              width={pageWidth}
+              height={pageHeight}
+              size="fixed"
+              minWidth={pageWidth}
+              maxWidth={pageWidth}
+              minHeight={pageHeight}
+              maxHeight={pageHeight}
+              showCover={true}
+              mobileScrollSupport={false}
+              onFlip={handleFlip}
+              className="trade-book"
+              style={{}}
+              startPage={0}
+              drawShadow={true}
+              flippingTime={400}
+              usePortrait={false}
+              startZIndex={0}
+              autoSize={false}
+              maxShadowOpacity={0.3}
+              showPageCorners={true}
+              disableFlipByClick={false}
+              swipeDistance={10}
+              clickEventForward={true}
+              useMouseEvents={true}
+            >
             {pages.map((page) => (
               <TradeBookPageComponent
                 key={page.id}
@@ -704,6 +775,7 @@ const TradeBookViewer: React.FC<{
               />
             ))}
           </HTMLFlipBook>
+          </div>
         </div>
       </div>
 
@@ -1055,6 +1127,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             myWants={myWants}
             partnerWants={myOffers}
             onRemoveMyWant={(id) => setMyWantIds((prev) => prev.filter((i) => i !== id))}
+            onRemovePartnerWant={(id) => setMyOfferIds((prev) => prev.filter((i) => i !== id))}
             myConfirmed={myConfirmed}
             partnerConfirmed={partnerConfirmed}
             canConfirm={canConfirm}
