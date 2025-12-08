@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { AppLayout, TabId } from '@/components'
 import {
   BookView,
@@ -382,6 +382,7 @@ const demoPartnerTradePages: TradeBookPageFull[] = [
     type: 'cover',
     pageNumber: 0,
     stickers: [],
+    // カバーデザインはTradeSessionFullのpartnerCoverDesignIdで指定
   },
   {
     id: 'partner-trade-page-1',
@@ -567,6 +568,15 @@ export default function Home() {
   const [matchedUser, setMatchedUser] = useState<MatchedUser | null>(null)
   const [isTradeSessionOpen, setIsTradeSessionOpen] = useState(false)
   const [tradePartner, setTradePartner] = useState<TradePartner | null>(null)
+
+  // 自分のシール帳をTrade用に変換（ホームで編集したシール帳をそのまま交換画面で使用）
+  const myTradePages: TradeBookPageFull[] = useMemo(() => {
+    return pages.map((page, index) => ({
+      ...page,
+      pageNumber: index,
+      stickers: placedStickers.filter(s => s.pageId === page.id),
+    }))
+  }, [pages, placedStickers])
 
   // Currency state
   const [userCurrency, setUserCurrency] = useState<UserCurrency>(demoUserCurrency)
@@ -1239,8 +1249,10 @@ export default function Home() {
             totalTrades: 3,
           }}
           partnerUser={demoPartnerUserData}
-          myPages={demoMyTradePages}
+          myPages={myTradePages}
+          myCoverDesignId={coverDesignId}
           partnerPages={demoPartnerTradePages}
+          partnerCoverDesignId="cover-mochimo"
           onTradeComplete={(myOffers, partnerOffers) => {
             console.log('Trade complete:', myOffers, partnerOffers)
             setIsTradeSessionOpen(false)

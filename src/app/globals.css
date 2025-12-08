@@ -796,20 +796,39 @@ html {
 /* ============================================
    TradeBookViewer用のreact-pageflip位置修正
    静的状態とアニメーション状態で位置がずれる問題を修正
-   BookViewと同じパターンを使用
    ============================================ */
 
-/* trade-bookの内部wrapper - BookViewと同じ設定 */
-.trade-book .stf__wrapper {
-  perspective: 2000px !important;
+/* trade-bookルート要素 */
+.trade-book {
   position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* trade-bookの内部wrapper - 位置を強制的にリセット */
+.trade-book .stf__wrapper {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  perspective: 2000px !important;
   z-index: 10 !important;
 }
 
-/* 親コンテナ - BookViewと同じ設定 */
-.trade-book .stf__parent {
-  transform-style: preserve-3d !important;
+/* 親コンテナ - trade-bookとstf__parentは同じ要素なのでセレクタを結合 */
+.trade-book.stf__parent {
   position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  transform-style: preserve-3d !important;
   z-index: 10 !important;
 }
 
