@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import HTMLFlipBook from 'react-pageflip'
 import type { PlacedSticker } from '../sticker-book/StickerPlacement'
@@ -35,7 +35,10 @@ export interface TradeBookPageFull extends BookPage {
   stickers: PlacedSticker[]
 }
 
-export type StampType = 'please' | 'thinking' | 'addMore' | 'ok' | 'thanks' | 'cute' | 'no' | 'wait'
+export type StampType =
+  | 'please' | 'thinking' | 'addMore' | 'ok'
+  | 'thanks' | 'cute' | 'no' | 'wait'
+  | 'this' | 'rare' | 'instead' | 'great'
 
 interface TradeMessage {
   id: string
@@ -45,35 +48,43 @@ interface TradeMessage {
   timestamp: Date
 }
 
-// スタンプ定義
-const STAMPS: Record<StampType, { emoji: string; text: string }> = {
-  please: { emoji: '🙏✨', text: 'おねがい！' },
-  thinking: { emoji: '🤔💭', text: 'まよい中...' },
-  addMore: { emoji: '➕🌟', text: 'もうちょっと' },
-  ok: { emoji: '🎉🤝', text: 'OK！' },
-  thanks: { emoji: '💕', text: 'ありがとう！' },
-  cute: { emoji: '🩷', text: 'かわいい！' },
-  no: { emoji: '😢💔', text: 'ごめんね...' },
-  wait: { emoji: '⏳', text: 'ちょっとまって' },
+// 交換用スタンプ（子ども向けシール交換に最適化）
+const STAMPS: Record<StampType, { emoji: string; label: string }> = {
+  please: { emoji: '🙏✨', label: 'おねがい！' },
+  thinking: { emoji: '🤔💭', label: 'うーん...' },
+  addMore: { emoji: '➕🌟', label: 'もっと！' },
+  ok: { emoji: '🎉🤝', label: 'いいよ！' },
+  thanks: { emoji: '💕', label: 'ありがとう！' },
+  cute: { emoji: '🩷', label: 'かわいい～' },
+  no: { emoji: '😢', label: 'ムリ...' },
+  wait: { emoji: '⏳', label: 'まってね' },
+  this: { emoji: '👀✨', label: 'これ！' },
+  rare: { emoji: '🌟🌟🌟', label: 'レア！' },
+  instead: { emoji: '🔄', label: 'かわりに？' },
+  great: { emoji: '👍', label: 'オッケー！' },
 }
 
-// 定型文
+// 交換用定型文
 const PRESET_MESSAGES = [
   'このシールほしい！',
-  'もう少し足して？',
+  'かわいい！',
+  'もうちょっと足して？',
   'これでどう？',
+  'レア見せて！',
+  'ありがとう！',
+  '他にある？',
+  'これと交換しよう！',
+  '考え中...',
   'いいね！',
-  '他のある？',
-  'ちょっと待って',
 ]
 
 // レアリティカラー
 const RARITY_COLORS: Record<number, string> = {
-  1: 'from-gray-200 to-gray-300 border-gray-400',
-  2: 'from-green-200 to-green-300 border-green-400',
-  3: 'from-blue-200 to-blue-300 border-blue-400',
-  4: 'from-purple-200 to-purple-300 border-purple-400',
-  5: 'from-yellow-200 to-orange-300 border-yellow-500',
+  1: 'from-gray-100 to-gray-200 border-gray-300',
+  2: 'from-green-100 to-green-200 border-green-300',
+  3: 'from-blue-100 to-blue-200 border-blue-300',
+  4: 'from-purple-100 to-purple-200 border-purple-300',
+  5: 'from-yellow-100 to-orange-200 border-yellow-400',
 }
 
 // ============================================
@@ -90,63 +101,294 @@ interface TradeSessionFullProps {
 }
 
 // ============================================
-// シールカード
+// LINE風チャットメッセージバブル
 // ============================================
-const StickerCard: React.FC<{
-  sticker: PlacedSticker
-  selected?: boolean
-  onSelect?: () => void
-  disabled?: boolean
-}> = ({ sticker, selected, onSelect, disabled }) => {
-  const stickerData = sticker.sticker
-  const imageUrl = stickerData.imageUrl
-  const rarity = stickerData.rarity
+const ChatBubble: React.FC<{
+  message: TradeMessage
+  isMe: boolean
+  partnerName: string
+}> = ({ message, isMe, partnerName }) => {
+  const content = message.type === 'stamp'
+    ? STAMPS[message.content as StampType]?.emoji || message.content
+    : message.content
+
+  const isStamp = message.type === 'stamp'
 
   return (
-    <motion.button
-      onClick={onSelect}
-      disabled={disabled}
-      whileTap={disabled ? {} : { scale: 0.9 }}
-      className={`
-        w-14 h-14 rounded-xl border-2 overflow-hidden
-        bg-gradient-to-br ${RARITY_COLORS[rarity] || RARITY_COLORS[1]}
-        transition-all duration-200 relative flex-shrink-0
-        ${selected ? 'ring-4 ring-pink-500 scale-110 z-10' : ''}
-        ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
-      `}
-    >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={stickerData.name}
-          className="w-full h-full object-contain p-0.5"
-          draggable={false}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-2xl">
-          ⭐
+    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
+      {!isMe && (
+        <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center mr-1 flex-shrink-0 text-[10px]">
+          👤
         </div>
       )}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/40 py-0.5">
-        <span className="text-[8px] text-yellow-300 block text-center">
-          {'★'.repeat(rarity)}
-        </span>
+      <div
+        className={`
+          ${isStamp ? 'text-2xl px-2 py-1' : 'text-xs px-3 py-1.5'}
+          rounded-2xl max-w-[70%] break-words
+          ${isMe
+            ? 'bg-gradient-to-r from-pink-400 to-pink-500 text-white rounded-br-sm'
+            : 'bg-white text-purple-800 rounded-bl-sm shadow-sm border border-purple-100'}
+        `}
+      >
+        {content}
+        {isStamp && message.type === 'stamp' && (
+          <span className="text-[10px] block text-center opacity-70">
+            {STAMPS[message.content as StampType]?.label}
+          </span>
+        )}
       </div>
-      {selected && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="absolute top-0 right-0 w-5 h-5 bg-pink-500 rounded-bl-lg flex items-center justify-center shadow-md"
-        >
-          <span className="text-white text-xs font-bold">✓</span>
-        </motion.div>
-      )}
-    </motion.button>
+    </div>
   )
 }
 
 // ============================================
-// シール帳ページコンポーネント
+// LINE風チャットエリア
+// ============================================
+const ChatArea: React.FC<{
+  messages: TradeMessage[]
+  myUserId: string
+  partnerName: string
+}> = ({ messages, myUserId, partnerName }) => {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
+
+  return (
+    <div
+      ref={scrollRef}
+      className="h-24 overflow-y-auto px-2 py-2 bg-gradient-to-b from-purple-50/80 to-pink-50/80 rounded-xl"
+      style={{ scrollBehavior: 'smooth' }}
+    >
+      {messages.length === 0 ? (
+        <div className="h-full flex items-center justify-center text-purple-300 text-xs">
+          スタンプでやりとりしよう！💬
+        </div>
+      ) : (
+        messages.map((msg) => (
+          <ChatBubble
+            key={msg.id}
+            message={msg}
+            isMe={msg.senderId === myUserId}
+            partnerName={partnerName}
+          />
+        ))
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// スタンプ・定型文パネル
+// ============================================
+const MessagePanel: React.FC<{
+  onSendStamp: (type: StampType) => void
+  onSendPreset: (text: string) => void
+}> = ({ onSendStamp, onSendPreset }) => {
+  const [activeTab, setActiveTab] = useState<'stamps' | 'presets'>('stamps')
+
+  return (
+    <div className="bg-white/95 rounded-xl border border-purple-100 overflow-hidden">
+      {/* タブ切り替え */}
+      <div className="flex border-b border-purple-100">
+        <button
+          onClick={() => setActiveTab('stamps')}
+          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === 'stamps'
+              ? 'bg-purple-100 text-purple-700'
+              : 'text-purple-400'
+          }`}
+        >
+          😊 スタンプ
+        </button>
+        <button
+          onClick={() => setActiveTab('presets')}
+          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === 'presets'
+              ? 'bg-purple-100 text-purple-700'
+              : 'text-purple-400'
+          }`}
+        >
+          💬 定型文
+        </button>
+      </div>
+
+      {/* コンテンツ */}
+      <div className="p-2 max-h-20 overflow-y-auto">
+        {activeTab === 'stamps' ? (
+          <div className="grid grid-cols-6 gap-1">
+            {(Object.keys(STAMPS) as StampType[]).map((type) => (
+              <motion.button
+                key={type}
+                whileTap={{ scale: 0.85 }}
+                onClick={() => onSendStamp(type)}
+                className="w-10 h-10 rounded-lg bg-purple-50 hover:bg-purple-100 flex flex-col items-center justify-center transition-colors"
+              >
+                <span className="text-lg leading-none">{STAMPS[type].emoji}</span>
+              </motion.button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {PRESET_MESSAGES.map((text, i) => (
+              <button
+                key={i}
+                onClick={() => onSendPreset(text)}
+                className="px-2 py-1 rounded-full bg-purple-50 border border-purple-200 text-[10px] text-purple-600 active:bg-purple-100 whitespace-nowrap"
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 希望シール枠（コンパクト版）
+// ============================================
+const CompactWishlist: React.FC<{
+  myWants: PlacedSticker[]
+  partnerWants: PlacedSticker[]
+  onRemoveMyWant: (id: string) => void
+  myConfirmed: boolean
+  partnerConfirmed: boolean
+  canConfirm: boolean
+  onConfirm: () => void
+}> = ({ myWants, partnerWants, onRemoveMyWant, myConfirmed, partnerConfirmed, canConfirm, onConfirm }) => {
+  const myRate = myWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
+  const partnerRate = partnerWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
+  const isBalanced = Math.abs(myRate - partnerRate) <= 20
+
+  return (
+    <div className="bg-white/95 rounded-xl p-2 shadow-sm border border-purple-100">
+      <div className="flex gap-2 items-stretch">
+        {/* 希望シール（もらう） */}
+        <div className="flex-1 bg-purple-50/80 rounded-lg p-1.5 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-[10px] text-purple-500">👤→わたし</span>
+            <span className="text-[10px] font-bold text-purple-600">{myRate}pt</span>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {myWants.length > 0 ? (
+              myWants.slice(0, 3).map((s) => (
+                <div key={s.id} className="relative group">
+                  <div className="w-8 h-8 rounded-md overflow-hidden border border-purple-300 bg-white">
+                    {s.sticker.imageUrl ? (
+                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-sm flex items-center justify-center h-full">⭐</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onRemoveMyWant(s.id)}
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+            ) : (
+              <span className="text-[9px] text-purple-300">タップで選択</span>
+            )}
+            {myWants.length > 3 && (
+              <span className="text-[10px] text-purple-400 self-center">+{myWants.length - 3}</span>
+            )}
+          </div>
+        </div>
+
+        {/* 交換アイコン */}
+        <div className="flex items-center">
+          <div className={`text-lg ${isBalanced ? 'text-green-500' : 'text-orange-400'}`}>
+            ⇄
+          </div>
+        </div>
+
+        {/* 提供シール（あげる） */}
+        <div className="flex-1 bg-pink-50/80 rounded-lg p-1.5 min-h-[52px]">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-[10px] text-pink-500">わたし→👤</span>
+            <span className="text-[10px] font-bold text-pink-600">{partnerRate}pt</span>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {partnerWants.length > 0 ? (
+              partnerWants.slice(0, 3).map((s) => (
+                <div key={s.id} className="w-8 h-8 rounded-md overflow-hidden border border-pink-300 bg-white">
+                  {s.sticker.imageUrl ? (
+                    <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-sm flex items-center justify-center h-full">⭐</span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <span className="text-[9px] text-pink-300">相手が選択中</span>
+            )}
+            {partnerWants.length > 3 && (
+              <span className="text-[10px] text-pink-400 self-center">+{partnerWants.length - 3}</span>
+            )}
+          </div>
+        </div>
+
+        {/* 交換OKボタン */}
+        <motion.button
+          onClick={onConfirm}
+          disabled={!canConfirm || myConfirmed}
+          whileTap={canConfirm && !myConfirmed ? { scale: 0.95 } : {}}
+          className={`
+            w-16 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all
+            ${myConfirmed
+              ? 'bg-green-500 text-white'
+              : !canConfirm
+                ? 'bg-gray-200 text-gray-400'
+                : 'bg-gradient-to-b from-pink-400 to-purple-500 text-white shadow-lg'}
+          `}
+        >
+          {myConfirmed ? (
+            <>
+              <motion.span
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="text-lg"
+              >
+                ⏳
+              </motion.span>
+              <span className="text-[8px]">まち中</span>
+            </>
+          ) : (
+            <>
+              <span className="text-lg">🤝</span>
+              <span>OK!</span>
+            </>
+          )}
+        </motion.button>
+      </div>
+
+      {/* ステータス表示 */}
+      <div className="flex justify-center gap-3 mt-1.5">
+        <div className={`flex items-center gap-1 text-[10px] ${myConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
+          <span>{myConfirmed ? '✓' : '○'}</span>
+          <span>わたし</span>
+        </div>
+        <div className={`flex items-center gap-1 text-[10px] ${partnerConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
+          <span>{partnerConfirmed ? '✓' : '○'}</span>
+          <span>相手</span>
+        </div>
+        {!isBalanced && (
+          <span className="text-[10px] text-orange-500">⚠️ レート差あり</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// シール帳ページコンポーネント（修正版）
 // ============================================
 const TradeBookPageComponent = React.forwardRef<
   HTMLDivElement,
@@ -161,59 +403,109 @@ const TradeBookPageComponent = React.forwardRef<
   const canSelectMore = selectedStickers.length < maxSelections
   const stickers = page.stickers || []
 
-  // ページテーマの背景
+  // ページ背景
   const getPageBackground = (theme?: PageTheme) => {
     if (!theme) return 'bg-gradient-to-br from-pink-50 to-purple-50'
     return `bg-gradient-to-br ${theme.backgroundColor || 'from-pink-50 to-purple-50'}`
   }
 
+  // シールのタップハンドラ
+  const handleStickerTap = useCallback((e: React.MouseEvent | React.TouchEvent, stickerId: string) => {
+    e.stopPropagation()
+    e.preventDefault()
+    onStickerSelect(stickerId)
+  }, [onStickerSelect])
+
   return (
     <div
       ref={ref}
-      className={`w-full h-full ${getPageBackground(page.theme)} p-3 overflow-hidden`}
-      style={{ boxShadow: 'inset 0 0 20px rgba(0,0,0,0.05)' }}
+      className={`w-full h-full ${getPageBackground(page.theme)} overflow-hidden relative`}
+      style={{
+        boxShadow: 'inset 0 0 15px rgba(0,0,0,0.03)',
+      }}
     >
       {page.type === 'cover' ? (
-        <div className="w-full h-full flex flex-col items-center justify-center">
-          <div className="text-4xl mb-2">📘</div>
-          <p className="text-purple-700 font-bold text-sm">シール帳</p>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-400 to-pink-400">
+          <div className="text-3xl mb-1">📘</div>
+          <p className="text-white font-bold text-xs drop-shadow">シール帳</p>
         </div>
       ) : page.type === 'back-cover' ? (
-        <div className="w-full h-full flex flex-col items-center justify-center">
-          <div className="text-2xl mb-2">📕</div>
-          <p className="text-purple-500 text-xs">おわり</p>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-300 to-pink-300">
+          <div className="text-2xl mb-1">📕</div>
+          <p className="text-white/80 text-[10px]">おわり</p>
         </div>
       ) : (
-        <div className="w-full h-full relative">
+        <div className="w-full h-full p-2 relative">
           {/* ページ番号 */}
-          <div className="absolute top-1 right-1 text-[10px] text-purple-400">
-            {page.pageNumber}
-          </div>
-          {/* シール配置 */}
+          {page.pageNumber && (
+            <div className="absolute top-1 right-1 text-[8px] text-purple-300 bg-white/50 px-1 rounded">
+              {page.pageNumber}
+            </div>
+          )}
+
+          {/* シール配置 - 位置を正確に計算 */}
           {stickers.map((sticker) => {
             const isSelected = selectedStickers.includes(sticker.id)
-            const size = 50 * sticker.scale
+            const size = Math.min(40, 36 * sticker.scale)
+            const rarity = sticker.sticker.rarity
+
             return (
               <div
                 key={sticker.id}
                 className="absolute"
                 style={{
-                  left: `${sticker.x * 100}%`,
-                  top: `${sticker.y * 100}%`,
-                  transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+                  left: `calc(${sticker.x * 100}% - ${size/2}px)`,
+                  top: `calc(${sticker.y * 100}% - ${size/2}px)`,
+                  width: size,
+                  height: size,
+                  transform: `rotate(${sticker.rotation}deg)`,
+                  zIndex: isSelected ? 10 : 1,
                 }}
               >
-                <StickerCard
-                  sticker={sticker}
-                  selected={isSelected}
-                  onSelect={() => onStickerSelect(sticker.id)}
+                <button
+                  onClick={(e) => handleStickerTap(e, sticker.id)}
+                  onTouchEnd={(e) => handleStickerTap(e, sticker.id)}
                   disabled={disabled || (!isSelected && !canSelectMore)}
-                />
+                  className={`
+                    w-full h-full rounded-lg border-2 overflow-hidden
+                    bg-gradient-to-br ${RARITY_COLORS[rarity] || RARITY_COLORS[1]}
+                    transition-all duration-150 relative
+                    ${isSelected ? 'ring-2 ring-pink-500 ring-offset-1 scale-110' : ''}
+                    ${disabled || (!isSelected && !canSelectMore) ? 'opacity-50' : 'active:scale-95'}
+                  `}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  {sticker.sticker.imageUrl ? (
+                    <img
+                      src={sticker.sticker.imageUrl}
+                      alt={sticker.sticker.name}
+                      className="w-full h-full object-contain p-0.5"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-lg">
+                      ⭐
+                    </div>
+                  )}
+                  {/* レア度表示 */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/30 py-px">
+                    <span className="text-[6px] text-yellow-300 block text-center">
+                      {'★'.repeat(rarity)}
+                    </span>
+                  </div>
+                  {/* 選択マーク */}
+                  {isSelected && (
+                    <div className="absolute top-0 right-0 w-4 h-4 bg-pink-500 rounded-bl-lg flex items-center justify-center">
+                      <span className="text-white text-[8px] font-bold">✓</span>
+                    </div>
+                  )}
+                </button>
               </div>
             )
           })}
+
           {stickers.length === 0 && (
-            <div className="w-full h-full flex items-center justify-center text-purple-300 text-xs">
+            <div className="w-full h-full flex items-center justify-center text-purple-200 text-[10px]">
               シールがありません
             </div>
           )}
@@ -226,7 +518,7 @@ const TradeBookPageComponent = React.forwardRef<
 TradeBookPageComponent.displayName = 'TradeBookPageComponent'
 
 // ============================================
-// シール帳ビューワー
+// シール帳ビューワー（改良版）
 // ============================================
 const TradeBookViewer: React.FC<{
   pages: TradeBookPageFull[]
@@ -238,42 +530,51 @@ const TradeBookViewer: React.FC<{
 }> = ({ pages, userName, isPartner, selectedStickers, onStickerSelect, maxSelections }) => {
   const bookRef = useRef<any>(null)
   const [currentPage, setCurrentPage] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const handleFlip = useCallback((e: any) => {
     setCurrentPage(e.data)
   }, [])
 
-  // ページ幅・高さ (iPhone 12 最適化: 幅390px想定)
-  const pageWidth = 150
-  const pageHeight = 200
+  // ページめくりボタン
+  const goToPrev = useCallback(() => {
+    bookRef.current?.pageFlip()?.flipPrev()
+  }, [])
+
+  const goToNext = useCallback(() => {
+    bookRef.current?.pageFlip()?.flipNext()
+  }, [])
+
+  // iPhone 12最適化サイズ (390px幅想定)
+  const pageWidth = 140
+  const pageHeight = 180
 
   return (
     <div className={`
-      rounded-2xl p-2
-      ${isPartner ? 'bg-purple-100/80' : 'bg-pink-100/80'}
-      backdrop-blur-sm
+      rounded-xl p-2
+      ${isPartner ? 'bg-purple-100/90' : 'bg-pink-100/90'}
     `}>
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-2 px-2">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{isPartner ? '👤' : '😊'}</span>
-          <span className="text-xs font-bold text-purple-700">{userName}のシール帳</span>
+      <div className="flex items-center justify-between mb-1 px-1">
+        <div className="flex items-center gap-1">
+          <span className="text-sm">{isPartner ? '👤' : '😊'}</span>
+          <span className="text-[10px] font-bold text-purple-700">{userName}</span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => bookRef.current?.pageFlip()?.flipPrev()}
+            onClick={goToPrev}
             disabled={currentPage === 0}
-            className="w-7 h-7 rounded-full bg-white/80 text-purple-600 text-xs disabled:opacity-30 active:scale-95 transition-transform"
+            className="w-6 h-6 rounded-full bg-white/80 text-purple-600 text-[10px] disabled:opacity-30 active:scale-95 transition-transform shadow-sm"
           >
             ◀
           </button>
-          <span className="text-[10px] text-purple-500 min-w-[30px] text-center">
+          <span className="text-[9px] text-purple-500 min-w-[28px] text-center">
             {currentPage + 1}/{pages.length}
           </span>
           <button
-            onClick={() => bookRef.current?.pageFlip()?.flipNext()}
+            onClick={goToNext}
             disabled={currentPage >= pages.length - 1}
-            className="w-7 h-7 rounded-full bg-white/80 text-purple-600 text-xs disabled:opacity-30 active:scale-95 transition-transform"
+            className="w-6 h-6 rounded-full bg-white/80 text-purple-600 text-[10px] disabled:opacity-30 active:scale-95 transition-transform shadow-sm"
           >
             ▶
           </button>
@@ -281,10 +582,17 @@ const TradeBookViewer: React.FC<{
       </div>
 
       {/* シール帳 */}
-      <div className="flex justify-center">
+      <div
+        ref={containerRef}
+        className="flex justify-center"
+        style={{ touchAction: 'pan-y' }}
+      >
         <div
-          className="relative bg-white rounded-lg shadow-lg overflow-hidden"
-          style={{ width: pageWidth * 2, height: pageHeight }}
+          className="relative bg-white rounded-lg shadow-md overflow-hidden"
+          style={{
+            width: pageWidth * 2,
+            height: pageHeight,
+          }}
         >
           <HTMLFlipBook
             ref={bookRef}
@@ -296,20 +604,20 @@ const TradeBookViewer: React.FC<{
             minHeight={pageHeight}
             maxHeight={pageHeight}
             showCover={true}
-            mobileScrollSupport={true}
+            mobileScrollSupport={false}
             onFlip={handleFlip}
             className="trade-book"
             style={{}}
             startPage={0}
             drawShadow={true}
-            flippingTime={400}
+            flippingTime={300}
             usePortrait={false}
             startZIndex={0}
             autoSize={false}
-            maxShadowOpacity={0.3}
+            maxShadowOpacity={0.2}
             showPageCorners={true}
             disableFlipByClick={false}
-            swipeDistance={30}
+            swipeDistance={20}
             clickEventForward={true}
             useMouseEvents={true}
           >
@@ -327,202 +635,12 @@ const TradeBookViewer: React.FC<{
         </div>
       </div>
 
-      {/* 選択数表示 */}
-      <div className="mt-2 text-center">
-        <span className={`text-xs font-medium ${isPartner ? 'text-purple-600' : 'text-pink-600'}`}>
-          {isPartner ? '🎯 ほしいシール' : '🎁 あげるシール'}: {selectedStickers.length}/{maxSelections}
+      {/* 選択数 */}
+      <div className="mt-1 text-center">
+        <span className={`text-[10px] font-medium ${isPartner ? 'text-purple-600' : 'text-pink-600'}`}>
+          {isPartner ? '🎯 ほしい' : '🎁 あげる'}: {selectedStickers.length}/{maxSelections}
         </span>
       </div>
-    </div>
-  )
-}
-
-// ============================================
-// 希望シール枠
-// ============================================
-const WishlistSlots: React.FC<{
-  myWants: PlacedSticker[]
-  partnerWants: PlacedSticker[]
-  onRemoveMyWant: (id: string) => void
-}> = ({ myWants, partnerWants, onRemoveMyWant }) => {
-  const myRate = myWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
-  const partnerRate = partnerWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
-  const isBalanced = Math.abs(myRate - partnerRate) <= 20
-
-  return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-3 shadow-sm border border-purple-100">
-      {/* レートバー */}
-      <div className="flex items-center justify-center gap-3 mb-2">
-        <div className="text-center">
-          <p className="text-[10px] text-purple-400">もらう</p>
-          <p className="text-lg font-bold text-purple-600">{myRate}</p>
-        </div>
-        <div className={`
-          px-3 py-1 rounded-full text-xs font-bold
-          ${isBalanced ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}
-        `}>
-          {isBalanced ? '⚖️ OK' : '⚠️ 差あり'}
-        </div>
-        <div className="text-center">
-          <p className="text-[10px] text-pink-400">あげる</p>
-          <p className="text-lg font-bold text-pink-600">{partnerRate}</p>
-        </div>
-      </div>
-
-      {/* スロット */}
-      <div className="flex gap-2">
-        {/* 自分がほしいシール（相手から） */}
-        <div className="flex-1 bg-purple-50 rounded-xl p-2 min-h-[70px]">
-          <p className="text-[10px] text-purple-500 text-center mb-1">👤→わたし</p>
-          <div className="flex gap-1 flex-wrap justify-center">
-            {myWants.length > 0 ? (
-              myWants.map((s) => (
-                <div key={s.id} className="relative">
-                  <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-purple-300 bg-white">
-                    {s.sticker.imageUrl ? (
-                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-xl flex items-center justify-center h-full">⭐</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => onRemoveMyWant(s.id)}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))
-            ) : (
-              <span className="text-[10px] text-purple-300">タップで選択</span>
-            )}
-          </div>
-        </div>
-
-        <div className="text-2xl self-center">⇄</div>
-
-        {/* 相手がほしいシール（自分から） */}
-        <div className="flex-1 bg-pink-50 rounded-xl p-2 min-h-[70px]">
-          <p className="text-[10px] text-pink-500 text-center mb-1">わたし→👤</p>
-          <div className="flex gap-1 flex-wrap justify-center">
-            {partnerWants.length > 0 ? (
-              partnerWants.map((s) => (
-                <div key={s.id} className="relative">
-                  <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-pink-300 bg-white">
-                    {s.sticker.imageUrl ? (
-                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-xl flex items-center justify-center h-full">⭐</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <span className="text-[10px] text-pink-300">相手が選択中</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// スタンプ・定型文パネル
-// ============================================
-const CommunicationPanel: React.FC<{
-  messages: TradeMessage[]
-  myUserId: string
-  onSendStamp: (type: StampType) => void
-  onSendPreset: (text: string) => void
-}> = ({ messages, myUserId, onSendStamp, onSendPreset }) => {
-  const [showPresets, setShowPresets] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
-      {/* メッセージ表示 */}
-      <div className="h-16 overflow-y-auto px-2 py-1 bg-gradient-to-b from-purple-50/50 to-white">
-        {messages.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {messages.slice(-6).map((msg) => {
-              const isMe = msg.senderId === myUserId
-              return (
-                <motion.div
-                  key={msg.id}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className={`
-                    px-2 py-1 rounded-full text-xs
-                    ${isMe ? 'bg-pink-100 text-pink-700' : 'bg-purple-100 text-purple-700'}
-                  `}
-                >
-                  {msg.type === 'stamp'
-                    ? STAMPS[msg.content as StampType]?.emoji
-                    : msg.content}
-                </motion.div>
-              )
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-purple-300 text-xs">
-            スタンプでやりとりしよう！
-          </div>
-        )}
-      </div>
-
-      {/* スタンプボタン */}
-      <div className="flex gap-1 p-2 overflow-x-auto border-t border-purple-100/50">
-        {(Object.keys(STAMPS) as StampType[]).map((type) => (
-          <motion.button
-            key={type}
-            whileTap={{ scale: 0.85 }}
-            onClick={() => onSendStamp(type)}
-            className="flex-shrink-0 w-10 h-10 rounded-xl bg-purple-50 hover:bg-purple-100 flex items-center justify-center text-xl transition-colors"
-          >
-            {STAMPS[type].emoji}
-          </motion.button>
-        ))}
-        <button
-          onClick={() => setShowPresets(!showPresets)}
-          className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-colors
-            ${showPresets ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-600'}`}
-        >
-          💬
-        </button>
-      </div>
-
-      {/* 定型文 */}
-      <AnimatePresence>
-        {showPresets && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            className="overflow-hidden border-t border-purple-100/50"
-          >
-            <div className="flex flex-wrap gap-1 p-2 bg-purple-50/50">
-              {PRESET_MESSAGES.map((text, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    onSendPreset(text)
-                    setShowPresets(false)
-                  }}
-                  className="px-2 py-1 rounded-full bg-white border border-purple-200 text-[11px] text-purple-600 active:bg-purple-100"
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -545,10 +663,10 @@ const PostTradeProfileScreen: React.FC<{
     >
       {/* キラキラエフェクト */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(15)].map((_, i) => (
+        {[...Array(20)].map((_, i) => (
           <motion.div
             key={i}
-            className="absolute text-2xl"
+            className="absolute text-xl"
             initial={{
               x: `${Math.random() * 100}%`,
               y: `${Math.random() * 100}%`,
@@ -564,7 +682,7 @@ const PostTradeProfileScreen: React.FC<{
               repeat: Infinity,
             }}
           >
-            {['✨', '⭐', '💫'][i % 3]}
+            {['✨', '⭐', '💫', '🌟'][i % 4]}
           </motion.div>
         ))}
       </div>
@@ -573,7 +691,7 @@ const PostTradeProfileScreen: React.FC<{
         initial={{ scale: 0.8, y: 50 }}
         animate={{ scale: 1, y: 0 }}
         transition={{ type: 'spring', duration: 0.6 }}
-        className="w-full max-w-sm"
+        className="w-full max-w-xs"
       >
         {/* 成功メッセージ */}
         <div className="text-center mb-4">
@@ -588,21 +706,21 @@ const PostTradeProfileScreen: React.FC<{
         </div>
 
         {/* もらったシール */}
-        <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 mb-4">
-          <p className="text-white/80 text-sm text-center mb-2">もらったシール</p>
+        <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-3 mb-4">
+          <p className="text-white/80 text-xs text-center mb-2">もらったシール</p>
           <div className="flex gap-2 justify-center flex-wrap">
-            {receivedStickers.map((s) => (
+            {receivedStickers.map((s, i) => (
               <motion.div
                 key={s.id}
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', delay: 0.3 }}
-                className="w-14 h-14 rounded-xl bg-white/30 overflow-hidden"
+                transition={{ type: 'spring', delay: 0.2 + i * 0.1 }}
+                className="w-12 h-12 rounded-lg bg-white/30 overflow-hidden border-2 border-white/50"
               >
                 {s.sticker.imageUrl ? (
                   <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
                 ) : (
-                  <span className="text-3xl flex items-center justify-center h-full">⭐</span>
+                  <span className="text-2xl flex items-center justify-center h-full">⭐</span>
                 )}
               </motion.div>
             ))}
@@ -612,7 +730,7 @@ const PostTradeProfileScreen: React.FC<{
         {/* 相手プロフィール */}
         <div className="bg-white rounded-2xl p-4 shadow-xl">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-2xl border-2 border-purple-300">
+            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-xl border-2 border-purple-300">
               {partner.avatarUrl ? (
                 <img src={partner.avatarUrl} className="w-full h-full rounded-full" />
               ) : (
@@ -626,26 +744,26 @@ const PostTradeProfileScreen: React.FC<{
           </div>
 
           {partner.bio && (
-            <p className="text-sm text-purple-600 mb-3 bg-purple-50 rounded-lg p-2">
+            <p className="text-xs text-purple-600 mb-3 bg-purple-50 rounded-lg p-2">
               {partner.bio}
             </p>
           )}
 
-          <div className="flex gap-2 text-center mb-4">
+          <div className="flex gap-2 text-center mb-3">
             <div className="flex-1 bg-purple-50 rounded-lg py-2">
               <p className="text-lg font-bold text-purple-700">{partner.totalStickers || 0}</p>
-              <p className="text-[10px] text-purple-500">シール</p>
+              <p className="text-[9px] text-purple-500">シール</p>
             </div>
             <div className="flex-1 bg-pink-50 rounded-lg py-2">
               <p className="text-lg font-bold text-pink-700">{partner.totalTrades || 0}</p>
-              <p className="text-[10px] text-pink-500">交換</p>
+              <p className="text-[9px] text-pink-500">交換</p>
             </div>
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={onFollow}
-              className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all
+              className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all
                 ${isFollowing
                   ? 'bg-gray-200 text-gray-600'
                   : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'}`}
@@ -654,7 +772,7 @@ const PostTradeProfileScreen: React.FC<{
             </button>
             <button
               onClick={onClose}
-              className="flex-1 py-3 rounded-xl font-bold text-sm bg-gray-100 text-gray-600"
+              className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gray-100 text-gray-600"
             >
               とじる
             </button>
@@ -703,8 +821,15 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     return undefined
   }, [])
 
-  const myWants = myWantIds.map((id) => getStickerFromPages(partnerPages, id)).filter(Boolean) as PlacedSticker[]
-  const myOffers = myOfferIds.map((id) => getStickerFromPages(myPages, id)).filter(Boolean) as PlacedSticker[]
+  const myWants = useMemo(() =>
+    myWantIds.map((id) => getStickerFromPages(partnerPages, id)).filter(Boolean) as PlacedSticker[],
+    [myWantIds, partnerPages, getStickerFromPages]
+  )
+
+  const myOffers = useMemo(() =>
+    myOfferIds.map((id) => getStickerFromPages(myPages, id)).filter(Boolean) as PlacedSticker[],
+    [myOfferIds, myPages, getStickerFromPages]
+  )
 
   // 選択ハンドラ
   const handleSelectPartnerSticker = useCallback((stickerId: string) => {
@@ -740,7 +865,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     setMessages((prev) => [
       ...prev,
       {
-        id: `msg-${Date.now()}`,
+        id: `msg-${Date.now()}-${Math.random()}`,
         type,
         content,
         senderId,
@@ -782,27 +907,13 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   // デモ: 相手のスタンプをランダム送信
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Math.random() > 0.6 && messages.length < 15) {
-        const types: StampType[] = ['please', 'thinking', 'cute', 'ok']
+      if (Math.random() > 0.65 && messages.length < 20) {
+        const types: StampType[] = ['please', 'thinking', 'cute', 'ok', 'this', 'great']
         addMessage('stamp', types[Math.floor(Math.random() * types.length)], partnerUser.id)
       }
-    }, 4000)
+    }, 3500)
     return () => clearInterval(interval)
   }, [addMessage, partnerUser.id, messages.length])
-
-  // デモ: 相手が自分のシールをほしがる（ランダム）
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      // 相手がランダムにシールを選ぶ（デモ用）
-      const allMyStickers = myPages.flatMap((p) => p.stickers)
-      if (allMyStickers.length > 0 && myOfferIds.length === 0) {
-        const randomCount = Math.min(2, allMyStickers.length)
-        const selected = allMyStickers.slice(0, randomCount).map((s) => s.id)
-        // 相手の選択として表示（実際はサーバーから来る）
-      }
-    }, 3000)
-    return () => clearTimeout(timeout)
-  }, [myPages, myOfferIds.length])
 
   // フォロー処理
   const handleFollow = useCallback(() => {
@@ -828,63 +939,89 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     )
   }
 
+  const canConfirm = myWantIds.length > 0 && myOfferIds.length > 0
+
   return (
     <div
       className="fixed inset-0 z-50 bg-gradient-to-b from-purple-100 via-pink-50 to-purple-100 flex flex-col"
       style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
     >
-      {/* ヘッダー */}
-      <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm px-3 py-2 flex items-center justify-between shadow-sm">
+      {/* ヘッダー（コンパクト） */}
+      <div className="flex-shrink-0 bg-white/95 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between shadow-sm">
         <button
           onClick={() => setShowCancelConfirm(true)}
-          className="text-purple-600 text-sm font-medium"
+          className="text-purple-600 text-xs font-medium px-2 py-1"
         >
           ✕ やめる
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center overflow-hidden">
             {partnerUser.avatarUrl ? (
-              <img src={partnerUser.avatarUrl} className="w-full h-full rounded-full" />
+              <img src={partnerUser.avatarUrl} className="w-full h-full" />
             ) : (
-              <span className="text-sm">👤</span>
+              <span className="text-xs">👤</span>
             )}
           </div>
           <span className="text-purple-700 font-bold text-sm">{partnerUser.name}</span>
           {partnerConfirmed && (
-            <span className="px-2 py-0.5 bg-green-500 text-white text-[10px] rounded-full font-bold">
+            <span className="px-1.5 py-0.5 bg-green-500 text-white text-[8px] rounded-full font-bold">
               OK!
             </span>
           )}
         </div>
-        <div className="w-14" />
+        <div className="w-16" />
       </div>
 
-      {/* タブ切り替え */}
-      <div className="flex-shrink-0 flex gap-2 px-3 py-2 bg-white/50">
-        <button
-          onClick={() => setActiveTab('partner')}
-          className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'partner'
-              ? 'bg-purple-500 text-white shadow-md'
-              : 'bg-white/80 text-purple-600'
-          }`}
-        >
-          👤 {partnerUser.name}の帳
-        </button>
-        <button
-          onClick={() => setActiveTab('my')}
-          className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-            activeTab === 'my'
-              ? 'bg-pink-500 text-white shadow-md'
-              : 'bg-white/80 text-pink-600'
-          }`}
-        >
-          😊 わたしの帳
-        </button>
-      </div>
+      {/* メインコンテンツ（スクロール可能） */}
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
+        {/* 希望シール枠 + 交換OKボタン */}
+        <CompactWishlist
+          myWants={myWants}
+          partnerWants={myOffers}
+          onRemoveMyWant={(id) => setMyWantIds((prev) => prev.filter((i) => i !== id))}
+          myConfirmed={myConfirmed}
+          partnerConfirmed={partnerConfirmed}
+          canConfirm={canConfirm}
+          onConfirm={handleConfirm}
+        />
 
-      {/* メインコンテンツ */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 pb-28">
+        {/* LINE風チャットエリア */}
+        <ChatArea
+          messages={messages}
+          myUserId={myUser.id}
+          partnerName={partnerUser.name}
+        />
+
+        {/* スタンプ・定型文パネル */}
+        <MessagePanel
+          onSendStamp={handleSendStamp}
+          onSendPreset={handleSendPreset}
+        />
+
+        {/* タブ切り替え */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('partner')}
+            className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'partner'
+                ? 'bg-purple-500 text-white shadow-md'
+                : 'bg-white/80 text-purple-600'
+            }`}
+          >
+            👤 {partnerUser.name}のシール帳
+          </button>
+          <button
+            onClick={() => setActiveTab('my')}
+            className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'my'
+                ? 'bg-pink-500 text-white shadow-md'
+                : 'bg-white/80 text-pink-600'
+            }`}
+          >
+            😊 わたしのシール帳
+          </button>
+        </div>
+
         {/* シール帳（タブで切り替え） */}
         <AnimatePresence mode="wait">
           {activeTab === 'partner' ? (
@@ -922,53 +1059,8 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
           )}
         </AnimatePresence>
 
-        {/* 希望シール枠 */}
-        <WishlistSlots
-          myWants={myWants}
-          partnerWants={myOffers}
-          onRemoveMyWant={(id) => setMyWantIds((prev) => prev.filter((i) => i !== id))}
-        />
-
-        {/* スタンプ・定型文 */}
-        <CommunicationPanel
-          messages={messages}
-          myUserId={myUser.id}
-          onSendStamp={handleSendStamp}
-          onSendPreset={handleSendPreset}
-        />
-      </div>
-
-      {/* 固定フッター: 交換OKボタン */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-sm border-t border-purple-100 shadow-lg">
-        <motion.button
-          onClick={handleConfirm}
-          disabled={myWantIds.length === 0 || myOfferIds.length === 0 || myConfirmed}
-          whileTap={myConfirmed ? {} : { scale: 0.98 }}
-          className={`
-            w-full py-4 rounded-2xl font-bold text-lg transition-all
-            ${myConfirmed
-              ? 'bg-green-500 text-white'
-              : myWantIds.length === 0 || myOfferIds.length === 0
-                ? 'bg-gray-200 text-gray-400'
-                : 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 text-white shadow-lg'}
-          `}
-        >
-          {myConfirmed ? (
-            <span className="flex items-center justify-center gap-2">
-              <motion.span
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-              >
-                ⏳
-              </motion.span>
-              相手のOKまち...
-            </span>
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              🤝 こうかんOK！
-            </span>
-          )}
-        </motion.button>
+        {/* 下部余白 */}
+        <div className="h-4" />
       </div>
 
       {/* キャンセル確認 */}
