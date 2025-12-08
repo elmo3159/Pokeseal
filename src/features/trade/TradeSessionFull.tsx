@@ -727,12 +727,19 @@ const TradeBookViewer: React.FC<{
         style={{ touchAction: 'pan-x pan-y' }}
       >
         <div
-          className="relative rounded-lg shadow-lg overflow-hidden border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
+          className="trade-book-container relative rounded-lg shadow-lg overflow-hidden border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
           style={{
             width: pageWidth * 2,
             height: pageHeight,
           }}
         >
+          {/* HTMLFlipBookラッパー - BookViewと同じパターン */}
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+          >
           <HTMLFlipBook
             ref={bookRef}
             width={pageWidth}
@@ -746,12 +753,7 @@ const TradeBookViewer: React.FC<{
             mobileScrollSupport={false}
             onFlip={handleFlip}
             className="trade-book"
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
-            }}
+            style={{}}
             startPage={0}
             drawShadow={true}
             flippingTime={400}
@@ -776,6 +778,7 @@ const TradeBookViewer: React.FC<{
               />
             ))}
           </HTMLFlipBook>
+          </div>
         </div>
       </div>
 

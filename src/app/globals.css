@@ -792,3 +792,36 @@ html {
 .book-container.book-on-back-cover .stf__item[class*="--left"] {
   left: 0 !important;
 }
+
+/* ============================================
+   TradeBookViewer用のreact-pageflip位置修正
+   静的状態とアニメーション状態で位置がずれる問題を修正
+   BookViewと同じパターンを使用
+   ============================================ */
+
+/* trade-bookの内部wrapper - BookViewと同じ設定 */
+.trade-book .stf__wrapper {
+  perspective: 2000px !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* 親コンテナ - BookViewと同じ設定 */
+.trade-book .stf__parent {
+  transform-style: preserve-3d !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* ブロック要素の配置 */
+.trade-book .stf__block {
+  position: relative !important;
+  z-index: 10 !important;
+  transform-style: preserve-3d !important;
+}
+
+/* ページ要素の配置 */
+.trade-book .stf__item {
+  z-index: 10 !important;
+  transform-style: preserve-3d !important;
+}
