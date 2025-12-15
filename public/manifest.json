@@ -1,0 +1,24 @@
+{
+  "name": "ポケシル - ポケットシールちょう",
+  "short_name": "ポケシル",
+  "description": "デジタルシール帳アプリ - シールを集めて、貼って、交換しよう！",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF5F8",
+  "theme_color": "#6B3FA0",
+  "icons": [
+    {
+      "src": "/stickers/ポフン/sticker_1.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/stickers/ポフン/sticker_1.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

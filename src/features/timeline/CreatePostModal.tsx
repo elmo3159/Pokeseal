@@ -1,12 +1,16 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
+import { PlacedSticker } from '@/features/sticker-book'
+import { PostPageData } from './PostCard'
 
 // 投稿する対象のページ
 export interface StickerBookPage {
   id: string
   pageNumber: number
   thumbnailUrl?: string
+  // 実際の配置シールデータ
+  placedStickers?: PlacedSticker[]
 }
 
 interface CreatePostModalProps {
@@ -18,6 +22,8 @@ interface CreatePostModalProps {
     caption: string
     hashtags: string[]
     visibility: 'public' | 'friends'
+    // 投稿用のページデータ
+    pageData?: PostPageData
   }) => void
 }
 
@@ -28,49 +34,189 @@ const suggestedHashtags = [
   'デコ', 'シール交換', '新着シール', '今日の1枚'
 ]
 
-// ページ選択カード
-const PageSelectCard: React.FC<{
+// シール帳ページのミニプレビュー（シール込み）
+// ホームタブと同じ見た目を縮小表示
+const PagePreviewMini: React.FC<{
   page: StickerBookPage
   isSelected: boolean
   onClick: () => void
 }> = ({ page, isSelected, onClick }) => {
+  // ホームと同じ60px基準のシールを、プレビューサイズに合わせてスケール
+  const previewScale = 0.35 // ミニプレビュー用のスケール係数
+
   return (
     <button
       onClick={onClick}
-      className={`
-        relative aspect-[3/4] rounded-xl overflow-hidden
-        transition-all duration-200
-        ${isSelected
-          ? 'ring-4 ring-purple-500 ring-offset-2 scale-[1.02]'
-          : 'hover:scale-[1.02] hover:shadow-lg'
-        }
-      `}
+      style={{
+        position: 'relative',
+        width: '100%',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        transition: 'all 0.2s',
+        background: 'white',
+        boxShadow: isSelected ? '0 0 0 4px #8B5CF6, 0 0 0 6px white' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+        border: isSelected ? 'none' : '2px solid #F3E8FF',
+        aspectRatio: '3/4',
+        minHeight: '100px',
+        cursor: 'pointer',
+        padding: 0,
+      }}
     >
-      {page.thumbnailUrl ? (
+      {/* グリッド線 */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.1, pointerEvents: 'none' }}>
+        {Array.from({ length: 4 }).map((_, row) =>
+          Array.from({ length: 3 }).map((_, col) => (
+            <div
+              key={`grid-${row}-${col}`}
+              style={{
+                position: 'absolute',
+                width: '33.33%',
+                height: '25%',
+                border: '1px solid #DDD6FE',
+                left: `${col * 33.33}%`,
+                top: `${row * 25}%`,
+              }}
+            />
+          ))
+        )}
+      </div>
+
+      {/* シールを表示 - ホームと同じ60px基準、縮小表示 */}
+      {page.placedStickers && page.placedStickers.length > 0 ? (
+        page.placedStickers.map((sticker) => {
+          const stickerSize = 60 * (sticker.scale || 1) * previewScale
+          return (
+            <div
+              key={sticker.id}
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                left: `${sticker.x * 100}%`,
+                top: `${sticker.y * 100}%`,
+                transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+                width: `${stickerSize}px`,
+                height: `${stickerSize}px`,
+                zIndex: sticker.zIndex || 1,
+              }}
+            >
+              <img
+                src={sticker.sticker.imageUrl}
+                alt={sticker.sticker.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
+                draggable={false}
+              />
+            </div>
+          )
+        })
+      ) : page.thumbnailUrl ? (
         <img
           src={page.thumbnailUrl}
           alt={`ページ ${page.pageNumber}`}
-          className="w-full h-full object-cover"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       ) : (
-        <div className="w-full h-full bg-gradient-to-br from-purple-100 to-pink-100 flex flex-col items-center justify-center">
-          <span className="text-4xl mb-1">📖</span>
-          <span className="text-xs text-purple-400">ページ {page.pageNumber}</span>
+        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: '24px', marginBottom: '4px' }}>📖</span>
+          <span style={{ fontSize: '10px', color: '#A78BFA' }}>空のページ</span>
         </div>
       )}
 
       {/* 選択マーク */}
       {isSelected && (
-        <div className="absolute top-2 right-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-sm">✓</span>
+        <div style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', background: '#8B5CF6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
+          <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
         </div>
       )}
 
       {/* ページ番号 */}
-      <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/50 rounded text-white text-xs">
+      <div style={{ position: 'absolute', bottom: '2px', left: '2px', paddingLeft: '4px', paddingRight: '4px', paddingTop: '2px', paddingBottom: '2px', background: 'rgba(0, 0, 0, 0.5)', borderRadius: '4px', color: 'white', fontSize: '10px' }}>
         {page.pageNumber}
       </div>
+
+      {/* シール数バッジ */}
+      {page.placedStickers && page.placedStickers.length > 0 && (
+        <div style={{ position: 'absolute', top: '4px', left: '4px', paddingLeft: '6px', paddingRight: '6px', paddingTop: '2px', paddingBottom: '2px', background: '#EC4899', borderRadius: '9999px', color: 'white', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
+          {page.placedStickers.length}枚
+        </div>
+      )}
     </button>
+  )
+}
+
+// シール帳ページのプレビュー（大きめ）
+// ホームタブと同じ見た目で表示
+const PagePreviewLarge: React.FC<{
+  page: StickerBookPage
+}> = ({ page }) => {
+  // ホームと同じ60px基準のシールサイズ
+  const baseStickerSize = 60
+
+  return (
+    <div style={{ aspectRatio: '4/3', borderRadius: '12px', overflow: 'hidden', background: 'white', border: '1px solid #F3E8FF', boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.06)' }}>
+      {/* グリッド線 */}
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.1, pointerEvents: 'none' }}>
+          {Array.from({ length: 4 }).map((_, row) =>
+            Array.from({ length: 4 }).map((_, col) => (
+              <div
+                key={`grid-${row}-${col}`}
+                style={{
+                  position: 'absolute',
+                  width: '25%',
+                  height: '25%',
+                  border: '1px solid #DDD6FE',
+                  left: `${col * 25}%`,
+                  top: `${row * 25}%`,
+                }}
+              />
+            ))
+          )}
+        </div>
+
+        {/* シールを表示 - ホームと同じ60px基準 */}
+        {page.placedStickers && page.placedStickers.length > 0 ? (
+          page.placedStickers.map((sticker) => {
+            const stickerSize = baseStickerSize * (sticker.scale || 1)
+            return (
+              <div
+                key={sticker.id}
+                style={{
+                  position: 'absolute',
+                  pointerEvents: 'none',
+                  left: `${sticker.x * 100}%`,
+                  top: `${sticker.y * 100}%`,
+                  transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+                  width: `${stickerSize}px`,
+                  height: `${stickerSize}px`,
+                  zIndex: sticker.zIndex || 1,
+                }}
+              >
+                <img
+                  src={sticker.sticker.imageUrl}
+                  alt={sticker.sticker.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 3px rgba(0,0,0,0.07)) drop-shadow(0 2px 2px rgba(0,0,0,0.06))' }}
+                  draggable={false}
+                />
+              </div>
+            )
+          })
+        ) : page.thumbnailUrl ? (
+          <img
+            src={page.thumbnailUrl}
+            alt="投稿プレビュー"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '8px' }}>📖</div>
+              <p style={{ color: '#A78BFA', fontSize: '14px' }}>シールを貼ってね！</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -83,14 +229,20 @@ const HashtagChip: React.FC<{
   return (
     <button
       onClick={onClick}
-      className={`
-        px-3 py-1.5 rounded-full text-sm font-medium
-        transition-all duration-200
-        ${isSelected
-          ? 'bg-purple-500 text-white'
-          : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
-        }
-      `}
+      style={{
+        paddingLeft: '12px',
+        paddingRight: '12px',
+        paddingTop: '6px',
+        paddingBottom: '6px',
+        borderRadius: '9999px',
+        fontSize: '14px',
+        fontWeight: 500,
+        transition: 'all 0.2s',
+        background: isSelected ? '#8B5CF6' : '#F3E8FF',
+        color: isSelected ? 'white' : '#7C3AED',
+        border: 'none',
+        cursor: 'pointer',
+      }}
     >
       #{tag}
     </button>
@@ -109,6 +261,13 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'friends'>('public')
+
+  // 選択中のページを取得
+  const selectedPage = pages.find(p => p.id === selectedPageId)
+
+  // シールがあるページのみをフィルタリング
+  const pagesWithStickers = pages.filter(p => p.placedStickers && p.placedStickers.length > 0)
+  const emptyPages = pages.filter(p => !p.placedStickers || p.placedStickers.length === 0)
 
   // リセット
   const handleClose = useCallback(() => {
@@ -158,12 +317,15 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
   // 投稿
   const handleSubmit = () => {
-    if (selectedPageId) {
+    if (selectedPageId && selectedPage) {
       onSubmit({
         pageId: selectedPageId,
         caption,
         hashtags: selectedTags,
-        visibility
+        visibility,
+        pageData: selectedPage.placedStickers ? {
+          placedStickers: selectedPage.placedStickers,
+        } : undefined,
       })
       handleClose()
     }
@@ -172,67 +334,155 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+    >
       {/* 背景オーバーレイ */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+        }}
         onClick={handleClose}
       />
 
       {/* モーダル本体 */}
-      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '448px',
+          background: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          overflow: 'hidden',
+          fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        }}
+      >
         {/* ヘッダー */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <header style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '12px',
+          paddingBottom: '12px',
+          borderBottom: '1px solid #F3F4F6',
+          background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)',
+        }}>
           {step === 'edit' ? (
             <button
               onClick={handleBack}
-              className="text-purple-600 font-medium"
+              style={{
+                color: '#9333EA',
+                fontWeight: 500,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '14px',
+              }}
             >
               ← もどる
             </button>
           ) : (
-            <div className="w-16" />
+            <div style={{ width: '64px' }} />
           )}
 
-          <h2 className="text-lg font-bold text-purple-700">
-            {step === 'select' ? 'ページをえらぶ' : 'とうこうする'}
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#7C3AED' }}>
+            {step === 'select' ? '📖 ページをえらぶ' : '✏️ とうこうする'}
           </h2>
 
           <button
             onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            style={{
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
           >
-            <span className="text-gray-400">✕</span>
+            <span style={{ color: '#9CA3AF' }}>✕</span>
           </button>
         </header>
 
         {/* コンテンツ */}
-        <div className="p-4 max-h-[70vh] overflow-y-auto">
+        <div style={{ padding: '16px', maxHeight: '70vh', overflowY: 'auto' }}>
           {step === 'select' ? (
             // ページ選択ステップ
             <div>
-              <p className="text-sm text-purple-400 mb-4 text-center">
+              <p style={{ fontSize: '14px', color: '#A78BFA', marginBottom: '16px', textAlign: 'center' }}>
                 タイムラインに投稿したいページを選んでね！
               </p>
 
-              {pages.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {pages.map(page => (
-                    <PageSelectCard
-                      key={page.id}
-                      page={page}
-                      isSelected={selectedPageId === page.id}
-                      onClick={() => handlePageSelect(page.id)}
-                    />
-                  ))}
+              {/* シールがあるページを優先表示 */}
+              {pagesWithStickers.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#9333EA', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>✨</span>
+                    <span>シールが貼られたページ</span>
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {pagesWithStickers.map(page => (
+                      <PagePreviewMini
+                        key={page.id}
+                        page={page}
+                        isSelected={selectedPageId === page.id}
+                        onClick={() => handlePageSelect(page.id)}
+                      />
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="text-5xl mb-3">📭</div>
-                  <p className="text-purple-400 text-sm">
+              )}
+
+              {/* 空のページ */}
+              {emptyPages.length > 0 && (
+                <div>
+                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#A78BFA', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>📄</span>
+                    <span>空のページ</span>
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', opacity: 0.6 }}>
+                    {emptyPages.map(page => (
+                      <PagePreviewMini
+                        key={page.id}
+                        page={page}
+                        isSelected={selectedPageId === page.id}
+                        onClick={() => handlePageSelect(page.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pages.length === 0 && (
+                <div style={{ textAlign: 'center', paddingTop: '32px', paddingBottom: '32px' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
+                  <p style={{ color: '#A78BFA', fontSize: '14px' }}>
                     まだページがありません
                   </p>
-                  <p className="text-purple-300 text-xs mt-1">
+                  <p style={{ color: '#C4B5FD', fontSize: '12px', marginTop: '4px' }}>
                     シールを貼ってから投稿しよう！
                   </p>
                 </div>
@@ -240,66 +490,76 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             </div>
           ) : (
             // 編集ステップ
-            <div className="space-y-6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {/* 選択したページのプレビュー */}
-              <div className="aspect-[4/3] rounded-xl overflow-hidden bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
-                {pages.find(p => p.id === selectedPageId)?.thumbnailUrl ? (
-                  <img
-                    src={pages.find(p => p.id === selectedPageId)?.thumbnailUrl}
-                    alt="投稿プレビュー"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <div className="text-6xl">📖</div>
-                    <p className="text-purple-400 text-sm mt-2">プレビュー</p>
-                  </div>
-                )}
-              </div>
+              {selectedPage && (
+                <PagePreviewLarge page={selectedPage} />
+              )}
 
               {/* キャプション入力 */}
               <div>
-                <label className="text-sm font-bold text-purple-700 mb-2 block">
-                  キャプション
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                  💬 キャプション
                 </label>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="このページのせつめいを書いてね！"
-                  className="w-full p-3 border-2 border-purple-200 rounded-xl text-sm
-                           focus:border-purple-400 focus:outline-none resize-none"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #E9D5FF',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    resize: 'none',
+                    outline: 'none',
+                  }}
                   rows={3}
                   maxLength={200}
                 />
-                <p className="text-xs text-purple-300 text-right mt-1">
+                <p style={{ fontSize: '12px', color: '#C4B5FD', textAlign: 'right', marginTop: '4px' }}>
                   {caption.length}/200
                 </p>
               </div>
 
               {/* ハッシュタグ選択 */}
               <div>
-                <label className="text-sm font-bold text-purple-700 mb-2 block">
-                  ハッシュタグ
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                  🏷️ ハッシュタグ
                 </label>
 
                 {/* 選択済みタグ */}
                 {selectedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-3">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                     {selectedTags.map(tag => (
                       <button
                         key={tag}
                         onClick={() => handleTagToggle(tag)}
-                        className="flex items-center gap-1 px-2 py-1 bg-purple-500 text-white rounded-full text-xs"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          paddingLeft: '8px',
+                          paddingRight: '8px',
+                          paddingTop: '4px',
+                          paddingBottom: '4px',
+                          background: '#8B5CF6',
+                          color: 'white',
+                          borderRadius: '9999px',
+                          fontSize: '12px',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
                       >
                         <span>#{tag}</span>
-                        <span className="opacity-70">×</span>
+                        <span style={{ opacity: 0.7 }}>×</span>
                       </button>
                     ))}
                   </div>
                 )}
 
                 {/* 候補タグ */}
-                <div className="flex flex-wrap gap-1.5 mb-3">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                   {suggestedHashtags
                     .filter(tag => !selectedTags.includes(tag))
                     .slice(0, 6)
@@ -314,22 +574,43 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 </div>
 
                 {/* カスタムタグ入力 */}
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
                     value={customTag}
                     onChange={(e) => setCustomTag(e.target.value)}
                     placeholder="じぶんでタグを追加"
-                    className="flex-1 px-3 py-2 border-2 border-purple-200 rounded-full text-sm
-                             focus:border-purple-400 focus:outline-none"
+                    style={{
+                      flex: 1,
+                      paddingLeft: '12px',
+                      paddingRight: '12px',
+                      paddingTop: '8px',
+                      paddingBottom: '8px',
+                      border: '2px solid #E9D5FF',
+                      borderRadius: '9999px',
+                      fontSize: '14px',
+                      outline: 'none',
+                    }}
                     maxLength={20}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddCustomTag()}
                   />
                   <button
                     onClick={handleAddCustomTag}
                     disabled={!customTag.trim()}
-                    className="px-4 py-2 bg-purple-100 text-purple-600 rounded-full text-sm font-medium
-                             disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      paddingLeft: '16px',
+                      paddingRight: '16px',
+                      paddingTop: '8px',
+                      paddingBottom: '8px',
+                      background: '#F3E8FF',
+                      color: '#9333EA',
+                      borderRadius: '9999px',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      border: 'none',
+                      cursor: customTag.trim() ? 'pointer' : 'not-allowed',
+                      opacity: customTag.trim() ? 1 : 0.5,
+                    }}
                   >
                     追加
                   </button>
@@ -338,37 +619,55 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
               {/* 公開範囲 */}
               <div>
-                <label className="text-sm font-bold text-purple-700 mb-2 block">
-                  だれに見せる？
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                  👀 だれに見せる？
                 </label>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => setVisibility('public')}
-                    className={`
-                      flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                      transition-all duration-200 border-2
-                      ${visibility === 'public'
-                        ? 'bg-purple-500 text-white border-purple-500'
-                        : 'bg-white text-purple-600 border-purple-200 hover:border-purple-400'
-                      }
-                    `}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      paddingLeft: '16px',
+                      paddingRight: '16px',
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      borderRadius: '12px',
+                      transition: 'all 0.2s',
+                      background: visibility === 'public' ? '#8B5CF6' : 'white',
+                      color: visibility === 'public' ? 'white' : '#9333EA',
+                      border: visibility === 'public' ? '2px solid #8B5CF6' : '2px solid #E9D5FF',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <span className="text-lg">🌍</span>
-                    <span className="font-medium">みんな</span>
+                    <span style={{ fontSize: '18px' }}>🌍</span>
+                    <span style={{ fontWeight: 500 }}>みんな</span>
                   </button>
                   <button
                     onClick={() => setVisibility('friends')}
-                    className={`
-                      flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl
-                      transition-all duration-200 border-2
-                      ${visibility === 'friends'
-                        ? 'bg-purple-500 text-white border-purple-500'
-                        : 'bg-white text-purple-600 border-purple-200 hover:border-purple-400'
-                      }
-                    `}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      paddingLeft: '16px',
+                      paddingRight: '16px',
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      borderRadius: '12px',
+                      transition: 'all 0.2s',
+                      background: visibility === 'friends' ? '#8B5CF6' : 'white',
+                      color: visibility === 'friends' ? 'white' : '#9333EA',
+                      border: visibility === 'friends' ? '2px solid #8B5CF6' : '2px solid #E9D5FF',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <span className="text-lg">👫</span>
-                    <span className="font-medium">フレンドだけ</span>
+                    <span style={{ fontSize: '18px' }}>👫</span>
+                    <span style={{ fontWeight: 500 }}>フレンドだけ</span>
                   </button>
                 </div>
               </div>
@@ -377,31 +676,49 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         </div>
 
         {/* フッター */}
-        <footer className="p-4 border-t border-gray-100">
+        <footer style={{
+          padding: '16px',
+          borderTop: '1px solid #F3F4F6',
+          background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)',
+        }}>
           {step === 'select' ? (
             <button
               onClick={handleNext}
               disabled={!selectedPageId}
-              className="
-                w-full py-4 rounded-2xl font-bold text-lg
-                transition-all duration-200
-                disabled:bg-gray-200 disabled:text-gray-400
-                enabled:bg-gradient-to-r enabled:from-purple-500 enabled:to-pink-500
-                enabled:text-white enabled:shadow-lg
-                enabled:hover:shadow-xl enabled:active:scale-[0.98]
-              "
+              style={{
+                width: '100%',
+                paddingTop: '16px',
+                paddingBottom: '16px',
+                borderRadius: '16px',
+                fontWeight: 'bold',
+                fontSize: '18px',
+                transition: 'all 0.2s',
+                background: selectedPageId ? 'linear-gradient(to right, #8B5CF6, #EC4899)' : '#E5E7EB',
+                color: selectedPageId ? 'white' : '#9CA3AF',
+                boxShadow: selectedPageId ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : 'none',
+                border: 'none',
+                cursor: selectedPageId ? 'pointer' : 'not-allowed',
+              }}
             >
               次へすすむ →
             </button>
           ) : (
             <button
               onClick={handleSubmit}
-              className="
-                w-full py-4 rounded-2xl font-bold text-lg
-                bg-gradient-to-r from-purple-500 to-pink-500 text-white
-                shadow-lg hover:shadow-xl
-                transition-all duration-200 active:scale-[0.98]
-              "
+              style={{
+                width: '100%',
+                paddingTop: '16px',
+                paddingBottom: '16px',
+                borderRadius: '16px',
+                fontWeight: 'bold',
+                fontSize: '18px',
+                background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                color: 'white',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               ✨ とうこうする ✨
             </button>

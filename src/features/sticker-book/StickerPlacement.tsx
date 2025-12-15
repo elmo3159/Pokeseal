@@ -5,7 +5,8 @@ import { Sticker } from './StickerTray'
 
 // 配置されたシール情報
 export interface PlacedSticker {
-  id: string
+  id: string              // sticker_placements.id（配置の編集・削除に使用）
+  userStickerId?: string  // user_stickers.id（交換時に使用）
   stickerId: string
   sticker: Sticker
   pageId: string
@@ -463,50 +464,90 @@ export const EditControls: React.FC<EditControlsProps> = ({
     }
   }
 
-  // 閉じるボタン用：遅延してクローズすることでイベント伝播を完全に防ぐ
+  // 閉じるボタン用
   const handleClose = (e: React.MouseEvent | React.PointerEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    // 少し遅延させてからクローズ（イベントが完全に処理されるのを待つ）
-    requestAnimationFrame(() => {
-      onClose()
-    })
+    onClose()
   }
 
   return (
-    <div
-      className="fixed bottom-20 left-4 right-4 z-50"
-      onClick={stopEvent}
-      onPointerDown={stopEvent}
-      onPointerMove={stopEvent}
-      onPointerUp={stopEvent}
-      onTouchStart={stopEvent}
-      onTouchMove={stopEvent}
-      onTouchEnd={stopEvent}
-    >
+    <>
+      {/* 背景オーバーレイ - タップで閉じる */}
       <div
-        className="rounded-3xl p-5 mx-auto max-w-sm"
-        style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(24px)',
-          boxShadow: '0 8px 32px rgba(139, 92, 246, 0.2)',
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onTouchEnd={(e) => {
+          e.preventDefault()
+          onClose()
         }}
+        style={{ background: 'transparent' }}
+      />
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pb-4"
+        onClick={stopEvent}
+        onPointerDown={stopEvent}
+        onPointerMove={stopEvent}
+        onPointerUp={stopEvent}
+        onTouchStart={stopEvent}
+        onTouchMove={stopEvent}
+        onTouchEnd={stopEvent}
       >
-        <div className="flex justify-between items-center mb-3">
-          <h3
-            className="font-bold"
-            style={{
-              fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              color: '#7C3AED',
-            }}
-          >
-            シールを編集
-          </h3>
+        <div
+          className="rounded-2xl p-4 w-full"
+          style={{
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 8px 32px rgba(139, 92, 246, 0.2)',
+            maxWidth: '360px',
+          }}
+        >
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-2">
+            {/* シールプレビュー */}
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-purple-50 border border-purple-200">
+              {sticker.sticker.imageUrl ? (
+                <img
+                  src={sticker.sticker.imageUrl}
+                  alt={sticker.sticker.name}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <span className="text-xl">🌟</span>
+              )}
+            </div>
+            <h3
+              className="font-bold text-sm"
+              style={{
+                fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                color: '#7C3AED',
+              }}
+            >
+              ✏️ シールへんしゅう
+            </h3>
+          </div>
           <button
-            onClick={handleClose}
-            onPointerDown={stopEvent}
-            onPointerUp={handleClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              setTimeout(() => onClose(), 50)
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation()
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              setTimeout(() => onClose(), 50)
+            }}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95 text-sm"
             style={{
               background: 'rgba(167, 139, 250, 0.15)',
               color: '#7C3AED',
@@ -516,37 +557,16 @@ export const EditControls: React.FC<EditControlsProps> = ({
           </button>
         </div>
 
-        {/* 位置調整のヒント */}
-        <div
-          className="text-xs text-center mb-3 py-2 px-3 rounded-xl"
-          style={{
-            background: 'rgba(139, 92, 246, 0.08)',
-            color: '#8B5CF6',
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-          }}
-        >
-          👆 シールをドラッグして位置を調整できます
-        </div>
-
-        {/* 回転 */}
-        <div className="mb-4">
-          <label
-            className="text-sm mb-2 block text-center"
-            style={{
-              fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              color: '#8B5CF6',
-            }}
-          >
-            かいてん: {sticker.rotation}°
-          </label>
-          <div className="flex items-center gap-3 justify-center">
+        {/* 回転 - コンパクト */}
+        <div className="mb-2">
+          <div className="flex items-center gap-2 justify-center">
+            <span className="text-xs text-purple-500">🔄</span>
             <button
               onClick={() => onRotate(sticker.rotation - 15)}
-              className="w-12 h-12 rounded-full flex items-center justify-center text-xl transition-all active:scale-95"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
                 color: '#7C3AED',
-                boxShadow: '0 2px 8px rgba(139, 92, 246, 0.2)',
               }}
             >
               ↺
@@ -557,103 +577,101 @@ export const EditControls: React.FC<EditControlsProps> = ({
               max="180"
               value={sticker.rotation}
               onChange={(e) => onRotate(Number(e.target.value))}
-              className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
               style={{
                 background: 'linear-gradient(to right, #C4B5FD 0%, #8B5CF6 50%, #C4B5FD 100%)',
               }}
             />
             <button
               onClick={() => onRotate(sticker.rotation + 15)}
-              className="w-12 h-12 rounded-full flex items-center justify-center text-xl transition-all active:scale-95"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
                 color: '#7C3AED',
-                boxShadow: '0 2px 8px rgba(139, 92, 246, 0.2)',
               }}
             >
               ↻
             </button>
+            <span className="text-xs text-purple-500 w-10 text-center">{sticker.rotation}°</span>
           </div>
         </div>
 
-        {/* 重なり順（前面/後面） */}
-        <div className="mb-4">
-          <label
-            className="text-sm mb-2 block text-center"
+        {/* 重なり順と削除 - 横並び */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onSendToBack}
+            disabled={isAtBack || (totalLayers !== undefined && totalLayers <= 1)}
+            className="flex-1 py-2 rounded-full flex items-center justify-center text-xs font-medium transition-all active:scale-95 disabled:opacity-40"
             style={{
+              background: isAtBack ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
+              color: isAtBack ? '#9CA3AF' : '#7C3AED',
               fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              color: '#8B5CF6',
             }}
           >
-            かさなり順
-            {/* 現在の順位を表示 */}
-            {layerPosition !== undefined && totalLayers !== undefined && totalLayers > 1 && (
-              <span
-                className="ml-2 px-2 py-0.5 rounded-full text-xs"
-                style={{
-                  background: isAtFront ? 'rgba(34, 197, 94, 0.15)' : isAtBack ? 'rgba(239, 68, 68, 0.15)' : 'rgba(139, 92, 246, 0.15)',
-                  color: isAtFront ? '#16A34A' : isAtBack ? '#DC2626' : '#7C3AED',
-                }}
-              >
-                {isAtFront ? '✨ 最前面' : isAtBack ? '最後面' : `${layerPosition}番目 / ${totalLayers}枚`}
-              </span>
-            )}
-            {totalLayers !== undefined && totalLayers <= 1 && (
-              <span
-                className="ml-2 px-2 py-0.5 rounded-full text-xs"
-                style={{
-                  background: 'rgba(156, 163, 175, 0.15)',
-                  color: '#6B7280',
-                }}
-              >
-                シール1枚のみ
-              </span>
-            )}
-          </label>
-          <div className="flex items-center gap-3 justify-center">
-            <button
-              onClick={onSendToBack}
-              disabled={isAtBack || (totalLayers !== undefined && totalLayers <= 1)}
-              className="flex-1 py-2.5 rounded-full flex items-center justify-center text-sm font-medium transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-              style={{
-                background: isAtBack ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
-                color: isAtBack ? '#9CA3AF' : '#7C3AED',
-                boxShadow: isAtBack ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.2)',
-                fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              }}
-            >
-              ⬇️ 後ろへ
-            </button>
-            <button
-              onClick={onBringToFront}
-              disabled={isAtFront || (totalLayers !== undefined && totalLayers <= 1)}
-              className="flex-1 py-2.5 rounded-full flex items-center justify-center text-sm font-medium transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-              style={{
-                background: isAtFront ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
-                color: isAtFront ? '#9CA3AF' : '#7C3AED',
-                boxShadow: isAtFront ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.2)',
-                fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              }}
-            >
-              ⬆️ 前へ
-            </button>
-          </div>
+            ⬇️ した
+          </button>
+          <button
+            onClick={onBringToFront}
+            disabled={isAtFront || (totalLayers !== undefined && totalLayers <= 1)}
+            className="flex-1 py-2 rounded-full flex items-center justify-center text-xs font-medium transition-all active:scale-95 disabled:opacity-40"
+            style={{
+              background: isAtFront ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #E9D5FF 0%, #DDD6FE 100%)',
+              color: isAtFront ? '#9CA3AF' : '#7C3AED',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            }}
+          >
+            ⬆️ うえ
+          </button>
+          <button
+            onClick={onRemove}
+            className="py-2 px-3 rounded-full font-medium transition-all active:scale-95 text-xs"
+            style={{
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#EF4444',
+            }}
+          >
+            🗑️ はがす
+          </button>
         </div>
 
-        {/* 削除ボタン */}
+        {/* 決定ボタン */}
         <button
-          onClick={onRemove}
-          className="w-full py-3 rounded-full font-medium transition-all active:scale-98"
+          onClick={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            // 少し遅延させてから閉じる（下のレイヤーへのイベント伝播を防ぐ）
+            setTimeout(() => onClose(), 50)
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation()
+          }}
+          onTouchEnd={(e) => {
+            e.stopPropagation()
+            // 少し遅延させてから閉じる（下のレイヤーへのイベント伝播を防ぐ）
+            setTimeout(() => onClose(), 50)
+          }}
+          className="w-full mt-3 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98]"
           style={{
             fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            background: 'rgba(239, 68, 68, 0.1)',
-            color: '#EF4444',
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
           }}
         >
-          🗑️ シールをはがす
+          ✨ ここにはる
         </button>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 

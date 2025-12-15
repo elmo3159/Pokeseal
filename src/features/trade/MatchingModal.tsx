@@ -1,6 +1,13 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import {
+  SearchIcon,
+  SparkleIcon,
+  StarIcon,
+  UserIcon,
+  CelebrationIcon,
+} from '@/components/icons/TradeIcons'
 
 // マッチング状態
 export type MatchingStatus = 'idle' | 'searching' | 'found' | 'timeout' | 'cancelled'
@@ -25,28 +32,28 @@ interface MatchingModalProps {
 // 検索中アニメーション
 const SearchingAnimation: React.FC = () => {
   return (
-    <div className="relative w-40 h-40 mx-auto">
+    <div style={{ position: 'relative', width: '160px', height: '160px', marginLeft: 'auto', marginRight: 'auto' }}>
       {/* 外側のリング */}
-      <div className="absolute inset-0 rounded-full border-4 border-purple-200 animate-ping" />
-      <div className="absolute inset-2 rounded-full border-4 border-pink-200 animate-ping animation-delay-200" />
-      <div className="absolute inset-4 rounded-full border-4 border-purple-200 animate-ping animation-delay-400" />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: '50%', border: '4px solid #E9D5FF', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite' }} />
+      <div style={{ position: 'absolute', top: '8px', left: '8px', right: '8px', bottom: '8px', borderRadius: '50%', border: '4px solid #FBCFE8', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '0.2s' }} />
+      <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', bottom: '16px', borderRadius: '50%', border: '4px solid #E9D5FF', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '0.4s' }} />
 
       {/* 中央のアイコン */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-xl">
-          <span className="text-4xl animate-bounce">🔍</span>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(to bottom right, #A78BFA, #F472B6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)' }}>
+          <div style={{ animation: 'bounce 1s infinite' }}><SearchIcon size={36} color="white" /></div>
         </div>
       </div>
 
       {/* 周囲を回る点 */}
-      <div className="absolute inset-0 animate-spin" style={{ animationDuration: '3s' }}>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-500 rounded-full" />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, animation: 'spin 3s linear infinite' }}>
+        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '12px', height: '12px', background: '#8B5CF6', borderRadius: '50%' }} />
       </div>
-      <div className="absolute inset-0 animate-spin" style={{ animationDuration: '3s', animationDelay: '1s' }}>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-pink-500 rounded-full" />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, animation: 'spin 3s linear infinite', animationDelay: '1s' }}>
+        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '12px', height: '12px', background: '#EC4899', borderRadius: '50%' }} />
       </div>
-      <div className="absolute inset-0 animate-spin" style={{ animationDuration: '3s', animationDelay: '2s' }}>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-400 rounded-full" />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, animation: 'spin 3s linear infinite', animationDelay: '2s' }}>
+        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '12px', height: '12px', background: '#A78BFA', borderRadius: '50%' }} />
       </div>
     </div>
   )
@@ -55,37 +62,53 @@ const SearchingAnimation: React.FC = () => {
 // マッチ成功アニメーション
 const MatchFoundAnimation: React.FC<{ user: MatchedUser }> = ({ user }) => {
   return (
-    <div className="relative">
+    <div style={{ position: 'relative' }}>
       {/* キラキラ背景 */}
-      <div className="absolute -inset-8 flex items-center justify-center">
-        <div className="text-4xl absolute top-0 left-4 animate-ping">✨</div>
-        <div className="text-3xl absolute top-4 right-2 animate-ping animation-delay-200">⭐</div>
-        <div className="text-2xl absolute bottom-4 left-2 animate-ping animation-delay-400">✨</div>
-        <div className="text-3xl absolute bottom-0 right-4 animate-ping animation-delay-600">⭐</div>
+      <div style={{ position: 'absolute', top: '-32px', left: '-32px', right: '-32px', bottom: '-32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', top: 0, left: '16px', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite' }}><SparkleIcon size={36} color="#FBBF24" /></div>
+        <div style={{ position: 'absolute', top: '16px', right: '8px', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '0.2s' }}><StarIcon size={30} color="#FBBF24" /></div>
+        <div style={{ position: 'absolute', bottom: '16px', left: '8px', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '0.4s' }}><SparkleIcon size={24} color="#F9A8D4" /></div>
+        <div style={{ position: 'absolute', bottom: 0, right: '16px', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '0.6s' }}><StarIcon size={30} color="#F9A8D4" /></div>
       </div>
 
       {/* ユーザーカード */}
-      <div className="
-        relative bg-white rounded-3xl p-6 shadow-2xl
-        animate-[scaleIn_0.5s_ease-out]
-      ">
+      <div style={{
+        position: 'relative',
+        background: 'white',
+        borderRadius: '24px',
+        padding: '24px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        animation: 'scaleIn 0.5s ease-out',
+      }}>
         {/* アバター */}
-        <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-purple-300 to-pink-300 flex items-center justify-center text-5xl shadow-lg mb-4">
+        <div style={{
+          width: '96px',
+          height: '96px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          borderRadius: '50%',
+          background: 'linear-gradient(to bottom right, #C4B5FD, #F9A8D4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          marginBottom: '16px',
+        }}>
           {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.name} className="w-full h-full rounded-full object-cover" />
+            <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
-            '👤'
+            <UserIcon size={48} color="#A855F7" />
           )}
         </div>
 
         {/* 名前 */}
-        <h3 className="text-xl font-bold text-purple-700 text-center mb-1">
+        <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#7C3AED', textAlign: 'center', marginBottom: '4px' }}>
           {user.name}
         </h3>
 
         {/* レベル */}
         {user.level && (
-          <p className="text-sm text-purple-400 text-center">
+          <p style={{ fontSize: '14px', color: '#A78BFA', textAlign: 'center' }}>
             Lv.{user.level}
           </p>
         )}
@@ -97,12 +120,12 @@ const MatchFoundAnimation: React.FC<{ user: MatchedUser }> = ({ user }) => {
 // タイムアウト表示
 const TimeoutDisplay: React.FC = () => {
   return (
-    <div className="text-center">
-      <div className="text-6xl mb-4">😢</div>
-      <h3 className="text-xl font-bold text-purple-700 mb-2">
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: '60px', marginBottom: '16px' }}>😢</div>
+      <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px' }}>
         みつかりませんでした
       </h3>
-      <p className="text-sm text-purple-400">
+      <p style={{ fontSize: '14px', color: '#A78BFA' }}>
         もういちどためしてみてね
       </p>
     </div>
@@ -158,39 +181,76 @@ export const MatchingModal: React.FC<MatchingModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
+    >
       {/* 背景 */}
-      <div className="
-        absolute inset-0
-        bg-gradient-to-b from-purple-900/90 via-pink-900/90 to-purple-900/90
-      " />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'linear-gradient(to bottom, rgba(88, 28, 135, 0.9), rgba(131, 24, 67, 0.9), rgba(88, 28, 135, 0.9))',
+        }}
+      />
 
       {/* コンテンツ */}
-      <div className="relative w-full max-w-sm px-6 py-8">
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '384px',
+          paddingLeft: '24px',
+          paddingRight: '24px',
+          paddingTop: '32px',
+          paddingBottom: '32px',
+        }}
+      >
         {/* 検索中 */}
         {status === 'searching' && (
-          <div className="flex flex-col items-center">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <SearchingAnimation />
 
-            <h2 className="text-2xl font-bold text-white mt-8 mb-2">
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', marginTop: '32px', marginBottom: '8px' }}>
               さがしています{dots}
             </h2>
 
-            <p className="text-purple-200 mb-4">
+            <p style={{ color: '#E9D5FF', marginBottom: '16px' }}>
               {formatTime(searchTime)}
             </p>
 
-            <p className="text-sm text-purple-300 text-center mb-8">
+            <p style={{ fontSize: '14px', color: '#D8B4FE', textAlign: 'center', marginBottom: '32px' }}>
               せかいちゅうのともだちを<br />さがしています...
             </p>
 
             <button
               onClick={onCancel}
-              className="
-                px-8 py-3 rounded-full
-                bg-white/20 text-white font-bold
-                hover:bg-white/30 transition-colors
-              "
+              style={{
+                paddingLeft: '32px',
+                paddingRight: '32px',
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                borderRadius: '9999px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                fontWeight: 'bold',
+                transition: 'background 0.2s',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               キャンセル
             </button>
@@ -199,26 +259,33 @@ export const MatchingModal: React.FC<MatchingModalProps> = ({
 
         {/* マッチ成功 */}
         {status === 'found' && matchedUser && (
-          <div className="flex flex-col items-center">
-            <div className="text-3xl text-white font-bold mb-6">
-              🎉 マッチ！ 🎉
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ fontSize: '30px', color: 'white', fontWeight: 'bold', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CelebrationIcon size={30} /> マッチ！ <CelebrationIcon size={30} />
             </div>
 
             <MatchFoundAnimation user={matchedUser} />
 
-            <p className="text-purple-200 mt-6 mb-4 text-center">
+            <p style={{ color: '#E9D5FF', marginTop: '24px', marginBottom: '16px', textAlign: 'center' }}>
               こうかんあいてがみつかりました！
             </p>
 
             <button
               onClick={onStartTrade}
-              className="
-                w-full py-4 rounded-2xl
-                bg-gradient-to-r from-purple-500 to-pink-500
-                text-white font-bold text-lg
-                shadow-lg hover:shadow-xl
-                transition-all active:scale-95
-              "
+              style={{
+                width: '100%',
+                paddingTop: '16px',
+                paddingBottom: '16px',
+                borderRadius: '16px',
+                background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                color: 'white',
+                fontWeight: 'bold',
+                fontSize: '18px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               こうかんをはじめる！
             </button>
@@ -227,28 +294,46 @@ export const MatchingModal: React.FC<MatchingModalProps> = ({
 
         {/* タイムアウト */}
         {status === 'timeout' && (
-          <div className="flex flex-col items-center">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <TimeoutDisplay />
 
-            <div className="flex gap-4 mt-8">
+            <div style={{ display: 'flex', gap: '16px', marginTop: '32px' }}>
               <button
                 onClick={onCancel}
-                className="
-                  flex-1 py-3 px-4 rounded-xl
-                  bg-white/20 text-white font-bold
-                  hover:bg-white/30 transition-colors
-                "
+                style={{
+                  flex: 1,
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  paddingLeft: '16px',
+                  paddingRight: '16px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  transition: 'background 0.2s',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 もどる
               </button>
               <button
                 onClick={onRetry}
-                className="
-                  flex-1 py-3 px-4 rounded-xl
-                  bg-gradient-to-r from-purple-500 to-pink-500
-                  text-white font-bold
-                  shadow-lg hover:shadow-xl transition-all
-                "
+                style={{
+                  flex: 1,
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  paddingLeft: '16px',
+                  paddingRight: '16px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 もういちど
               </button>
@@ -258,12 +343,12 @@ export const MatchingModal: React.FC<MatchingModalProps> = ({
 
         {/* キャンセル済み */}
         {status === 'cancelled' && (
-          <div className="flex flex-col items-center">
-            <div className="text-6xl mb-4">👋</div>
-            <h3 className="text-xl font-bold text-white mb-2">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ fontSize: '60px', marginBottom: '16px' }}>👋</div>
+            <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: 'white', marginBottom: '8px' }}>
               キャンセルしました
             </h3>
-            <p className="text-purple-200 text-sm">
+            <p style={{ color: '#E9D5FF', fontSize: '14px' }}>
               またいつでもあそびにきてね
             </p>
           </div>

@@ -60,19 +60,26 @@ const CreatePostButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   return (
     <button
       onClick={onClick}
-      className="
-        fixed bottom-24 right-4 z-40
-        w-14 h-14 rounded-full
-        bg-gradient-to-r from-purple-500/90 to-pink-500/90
-        backdrop-blur-sm
-        text-white text-2xl
-        shadow-[0_4px_16px_rgba(139,92,246,0.4)]
-        hover:shadow-[0_6px_20px_rgba(139,92,246,0.5)]
-        transition-all duration-200
-        active:scale-95
-        flex items-center justify-center
-        border border-white/20
-      "
+      style={{
+        position: 'fixed',
+        bottom: '96px',
+        right: '16px',
+        zIndex: 40,
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: 'linear-gradient(to right, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9))',
+        backdropFilter: 'blur(4px)',
+        color: 'white',
+        fontSize: '24px',
+        boxShadow: '0 4px 16px rgba(139, 92, 246, 0.4)',
+        transition: 'all 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        cursor: 'pointer',
+      }}
     >
       ✏️
     </button>
@@ -191,14 +198,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
+    >
       {/* タブ */}
-      <div className="flex justify-center mb-4">
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
         <FeedTabs activeTab={activeTab} onTabChange={handleTabChange} />
       </div>
 
       {/* フィード */}
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
         {isLoading ? (
           // ローディング
           <>

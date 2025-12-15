@@ -54,8 +54,17 @@ export function Modal({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
         backgroundColor: 'rgba(74, 32, 104, 0.4)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
@@ -64,8 +73,10 @@ export function Modal({
     >
       {/* モーダル本体 */}
       <div
-        className="relative flex flex-col"
         style={{
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
           backgroundColor: 'rgba(255, 255, 255, 0.85)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
@@ -83,8 +94,14 @@ export function Modal({
         {/* ヘッダー */}
         {(title || showCloseButton) && (
           <div
-            className="flex items-center justify-between px-6 py-4"
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingLeft: '24px',
+              paddingRight: '24px',
+              paddingTop: '16px',
+              paddingBottom: '16px',
               borderBottom: '1px solid rgba(139, 92, 246, 0.1)',
             }}
           >
@@ -113,8 +130,13 @@ export function Modal({
 
         {/* コンテンツ */}
         <div
-          className="flex-1 overflow-y-auto px-6 py-4"
           style={{
+            flex: 1,
+            overflowY: 'auto',
+            paddingLeft: '24px',
+            paddingRight: '24px',
+            paddingTop: '16px',
+            paddingBottom: '16px',
             overscrollBehavior: 'contain',
           }}
         >
@@ -156,7 +178,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" showCloseButton={false}>
-      <div className="flex flex-col gap-6">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <p
           style={{
             fontSize: '16px',
@@ -167,15 +189,21 @@ export function ConfirmDialog({
           {message}
         </p>
 
-        <div className="flex gap-3">
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl font-bold transition-all hover:opacity-80 active:scale-95"
             style={{
+              flex: 1,
+              paddingTop: '12px',
+              paddingBottom: '12px',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
               backgroundColor: 'rgba(255, 255, 255, 0.7)',
               backdropFilter: 'blur(8px)',
               border: '1px solid rgba(155, 111, 208, 0.3)',
               color: '#7A5090',
+              cursor: 'pointer',
             }}
           >
             {cancelText}
@@ -185,8 +213,13 @@ export function ConfirmDialog({
               onConfirm()
               onClose()
             }}
-            className="flex-1 py-3 rounded-xl font-bold transition-all hover:opacity-80 active:scale-95"
             style={{
+              flex: 1,
+              paddingTop: '12px',
+              paddingBottom: '12px',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
               background: variant === 'danger'
                 ? 'linear-gradient(135deg, #F44336 0%, #E53935 100%)'
                 : 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
@@ -195,6 +228,7 @@ export function ConfirmDialog({
                 ? '0 4px 16px rgba(244, 67, 54, 0.3)'
                 : '0 4px 16px rgba(139, 92, 246, 0.3)',
               border: '1px solid rgba(255, 255, 255, 0.2)',
+              cursor: 'pointer',
             }}
           >
             {confirmText}

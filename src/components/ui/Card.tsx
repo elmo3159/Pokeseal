@@ -97,11 +97,12 @@ interface StickerCardProps {
   rarity?: number // 1-5の星
   onClick?: () => void
   selected?: boolean
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   compact?: boolean // 名前と星を非表示にしてコンパクト表示
 }
 
-const stickerSizeMap: Record<'sm' | 'md' | 'lg', { width: string; height: string }> = {
+const stickerSizeMap: Record<'xs' | 'sm' | 'md' | 'lg', { width: string; height: string }> = {
+  xs: { width: '70px', height: '70px' },
   sm: { width: '88px', height: '88px' },
   md: { width: '110px', height: '110px' },
   lg: { width: '150px', height: '150px' },

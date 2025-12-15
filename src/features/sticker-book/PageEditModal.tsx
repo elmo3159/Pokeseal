@@ -89,46 +89,62 @@ const PageCard: React.FC<{
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      className={`
-        bg-white rounded-2xl p-3 shadow-sm border-2 transition-all duration-200 cursor-grab active:cursor-grabbing
-        ${isDragging
-          ? 'opacity-70 scale-105 border-purple-500 shadow-xl ring-4 ring-purple-300 ring-opacity-50 z-50 rotate-2'
-          : ''}
-        ${isDragOver && !isDragging
-          ? 'border-purple-500 bg-purple-100 scale-[1.02] border-dashed'
-          : 'border-purple-100'}
-      `}
       style={{
-        // ドラッグ中はより目立つシャドウを追加
-        ...(isDragging ? {
-          boxShadow: '0 20px 40px rgba(139, 92, 246, 0.4), 0 8px 16px rgba(0, 0, 0, 0.15)',
-        } : {}),
+        background: isDragOver && !isDragging ? '#F3E8FF' : 'white',
+        borderRadius: '16px',
+        padding: '12px',
+        boxShadow: isDragging
+          ? '0 20px 40px rgba(139, 92, 246, 0.4), 0 8px 16px rgba(0, 0, 0, 0.15)'
+          : '0 1px 3px rgba(0, 0, 0, 0.1)',
+        border: isDragging || (isDragOver && !isDragging)
+          ? '2px solid #8B5CF6'
+          : '2px solid #F3E8FF',
+        borderStyle: isDragOver && !isDragging ? 'dashed' : 'solid',
+        transition: 'all 0.2s',
+        cursor: 'grab',
+        opacity: isDragging ? 0.7 : 1,
+        transform: isDragging ? 'scale(1.05) rotate(2deg)' : isDragOver && !isDragging ? 'scale(1.02)' : 'none',
+        zIndex: isDragging ? 50 : 'auto',
       }}
     >
-      <div className="flex items-center gap-3">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* ドラッグハンドル */}
-        <div className={`
-          flex flex-col items-center justify-center select-none px-1 py-2 rounded-lg
-          ${isDragging ? 'text-purple-600 bg-purple-200' : 'text-purple-400 hover:text-purple-600 hover:bg-purple-50'}
-          transition-colors duration-150
-        `}>
-          <span className="text-xl font-bold">⋮⋮</span>
-          <span className="text-[10px] whitespace-nowrap">ドラッグ</span>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          userSelect: 'none',
+          paddingLeft: '4px',
+          paddingRight: '4px',
+          paddingTop: '8px',
+          paddingBottom: '8px',
+          borderRadius: '8px',
+          color: isDragging ? '#7C3AED' : '#A78BFA',
+          background: isDragging ? '#DDD6FE' : 'transparent',
+          transition: 'all 0.15s',
+        }}>
+          <span style={{ fontSize: '20px', fontWeight: 'bold' }}>⋮⋮</span>
+          <span style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>ドラッグ</span>
         </div>
 
         {/* 見開きプレビュー - 左右ページとシール */}
-        <div className="flex rounded-lg border-2 border-purple-200 overflow-hidden">
+        <div style={{ display: 'flex', borderRadius: '8px', border: '2px solid #DDD6FE', overflow: 'hidden' }}>
           {/* 左ページ */}
           <div
-            className="w-12 h-16 relative"
-            style={{ backgroundColor: theme?.backgroundColor || '#FFFFFF' }}
+            style={{
+              width: '48px',
+              height: '64px',
+              position: 'relative',
+              backgroundColor: theme?.backgroundColor || '#FFFFFF',
+            }}
           >
             {/* 左ページのシール */}
             {spread.leftPageStickers.slice(0, 3).map((sticker, i) => (
               <div
                 key={sticker.id}
-                className="absolute"
                 style={{
+                  position: 'absolute',
                   left: `${sticker.x * 100}%`,
                   top: `${sticker.y * 100}%`,
                   transform: 'translate(-50%, -50%)',
@@ -141,30 +157,48 @@ const PageCard: React.FC<{
                   <img
                     src={sticker.sticker.imageUrl}
                     alt=""
-                    className="w-full h-full object-contain pointer-events-none"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                   />
                 ) : (
-                  <span className="text-[8px]">🌟</span>
+                  <span style={{ fontSize: '8px' }}>🌟</span>
                 )}
               </div>
             ))}
             {spread.leftPageStickers.length > 3 && (
-              <span className="absolute bottom-0 right-0 text-[8px] bg-purple-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+              <span style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                fontSize: '8px',
+                background: '#8B5CF6',
+                color: 'white',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
                 +{spread.leftPageStickers.length - 3}
               </span>
             )}
           </div>
           {/* 右ページ */}
           <div
-            className="w-12 h-16 border-l border-purple-200 relative"
-            style={{ backgroundColor: theme?.backgroundColor || '#FFFFFF' }}
+            style={{
+              width: '48px',
+              height: '64px',
+              borderLeft: '1px solid #DDD6FE',
+              position: 'relative',
+              backgroundColor: theme?.backgroundColor || '#FFFFFF',
+            }}
           >
             {/* 右ページのシール */}
             {spread.rightPageStickers.slice(0, 3).map((sticker, i) => (
               <div
                 key={sticker.id}
-                className="absolute"
                 style={{
+                  position: 'absolute',
                   left: `${sticker.x * 100}%`,
                   top: `${sticker.y * 100}%`,
                   transform: 'translate(-50%, -50%)',
@@ -177,15 +211,28 @@ const PageCard: React.FC<{
                   <img
                     src={sticker.sticker.imageUrl}
                     alt=""
-                    className="w-full h-full object-contain pointer-events-none"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                   />
                 ) : (
-                  <span className="text-[8px]">🌟</span>
+                  <span style={{ fontSize: '8px' }}>🌟</span>
                 )}
               </div>
             ))}
             {spread.rightPageStickers.length > 3 && (
-              <span className="absolute bottom-0 right-0 text-[8px] bg-purple-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+              <span style={{
+                position: 'absolute',
+                bottom: 0,
+                right: 0,
+                fontSize: '8px',
+                background: '#8B5CF6',
+                color: 'white',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
                 +{spread.rightPageStickers.length - 3}
               </span>
             )}
@@ -193,11 +240,11 @@ const PageCard: React.FC<{
         </div>
 
         {/* ページ情報 */}
-        <div className="flex-1">
-          <p className="font-bold text-purple-700 text-sm">
+        <div style={{ flex: 1 }}>
+          <p style={{ fontWeight: 'bold', color: '#6B21A8', fontSize: '14px' }}>
             見開き {spreadIndex + 1}
           </p>
-          <p className="text-xs text-purple-400 mt-0.5">
+          <p style={{ fontSize: '12px', color: '#A78BFA', marginTop: '2px' }}>
             シール: {spread.leftPageStickers.length + spread.rightPageStickers.length}枚
           </p>
           <button
@@ -205,7 +252,15 @@ const PageCard: React.FC<{
               e.stopPropagation()
               setShowThemeSelect(!showThemeSelect)
             }}
-            className="text-xs text-purple-500 mt-1 hover:underline"
+            style={{
+              fontSize: '12px',
+              color: '#8B5CF6',
+              marginTop: '4px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+            }}
           >
             🎨 テーマを変更
           </button>
@@ -218,8 +273,20 @@ const PageCard: React.FC<{
             onDelete()
           }}
           disabled={!canDelete}
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0
-            ${canDelete ? 'bg-red-100 text-red-500 active:scale-95' : 'bg-gray-100 text-gray-300'}`}
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '14px',
+            flexShrink: 0,
+            background: canDelete ? '#FEE2E2' : '#F3F4F6',
+            color: canDelete ? '#EF4444' : '#D1D5DB',
+            border: 'none',
+            cursor: canDelete ? 'pointer' : 'not-allowed',
+          }}
         >
           ×
         </button>
@@ -227,8 +294,8 @@ const PageCard: React.FC<{
 
       {/* テーマ選択パネル */}
       {showThemeSelect && (
-        <div className="mt-3 pt-3 border-t border-purple-100">
-          <div className="flex flex-wrap gap-2">
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F3E8FF' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {pageThemePresets.map((preset) => (
               <button
                 key={preset.id}
@@ -237,13 +304,20 @@ const PageCard: React.FC<{
                   onThemeChange(preset.theme)
                   setShowThemeSelect(false)
                 }}
-                className={`
-                  px-3 py-1.5 rounded-full text-xs font-medium
-                  transition-all duration-200
-                  ${theme?.decoration === preset.theme.decoration
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}
-                `}
+                style={{
+                  paddingLeft: '12px',
+                  paddingRight: '12px',
+                  paddingTop: '6px',
+                  paddingBottom: '6px',
+                  borderRadius: '9999px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s',
+                  background: theme?.decoration === preset.theme.decoration ? '#8B5CF6' : '#F3E8FF',
+                  color: theme?.decoration === preset.theme.decoration ? 'white' : '#7C3AED',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 {preset.emoji} {preset.name}
               </button>
@@ -265,36 +339,84 @@ const CoverCard: React.FC<{
     <button
       onClick={onSelect}
       disabled={!cover.isOwned}
-      className={`
-        relative rounded-2xl overflow-hidden transition-all duration-200
-        ${isSelected ? 'ring-4 ring-purple-500 scale-105' : ''}
-        ${!cover.isOwned ? 'opacity-50' : 'hover:scale-102'}
-      `}
+      style={{
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        transition: 'all 0.2s',
+        border: isSelected ? '4px solid #8B5CF6' : '4px solid transparent',
+        transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+        opacity: !cover.isOwned ? 0.5 : 1,
+        cursor: !cover.isOwned ? 'not-allowed' : 'pointer',
+        background: 'none',
+        padding: 0,
+      }}
     >
       {/* 表紙プレビュー */}
-      <div className="aspect-[3/4] bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+      <div style={{
+        aspectRatio: '3/4',
+        background: 'linear-gradient(to bottom right, #F3E8FF, #FCE7F3)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
         {cover.coverImage ? (
-          <img src={cover.coverImage} alt={cover.name} className="w-full h-full object-cover" />
+          <img src={cover.coverImage} alt={cover.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span className="text-4xl">{cover.previewEmoji || '📕'}</span>
+          <span style={{ fontSize: '36px' }}>{cover.previewEmoji || '📕'}</span>
         )}
       </div>
 
       {/* 表紙名 */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm px-2 py-1">
-        <p className="text-white text-xs font-medium truncate">{cover.name}</p>
+      <div style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(4px)',
+        paddingLeft: '8px',
+        paddingRight: '8px',
+        paddingTop: '4px',
+        paddingBottom: '4px',
+      }}>
+        <p style={{ color: 'white', fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cover.name}</p>
       </div>
 
       {/* 未所持マーク */}
       {!cover.isOwned && (
-        <div className="absolute top-2 right-2 bg-gray-800/70 text-white text-xs px-2 py-0.5 rounded-full">
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          background: 'rgba(31, 41, 55, 0.7)',
+          color: 'white',
+          fontSize: '12px',
+          paddingLeft: '8px',
+          paddingRight: '8px',
+          paddingTop: '2px',
+          paddingBottom: '2px',
+          borderRadius: '9999px',
+        }}>
           🔒
         </div>
       )}
 
       {/* 選択中マーク */}
       {isSelected && (
-        <div className="absolute top-2 left-2 bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          left: '8px',
+          background: '#8B5CF6',
+          color: 'white',
+          fontSize: '12px',
+          paddingLeft: '8px',
+          paddingRight: '8px',
+          paddingTop: '2px',
+          paddingBottom: '2px',
+          borderRadius: '9999px',
+        }}>
           ✓
         </div>
       )}
@@ -312,19 +434,31 @@ const CharmCard: React.FC<{
     <button
       onClick={onSelect}
       disabled={!charm.isOwned}
-      className={`
-        relative w-20 h-24 rounded-2xl flex flex-col items-center justify-center gap-2
-        transition-all duration-200
-        ${isSelected ? 'bg-purple-500 text-white ring-4 ring-purple-300' : 'bg-white text-purple-700'}
-        ${!charm.isOwned ? 'opacity-50' : 'hover:scale-105'}
-        shadow-sm border border-purple-100
-      `}
+      style={{
+        position: 'relative',
+        width: '80px',
+        height: '96px',
+        borderRadius: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        transition: 'all 0.2s',
+        background: isSelected ? '#8B5CF6' : 'white',
+        color: isSelected ? 'white' : '#6B21A8',
+        border: isSelected ? '4px solid #C4B5FD' : '1px solid #F3E8FF',
+        opacity: !charm.isOwned ? 0.5 : 1,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        cursor: !charm.isOwned ? 'not-allowed' : 'pointer',
+        transform: !charm.isOwned ? 'none' : 'scale(1)',
+      }}
     >
-      <span className="text-3xl">{charm.emoji}</span>
-      <span className="text-xs font-medium">{charm.name}</span>
+      <span style={{ fontSize: '30px' }}>{charm.emoji}</span>
+      <span style={{ fontSize: '12px', fontWeight: 500 }}>{charm.name}</span>
 
       {!charm.isOwned && (
-        <div className="absolute top-1 right-1 text-xs">🔒</div>
+        <div style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '12px' }}>🔒</div>
       )}
     </button>
   )
@@ -529,19 +663,67 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 80, // タブバーの高さ分を確保
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
       {/* オーバーレイ */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(4px)',
+      }} onClick={onClose} />
 
       {/* モーダル本体 */}
-      <div className="relative bg-gradient-to-b from-purple-50 to-pink-50 w-full max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-3xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
+      <div style={{
+        position: 'relative',
+        background: 'linear-gradient(to bottom, #FAF5FF, #FCE7F3)',
+        width: '100%',
+        maxWidth: '512px',
+        maxHeight: '85vh',
+        borderTopLeftRadius: '24px',
+        borderTopRightRadius: '24px',
+        overflow: 'hidden',
+      }}>
         {/* ヘッダー */}
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-white font-bold text-lg">📚 シール帳をへんしゅう</h2>
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '16px',
+          paddingBottom: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px' }}>📚 シール帳をへんしゅう</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               ✕
             </button>
@@ -549,7 +731,7 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
         </div>
 
         {/* タブ */}
-        <div className="flex bg-white/50 border-b border-purple-100">
+        <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.5)', borderBottom: '1px solid #F3E8FF' }}>
           {[
             { id: 'pages' as TabType, label: 'ページ', emoji: '📄' },
             { id: 'cover' as TabType, label: 'ひょうし', emoji: '📕' },
@@ -558,38 +740,61 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-3 text-sm font-medium transition-all
-                ${activeTab === tab.id
-                  ? 'text-purple-700 border-b-2 border-purple-500 bg-white/50'
-                  : 'text-purple-400'}`}
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                fontSize: '14px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+                color: activeTab === tab.id ? '#6B21A8' : '#A78BFA',
+                borderBottom: activeTab === tab.id ? '2px solid #8B5CF6' : '2px solid transparent',
+                background: activeTab === tab.id ? 'rgba(255, 255, 255, 0.5)' : 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
-              <span className="mr-1">{tab.emoji}</span>
+              <span style={{ marginRight: '4px' }}>{tab.emoji}</span>
               {tab.label}
             </button>
           ))}
         </div>
 
         {/* コンテンツ */}
-        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 140px)' }}>
+        <div style={{ padding: '16px', overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
           {/* ページ編集タブ */}
           {activeTab === 'pages' && (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* 現在のページ数表示 */}
-              <div className="text-center text-sm text-purple-600 font-medium">
+              <div style={{ textAlign: 'center', fontSize: '14px', color: '#7C3AED', fontWeight: 500 }}>
                 現在 {spreads.length} 見開き（{spreads.length * 2} ページ）
               </div>
 
               {/* ページ追加ボタン */}
               <button
                 onClick={handleAddPage}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-green-400 to-emerald-400 text-white font-bold flex items-center justify-center gap-2 active:scale-98"
+                style={{
+                  width: '100%',
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(to right, #4ADE80, #10B981)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 <span>➕</span>
                 <span>あたらしいページを追加</span>
               </button>
 
               {/* ドラッグ操作の説明 */}
-              <div className="text-center text-xs text-purple-400 mb-2">
+              <div style={{ textAlign: 'center', fontSize: '12px', color: '#A78BFA', marginBottom: '8px' }}>
                 ⋮⋮ をドラッグして並び替えできます
               </div>
 
@@ -622,10 +827,10 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
           {/* 表紙編集タブ */}
           {activeTab === 'cover' && (
             <div>
-              <p className="text-sm text-purple-600 mb-3">
+              <p style={{ fontSize: '14px', color: '#7C3AED', marginBottom: '12px' }}>
                 すきなひょうしを選んでね！
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 {availableCovers.map((cover) => (
                   <CoverCard
                     key={cover.id}
@@ -637,29 +842,29 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
               </div>
 
               {/* 表紙画像の説明 */}
-              <div className="mt-6 p-4 bg-white/70 rounded-2xl">
-                <h4 className="font-bold text-purple-700 text-sm mb-2">📐 カスタム表紙について</h4>
-                <p className="text-xs text-purple-600 leading-relaxed">
+              <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.7)', borderRadius: '16px' }}>
+                <h4 style={{ fontWeight: 'bold', color: '#6B21A8', fontSize: '14px', marginBottom: '8px' }}>📐 カスタム表紙について</h4>
+                <p style={{ fontSize: '12px', color: '#7C3AED', lineHeight: 1.6 }}>
                   オリジナルの表紙を作成する場合は、以下のサイズで画像を用意してください：
                 </p>
-                <ul className="text-xs text-purple-500 mt-2 space-y-1">
-                  <li>• 表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
-                  <li>• 裏表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
+                <ul style={{ fontSize: '12px', color: '#8B5CF6', marginTop: '8px' }}>
+                  <li style={{ marginBottom: '4px' }}>• 表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
+                  <li style={{ marginBottom: '4px' }}>• 裏表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
                   <li>• 形式: PNG または JPEG</li>
                 </ul>
-                <div className="mt-3 flex justify-center">
-                  <div className="flex border-2 border-purple-300 rounded-lg overflow-hidden text-xs">
-                    <div className="w-16 h-24 bg-purple-100 flex items-center justify-center border-r border-purple-200">
+                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', border: '2px solid #C4B5FD', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
+                    <div style={{ width: '64px', height: '96px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #DDD6FE' }}>
                       裏表紙
                     </div>
-                    <div className="w-2 h-24 bg-purple-300 flex items-center justify-center border-r border-purple-200">
+                    <div style={{ width: '8px', height: '96px', background: '#C4B5FD', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #DDD6FE' }}>
                     </div>
-                    <div className="w-16 h-24 bg-purple-100 flex items-center justify-center">
+                    <div style={{ width: '64px', height: '96px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       表紙
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-purple-400 mt-2 text-center">
+                <p style={{ fontSize: '12px', color: '#A78BFA', marginTop: '8px', textAlign: 'center' }}>
                   ※ 背表紙は自動生成されます
                 </p>
               </div>
@@ -669,10 +874,10 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
           {/* チャーム編集タブ */}
           {activeTab === 'charm' && (
             <div>
-              <p className="text-sm text-purple-600 mb-3">
+              <p style={{ fontSize: '14px', color: '#7C3AED', marginBottom: '12px' }}>
                 シール帳につけるチャームを選んでね！
               </p>
-              <div className="flex flex-wrap gap-3 justify-center">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
                 {availableCharms.map((charm) => (
                   <CharmCard
                     key={charm.id}
@@ -686,19 +891,6 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
           )}
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slideUp {
-          from {
-            transform: translateY(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </div>
   )
 }

@@ -114,12 +114,12 @@ const Sparkles: React.FC<{ count?: number }> = ({ count = 20 }) => {
   )
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden' }}>
       {sparkles.map((sparkle) => (
         <motion.div
           key={sparkle.id}
-          className="absolute"
           style={{
+            position: 'absolute',
             left: `${sparkle.x}%`,
             top: `${sparkle.y}%`,
             fontSize: `${sparkle.size}px`,
@@ -147,14 +147,26 @@ const Sparkles: React.FC<{ count?: number }> = ({ count = 20 }) => {
 // 光線バーストエフェクト
 const LightBurst: React.FC<{ color: string; delay?: number }> = ({ color, delay = 0 }) => (
   <motion.div
-    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+    style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+    }}
     initial={{ scale: 0, opacity: 0 }}
     animate={{ scale: [0, 2, 3], opacity: [0, 0.8, 0] }}
     transition={{ duration: 1.2, delay, ease: 'easeOut' }}
   >
     <div
-      className="w-full h-full rounded-full"
       style={{
+        width: '100%',
+        height: '100%',
+        borderRadius: '50%',
         background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
       }}
     />
@@ -171,7 +183,7 @@ const BigStickerCard: React.FC<{
 
   return (
     <motion.div
-      className="relative flex flex-col items-center"
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
       initial={{ scale: 0, opacity: 0, y: 100, rotateY: 180 }}
       animate={{ scale: 1, opacity: 1, y: 0, rotateY: 0 }}
       transition={{
@@ -184,8 +196,14 @@ const BigStickerCard: React.FC<{
     >
       {/* 巨大な背景グロー - より大きく明るく */}
       <motion.div
-        className="absolute -inset-20 rounded-full blur-3xl"
         style={{
+          position: 'absolute',
+          top: '-80px',
+          left: '-80px',
+          right: '-80px',
+          bottom: '-80px',
+          borderRadius: '50%',
+          filter: 'blur(48px)',
           background:
             sticker.rarity === 5
               ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
@@ -201,7 +219,15 @@ const BigStickerCard: React.FC<{
       {/* 追加のキラキラリング */}
       {sticker.rarity >= 4 && (
         <motion.div
-          className="absolute -inset-16 rounded-full border-4 border-white/30"
+          style={{
+            position: 'absolute',
+            top: '-64px',
+            left: '-64px',
+            right: '-64px',
+            bottom: '-64px',
+            borderRadius: '50%',
+            border: '4px solid rgba(255, 255, 255, 0.3)',
+          }}
           animate={{ rotate: 360, scale: [1, 1.1, 1] }}
           transition={{ rotate: { duration: 10, repeat: Infinity, ease: 'linear' }, scale: { duration: 2, repeat: Infinity } }}
         />
@@ -209,8 +235,12 @@ const BigStickerCard: React.FC<{
 
       {/* 巨大シールカード */}
       <motion.div
-        className="relative w-56 h-56 sm:w-72 sm:h-72 rounded-[2rem] overflow-hidden"
         style={{
+          position: 'relative',
+          width: '224px',
+          height: '224px',
+          borderRadius: '32px',
+          overflow: 'hidden',
           background:
             sticker.rarity === 5
               ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
@@ -224,28 +254,30 @@ const BigStickerCard: React.FC<{
         transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
       >
         {/* 光沢 */}
-        <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/50 to-transparent" />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '33%', background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), transparent)' }} />
 
         {/* シール画像 - より大きく */}
-        <div className="relative w-full h-full flex items-center justify-center p-6">
+        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           {sticker.imageUrl ? (
             <motion.img
               src={sticker.imageUrl}
               alt={sticker.name}
-              className="w-full h-full object-contain"
-              initial={{ scale: 0, rotate: -360 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ delay: index * 0.15 + 0.3, duration: 0.8, type: 'spring' }}
               style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
                 filter:
                   sticker.rarity >= 4
                     ? 'drop-shadow(0 0 50px rgba(255,255,255,1))'
                     : 'drop-shadow(0 8px 16px rgba(0,0,0,0.4))',
               }}
+              initial={{ scale: 0, rotate: -360 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ delay: index * 0.15 + 0.3, duration: 0.8, type: 'spring' }}
             />
           ) : (
             <motion.div
-              className="text-9xl"
+              style={{ fontSize: '128px' }}
               initial={{ scale: 0, rotate: -360 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: index * 0.15 + 0.3, duration: 0.8, type: 'spring' }}
@@ -258,11 +290,24 @@ const BigStickerCard: React.FC<{
         {/* 大きなNEWバッジ */}
         {sticker.isNew && (
           <motion.div
-            className="absolute top-4 left-4 px-5 py-2 bg-gradient-to-r from-rose-500 via-pink-500 to-red-500 text-white text-lg font-extrabold rounded-2xl shadow-2xl"
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              paddingLeft: '20px',
+              paddingRight: '20px',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              background: 'linear-gradient(to right, #F43F5E, #EC4899, #EF4444)',
+              color: 'white',
+              fontSize: '18px',
+              fontWeight: 800,
+              borderRadius: '16px',
+              boxShadow: '0 4px 20px rgba(244, 63, 94, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            }}
             initial={{ scale: 0, x: -50, rotate: -20 }}
             animate={{ scale: 1, x: 0, rotate: 0 }}
             transition={{ delay: index * 0.15 + 0.5, type: 'spring', stiffness: 200 }}
-            style={{ boxShadow: '0 4px 20px rgba(244, 63, 94, 0.6)' }}
           >
             ✨ NEW ✨
           </motion.div>
@@ -271,11 +316,15 @@ const BigStickerCard: React.FC<{
         {/* 虹色シャイン演出（高レア） */}
         {sticker.rarity >= 4 && (
           <motion.div
-            className="absolute inset-0 pointer-events-none overflow-hidden"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden' }}
           >
             <motion.div
-              className="absolute inset-0"
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)',
                 backgroundSize: '200% 200%',
               }}
@@ -288,8 +337,14 @@ const BigStickerCard: React.FC<{
         {/* 最高レア用 虹色ボーダーアニメーション */}
         {sticker.rarity === 5 && (
           <motion.div
-            className="absolute inset-0 rounded-[2rem] pointer-events-none"
             style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              borderRadius: '32px',
+              pointerEvents: 'none',
               border: '4px solid transparent',
               background: 'linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #A855F7, #FF6B6B) border-box',
               WebkitMask: 'linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)',
@@ -304,21 +359,25 @@ const BigStickerCard: React.FC<{
 
       {/* シール名 - より大きく */}
       <motion.h3
-        className="mt-6 text-3xl sm:text-4xl font-extrabold text-white text-center"
-        initial={{ opacity: 0, y: 30, scale: 0.5 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ delay: index * 0.15 + 0.4, type: 'spring' }}
         style={{
+          marginTop: '24px',
+          fontSize: '30px',
+          fontWeight: 800,
+          color: 'white',
+          textAlign: 'center',
           fontFamily: "'M PLUS Rounded 1c', sans-serif",
           textShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 40px rgba(255,255,255,0.3)',
         }}
+        initial={{ opacity: 0, y: 30, scale: 0.5 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ delay: index * 0.15 + 0.4, type: 'spring' }}
       >
         {sticker.name}
       </motion.h3>
 
       {/* 大きなレアリティ星 */}
       <motion.div
-        className="flex items-center justify-center gap-2 mt-4"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px' }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: index * 0.15 + 0.5 }}
@@ -326,13 +385,14 @@ const BigStickerCard: React.FC<{
         {Array.from({ length: 5 }, (_, i) => (
           <motion.span
             key={i}
-            className={`text-3xl sm:text-4xl ${i < sticker.rarity ? 'text-yellow-300' : 'text-white/20'}`}
+            style={{
+              fontSize: '30px',
+              color: i < sticker.rarity ? '#FDE047' : 'rgba(255, 255, 255, 0.2)',
+              filter: i < sticker.rarity ? 'drop-shadow(0 0 15px rgba(255,215,0,1))' : 'none',
+            }}
             initial={{ scale: 0, rotate: -180, y: 50 }}
             animate={{ scale: 1, rotate: 0, y: 0 }}
             transition={{ delay: index * 0.15 + 0.6 + i * 0.08, type: 'spring', stiffness: 300 }}
-            style={{
-              filter: i < sticker.rarity ? 'drop-shadow(0 0 15px rgba(255,215,0,1))' : 'none',
-            }}
           >
             ★
           </motion.span>
@@ -346,47 +406,66 @@ const BigStickerCard: React.FC<{
 const MiniResultCard: React.FC<{
   sticker: GachaResultSticker
   index: number
-}> = ({ sticker, index }) => {
+  onTap?: () => void
+}> = ({ sticker, index, onTap }) => {
   const colors = rarityColors[sticker.rarity]
 
   return (
     <motion.div
-      className="relative aspect-square rounded-2xl overflow-hidden"
+      style={{
+        position: 'relative',
+        aspectRatio: '1 / 1',
+        minWidth: '60px',
+        minHeight: '60px',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        background:
+          sticker.rarity === 5
+            ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
+            : `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
+        boxShadow: `0 4px 15px ${colors.glow}, 0 0 20px ${colors.glow}`,
+        cursor: 'pointer',
+      }}
       initial={{ scale: 0, opacity: 0, rotateY: 180 }}
       animate={{ scale: 1, opacity: 1, rotateY: 0 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={onTap}
       transition={{
         duration: 0.5,
         delay: index * 0.08,
         type: 'spring',
         stiffness: 200,
       }}
-      style={{
-        background:
-          sticker.rarity === 5
-            ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
-            : `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
-        boxShadow: `0 8px 30px ${colors.glow}, 0 0 40px ${colors.glow}`,
-      }}
     >
       {/* 光沢オーバーレイ */}
-      <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '33%',
+        background: 'linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)',
+        pointerEvents: 'none',
+      }} />
 
       {/* シール画像 - より大きく */}
-      <div className="w-full h-full flex items-center justify-center p-3">
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px' }}>
         {sticker.imageUrl ? (
           <motion.img
             src={sticker.imageUrl}
             alt={sticker.name}
-            className="w-full h-full object-contain"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              filter: sticker.rarity >= 4 ? 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' : 'none',
+            }}
             animate={sticker.rarity >= 4 ? { scale: [1, 1.05, 1] } : {}}
             transition={{ duration: 1.5, repeat: Infinity }}
-            style={{
-              filter: sticker.rarity >= 4 ? 'drop-shadow(0 0 10px rgba(255,255,255,0.8))' : 'none',
-            }}
           />
         ) : (
           <motion.div
-            className="text-3xl sm:text-4xl"
+            style={{ fontSize: '24px' }}
             animate={sticker.rarity >= 4 ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
@@ -398,11 +477,25 @@ const MiniResultCard: React.FC<{
       {/* 大きなNEWバッジ */}
       {sticker.isNew && (
         <motion.div
-          className="absolute top-1 left-1 w-7 h-7 bg-gradient-to-r from-rose-500 via-pink-500 to-red-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center shadow-xl"
+          style={{
+            position: 'absolute',
+            top: '4px',
+            left: '4px',
+            width: '28px',
+            height: '28px',
+            background: 'linear-gradient(to right, #F43F5E, #EC4899, #EF4444)',
+            color: 'white',
+            fontSize: '10px',
+            fontWeight: 800,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 10px rgba(244, 63, 94, 0.6), 0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          }}
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ delay: index * 0.08 + 0.3, type: 'spring', stiffness: 300 }}
-          style={{ boxShadow: '0 2px 10px rgba(244, 63, 94, 0.6)' }}
         >
           <motion.span
             animate={{ scale: [1, 1.2, 1] }}
@@ -414,10 +507,14 @@ const MiniResultCard: React.FC<{
       )}
 
       {/* 大きなレア度表示 */}
-      <div className="absolute bottom-1 left-0 right-0 text-center">
+      <div style={{ position: 'absolute', bottom: '4px', left: 0, right: 0, textAlign: 'center' }}>
         <motion.span
-          className="text-sm text-yellow-300 font-bold"
-          style={{ textShadow: '0 0 10px rgba(255,215,0,0.8)' }}
+          style={{
+            fontSize: '14px',
+            color: '#FDE047',
+            fontWeight: 'bold',
+            textShadow: '0 0 10px rgba(255,215,0,0.8)',
+          }}
           animate={sticker.rarity >= 4 ? { scale: [1, 1.1, 1] } : {}}
           transition={{ duration: 1, repeat: Infinity }}
         >
@@ -428,13 +525,25 @@ const MiniResultCard: React.FC<{
       {/* 高レア演出 - より派手に */}
       {sticker.rarity >= 4 && (
         <motion.div
-          className="absolute inset-0 pointer-events-none overflow-hidden"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            pointerEvents: 'none',
+            overflow: 'hidden',
+          }}
           animate={{ opacity: [0.4, 0.7, 0.4] }}
           transition={{ duration: 1.5, repeat: Infinity }}
         >
           <motion.div
-            className="absolute inset-0"
             style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
               backgroundSize: '200% 200%',
             }}
@@ -447,8 +556,14 @@ const MiniResultCard: React.FC<{
       {/* 5星用 レインボーボーダー */}
       {sticker.rarity === 5 && (
         <motion.div
-          className="absolute inset-0 rounded-2xl pointer-events-none"
           style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: '16px',
+            pointerEvents: 'none',
             border: '3px solid transparent',
             background: 'linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #A855F7, #FF6B6B) border-box',
             WebkitMask: 'linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)',
@@ -463,6 +578,252 @@ const MiniResultCard: React.FC<{
   )
 }
 
+// シール詳細オーバーレイ
+const StickerDetailOverlay: React.FC<{
+  sticker: GachaResultSticker
+  onClose: () => void
+}> = ({ sticker, onClose }) => {
+  const colors = rarityColors[sticker.rarity]
+  const typeLabel = sticker.type === 'sparkle' ? 'キラキラ' : sticker.type === 'puffy' ? 'ぷっくり' : 'ノーマル'
+  const typeIcon = sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'
+
+  return (
+    <motion.div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 200,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0, 0, 0, 0.8)',
+        backdropFilter: 'blur(8px)',
+      }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '24px',
+          maxWidth: '320px',
+          width: '90%',
+        }}
+        initial={{ scale: 0.5, opacity: 0, y: 50 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.5, opacity: 0, y: 50 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 背景グロー */}
+        <motion.div
+          style={{
+            position: 'absolute',
+            width: '300px',
+            height: '300px',
+            borderRadius: '50%',
+            filter: 'blur(60px)',
+            background: sticker.rarity === 5
+              ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
+              : `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
+            opacity: 0.6,
+          }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+
+        {/* シールカード */}
+        <motion.div
+          style={{
+            position: 'relative',
+            width: '200px',
+            height: '200px',
+            borderRadius: '24px',
+            overflow: 'hidden',
+            background: sticker.rarity === 5
+              ? `linear-gradient(135deg, ${colors.from}, ${colors.via}, ${colors.to})`
+              : `linear-gradient(135deg, ${colors.from}, ${colors.to})`,
+            boxShadow: `0 20px 60px ${colors.glow}, 0 0 100px ${colors.glow}`,
+          }}
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {/* 光沢 */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '40%',
+            background: 'linear-gradient(to bottom, rgba(255,255,255,0.5), transparent)',
+            pointerEvents: 'none',
+          }} />
+
+          {/* シール画像 */}
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}>
+            {sticker.imageUrl ? (
+              <img
+                src={sticker.imageUrl}
+                alt={sticker.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  filter: sticker.rarity >= 4 ? 'drop-shadow(0 0 20px rgba(255,255,255,0.8))' : 'none',
+                }}
+              />
+            ) : (
+              <span style={{ fontSize: '80px' }}>{typeIcon}</span>
+            )}
+          </div>
+
+          {/* NEWバッジ */}
+          {sticker.isNew && (
+            <motion.div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                padding: '6px 14px',
+                background: 'linear-gradient(to right, #F43F5E, #EC4899)',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 800,
+                borderRadius: '12px',
+                boxShadow: '0 4px 15px rgba(244, 63, 94, 0.5)',
+              }}
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
+              ✨ NEW
+            </motion.div>
+          )}
+
+          {/* キラキラエフェクト（高レア） */}
+          {sticker.rarity >= 4 && (
+            <motion.div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                pointerEvents: 'none',
+                background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+                backgroundSize: '200% 200%',
+              }}
+              animate={{ backgroundPosition: ['200% 200%', '-100% -100%'] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+            />
+          )}
+        </motion.div>
+
+        {/* シール名 */}
+        <motion.h2
+          style={{
+            marginTop: '24px',
+            fontSize: '28px',
+            fontWeight: 800,
+            color: 'white',
+            textAlign: 'center',
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            textShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          {sticker.name}
+        </motion.h2>
+
+        {/* レアリティ星 */}
+        <motion.div
+          style={{
+            display: 'flex',
+            gap: '6px',
+            marginTop: '12px',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          {Array.from({ length: 5 }, (_, i) => (
+            <motion.span
+              key={i}
+              style={{
+                fontSize: '24px',
+                color: i < sticker.rarity ? '#FDE047' : 'rgba(255, 255, 255, 0.2)',
+                filter: i < sticker.rarity ? 'drop-shadow(0 0 10px rgba(255,215,0,0.8))' : 'none',
+              }}
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ delay: 0.3 + i * 0.1, type: 'spring' }}
+            >
+              ★
+            </motion.span>
+          ))}
+        </motion.div>
+
+        {/* タイプ表示 */}
+        <motion.div
+          style={{
+            marginTop: '16px',
+            padding: '8px 20px',
+            borderRadius: '20px',
+            background: 'rgba(255, 255, 255, 0.15)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <span style={{ fontSize: '18px' }}>{typeIcon}</span>
+          <span style={{
+            color: 'white',
+            fontSize: '16px',
+            fontWeight: 600,
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+          }}>
+            {typeLabel}タイプ
+          </span>
+        </motion.div>
+
+        {/* 閉じるヒント */}
+        <motion.p
+          style={{
+            marginTop: '24px',
+            color: 'rgba(255, 255, 255, 0.5)',
+            fontSize: '14px',
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          タップして閉じる
+        </motion.p>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // メインモーダルコンポーネント
 export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
   isOpen,
@@ -472,6 +833,7 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
 }) => {
   const [phase, setPhase] = useState<'video' | 'result' | 'complete'>('video')
   const [particlesInit, setParticlesInit] = useState(false)
+  const [selectedSticker, setSelectedSticker] = useState<GachaResultSticker | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const isSingle = results.length === 1
@@ -546,7 +908,19 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -555,11 +929,18 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
         <video
           ref={videoRef}
           src="/videos/Gacha.mp4"
-          className="absolute inset-0 w-full h-full object-cover"
           playsInline
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleVideoEnded}
           style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
             opacity: phase === 'video' ? 1 : 0.3,
             transition: 'opacity 0.5s ease',
           }}
@@ -569,7 +950,14 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
         <AnimatePresence>
           {(phase === 'result' || phase === 'complete') && (
             <motion.div
-              className="absolute inset-0 bg-black/60"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.6)',
+              }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -583,7 +971,7 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
             id="gacha-particles"
             particlesLoaded={particlesLoaded}
             options={getParticlesConfig(maxRarity, hasUltraRare)}
-            className="absolute inset-0"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
         )}
 
@@ -606,8 +994,56 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
           </>
         )}
 
+        {/* スキップボタン（動画再生中のみ）- モーダル直下に配置 */}
+        <AnimatePresence>
+          {phase === 'video' && (
+            <motion.button
+              onClick={handleSkip}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              whileHover={{ scale: 1.05 }}
+              style={{
+                position: 'fixed',
+                bottom: '100px',
+                right: '20px',
+                paddingLeft: '20px',
+                paddingRight: '20px',
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '16px',
+                color: 'white',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                border: '2px solid rgba(255,255,255,0.3)',
+                cursor: 'pointer',
+                zIndex: 100,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              }}
+            >
+              スキップ ▶▶
+            </motion.button>
+          )}
+        </AnimatePresence>
+
         {/* コンテンツ */}
-        <div className="relative w-full max-w-lg px-4 py-6 z-10">
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px',
+          zIndex: 10,
+          pointerEvents: 'none',
+        }}>
+          <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: '400px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <AnimatePresence mode="wait">
             {/* 結果表示 */}
             {(phase === 'result' || phase === 'complete') && (
@@ -616,15 +1052,22 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="flex flex-col items-center"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
               >
                 {/* タイトル */}
                 <motion.h2
-                  className="text-white text-2xl sm:text-3xl font-bold text-center mb-6 drop-shadow-lg"
+                  style={{
+                    color: 'white',
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    marginBottom: '24px',
+                    filter: 'drop-shadow(0 4px 3px rgba(0,0,0,0.3))',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
                   initial={{ opacity: 0, y: -30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
-                  style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
                 >
                   {isSingle ? '🎰 ゲット！' : '🎰 10連ガチャ結果'}
                 </motion.h2>
@@ -633,73 +1076,107 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
                   /* シングル：大きく1枚表示 */
                   <BigStickerCard sticker={results[0]} index={0} total={1} />
                 ) : (
-                  /* マルチ：グリッド表示 */
+                  /* マルチ：グリッド表示 - 5x2で大きめに */
                   <>
-                    <div className="grid grid-cols-5 gap-2 w-full max-w-md mx-auto">
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(5, minmax(56px, 1fr))',
+                      gap: '8px',
+                      width: '100%',
+                      maxWidth: '340px',
+                      justifyContent: 'center',
+                    }}>
                       {results.map((sticker, index) => (
-                        <MiniResultCard key={sticker.id} sticker={sticker} index={index} />
+                        <MiniResultCard
+                          key={`result-${index}`}
+                          sticker={sticker}
+                          index={index}
+                          onTap={() => setSelectedSticker(sticker)}
+                        />
                       ))}
                     </div>
 
                     {/* サマリー - 大きく派手版 */}
                     {phase === 'complete' && (
                       <motion.div
-                        className="mt-8 bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-lg rounded-3xl p-6 border-2 border-white/30 w-full max-w-md"
+                        style={{
+                          marginTop: '32px',
+                          background: 'linear-gradient(to bottom right, rgba(255,255,255,0.2), rgba(255,255,255,0.05))',
+                          backdropFilter: 'blur(12px)',
+                          borderRadius: '24px',
+                          padding: '24px',
+                          border: '2px solid rgba(255,255,255,0.3)',
+                          width: '100%',
+                          maxWidth: '448px',
+                          boxShadow: '0 10px 40px rgba(0,0,0,0.3), 0 0 60px rgba(168,85,247,0.2)',
+                        }}
                         initial={{ opacity: 0, y: 30, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         transition={{ delay: 0.3, type: 'spring' }}
-                        style={{
-                          boxShadow: '0 10px 40px rgba(0,0,0,0.3), 0 0 60px rgba(168,85,247,0.2)',
-                        }}
                       >
-                        <div className="grid grid-cols-3 gap-4 text-center text-white">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', textAlign: 'center', color: 'white' }}>
                           <motion.div
-                            className="flex flex-col items-center"
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                             initial={{ scale: 0, rotate: -20 }}
                             animate={{ scale: 1, rotate: 0 }}
                             transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
                           >
                             <motion.span
-                              className="block text-4xl sm:text-5xl font-extrabold text-yellow-300"
+                              style={{
+                                display: 'block',
+                                fontSize: '36px',
+                                fontWeight: 800,
+                                color: '#FDE047',
+                                textShadow: '0 0 20px rgba(255,215,0,0.8)',
+                              }}
                               animate={{ scale: [1, 1.1, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity }}
-                              style={{ textShadow: '0 0 20px rgba(255,215,0,0.8)' }}
                             >
                               {results.filter((s) => s.rarity >= 4).length}
                             </motion.span>
-                            <span className="text-sm sm:text-base text-white/80 font-bold mt-1">✨レア以上</span>
+                            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', fontWeight: 'bold', marginTop: '4px' }}>✨レア以上</span>
                           </motion.div>
                           <motion.div
-                            className="flex flex-col items-center"
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                             initial={{ scale: 0, rotate: 20 }}
                             animate={{ scale: 1, rotate: 0 }}
                             transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
                           >
                             <motion.span
-                              className="block text-4xl sm:text-5xl font-extrabold text-rose-400"
+                              style={{
+                                display: 'block',
+                                fontSize: '36px',
+                                fontWeight: 800,
+                                color: '#FB7185',
+                                textShadow: '0 0 20px rgba(244,63,94,0.8)',
+                              }}
                               animate={{ scale: [1, 1.1, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
-                              style={{ textShadow: '0 0 20px rgba(244,63,94,0.8)' }}
                             >
                               {results.filter((s) => s.isNew).length}
                             </motion.span>
-                            <span className="text-sm sm:text-base text-white/80 font-bold mt-1">🆕 NEW</span>
+                            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', fontWeight: 'bold', marginTop: '4px' }}>🆕 NEW</span>
                           </motion.div>
                           <motion.div
-                            className="flex flex-col items-center"
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                             initial={{ scale: 0, rotate: -20 }}
                             animate={{ scale: 1, rotate: 0 }}
                             transition={{ delay: 0.6, type: 'spring', stiffness: 200 }}
                           >
                             <motion.span
-                              className="block text-4xl sm:text-5xl font-extrabold text-emerald-400"
+                              style={{
+                                display: 'block',
+                                fontSize: '36px',
+                                fontWeight: 800,
+                                color: '#34D399',
+                                textShadow: '0 0 20px rgba(52,211,153,0.8)',
+                              }}
                               animate={{ scale: [1, 1.1, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
-                              style={{ textShadow: '0 0 20px rgba(52,211,153,0.8)' }}
                             >
                               {results.filter((s) => !s.isNew).length}
                             </motion.span>
-                            <span className="text-sm sm:text-base text-white/80 font-bold mt-1">📦 ダブり</span>
+                            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', fontWeight: 'bold', marginTop: '4px' }}>📦 ダブり</span>
                           </motion.div>
                         </div>
                       </motion.div>
@@ -714,42 +1191,82 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
           <AnimatePresence>
             {phase === 'complete' && (
               <motion.div
-                className="flex gap-5 mt-10"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '20px',
+                  marginTop: '40px',
+                  width: '100%',
+                }}
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, type: 'spring' }}
               >
                 <motion.button
                   onClick={onClose}
-                  className="flex-1 py-5 px-6 rounded-3xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-lg text-white text-lg sm:text-xl font-bold border-2 border-white/30"
                   whileHover={{ scale: 1.05, backgroundColor: 'rgba(255,255,255,0.3)' }}
                   whileTap={{ scale: 0.95 }}
                   style={{
+                    flex: 1,
+                    paddingTop: '20px',
+                    paddingBottom: '20px',
+                    paddingLeft: '24px',
+                    paddingRight: '24px',
+                    borderRadius: '24px',
+                    background: 'linear-gradient(to bottom right, rgba(255,255,255,0.2), rgba(255,255,255,0.05))',
+                    backdropFilter: 'blur(12px)',
+                    color: 'white',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: '2px solid rgba(255,255,255,0.3)',
                     boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
                     fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                    cursor: 'pointer',
                   }}
                 >
                   <motion.span
-                    className="flex items-center justify-center gap-2"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
                   >
                     🚪 とじる
                   </motion.span>
                 </motion.button>
                 <motion.button
                   onClick={onContinue}
-                  className="flex-1 py-5 px-6 rounded-3xl text-white text-lg sm:text-xl font-bold relative overflow-hidden"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   style={{
+                    flex: 1,
+                    paddingTop: '20px',
+                    paddingBottom: '20px',
+                    paddingLeft: '24px',
+                    paddingRight: '24px',
+                    borderRadius: '24px',
+                    color: 'white',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    position: 'relative',
+                    overflow: 'hidden',
                     background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 50%, #F97316 100%)',
                     boxShadow: '0 8px 40px rgba(168,85,247,0.5), 0 0 60px rgba(236,72,153,0.3)',
                     fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                    border: 'none',
+                    cursor: 'pointer',
                   }}
                 >
                   {/* キラキラオーバーレイ */}
                   <motion.div
-                    className="absolute inset-0 pointer-events-none"
                     style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      pointerEvents: 'none',
                       background: 'linear-gradient(45deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
                       backgroundSize: '200% 200%',
                     }}
@@ -757,7 +1274,14 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
                     transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                   />
                   <motion.span
-                    className="relative z-10 flex items-center justify-center gap-2"
+                    style={{
+                      position: 'relative',
+                      zIndex: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
                     animate={{ scale: [1, 1.05, 1] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
                   >
@@ -768,22 +1292,18 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
             )}
           </AnimatePresence>
 
-          {/* スキップボタン（動画再生中のみ） */}
-          <AnimatePresence>
-            {phase === 'video' && (
-              <motion.button
-                onClick={handleSkip}
-                className="absolute bottom-4 right-4 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-xl text-white/80 text-sm hover:text-white hover:bg-black/70 transition-all"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                whileHover={{ scale: 1.05 }}
-              >
-                スキップ ▶
-              </motion.button>
-            )}
-          </AnimatePresence>
         </div>
+        </div>
+
+        {/* シール詳細オーバーレイ */}
+        <AnimatePresence>
+          {selectedSticker && (
+            <StickerDetailOverlay
+              sticker={selectedSticker}
+              onClose={() => setSelectedSticker(null)}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
     </AnimatePresence>
   )

@@ -22,18 +22,21 @@ interface StickerDetailModalProps {
 
 // レアリティの星表示
 const RarityStars: React.FC<{ rarity: number; size?: 'sm' | 'md' | 'lg' }> = ({ rarity, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'text-sm',
-    md: 'text-xl',
-    lg: 'text-2xl'
+  const sizes = {
+    sm: '14px',
+    md: '20px',
+    lg: '24px'
   }
 
   return (
-    <div className="flex gap-0.5 justify-center">
+    <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
       {Array.from({ length: 5 }, (_, i) => (
         <span
           key={i}
-          className={`${sizeClasses[size]} ${i < rarity ? 'text-yellow-400' : 'text-gray-300'}`}
+          style={{
+            fontSize: sizes[size],
+            color: i < rarity ? '#FBBF24' : '#D1D5DB',
+          }}
         >
           ★
         </span>
@@ -50,31 +53,55 @@ const RankMeter: React.FC<{ totalAcquired: number }> = ({ totalAcquired }) => {
   const nextReq = getNextRankRequirement(currentRank, totalAcquired)
   const rankGradient = getRankGradient(currentRank)
 
+  // グラデーント文字列をCSSに変換
+  const gradientMap: Record<string, string> = {
+    'from-gray-400 to-gray-500': 'linear-gradient(to right, #9CA3AF, #6B7280)',
+    'from-green-400 to-green-500': 'linear-gradient(to right, #4ADE80, #22C55E)',
+    'from-blue-400 to-blue-500': 'linear-gradient(to right, #60A5FA, #3B82F6)',
+    'from-purple-400 to-purple-500': 'linear-gradient(to right, #C084FC, #A855F7)',
+    'from-yellow-400 via-orange-400 to-pink-400': 'linear-gradient(to right, #FBBF24, #FB923C, #F472B6)',
+  }
+  const bgGradient = gradientMap[rankGradient] || 'linear-gradient(to right, #9CA3AF, #6B7280)'
+
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-bold text-purple-700">ランク</span>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED' }}>ランク</span>
         <span
-          className={`px-3 py-1 rounded-full font-bold text-sm bg-gradient-to-r ${rankGradient}`}
-          style={{ color: currentRank >= 4 ? '#000' : '#fff' }}
+          style={{
+            paddingLeft: '12px',
+            paddingRight: '12px',
+            paddingTop: '4px',
+            paddingBottom: '4px',
+            borderRadius: '9999px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            background: bgGradient,
+            color: currentRank >= 4 ? '#000' : '#fff',
+          }}
         >
           {rankNamesKids[currentRank]}
         </span>
       </div>
-      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+      <div style={{ height: '12px', background: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden' }}>
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${rankGradient} transition-all duration-500`}
-          style={{ width: `${progress}%` }}
+          style={{
+            height: '100%',
+            borderRadius: '9999px',
+            background: bgGradient,
+            transition: 'all 0.5s',
+            width: `${progress}%`,
+          }}
         />
       </div>
       {!isMax && nextReq !== null && (
-        <p className="text-xs text-purple-500 mt-1 text-center">
+        <p style={{ fontSize: '12px', color: '#8B5CF6', marginTop: '4px', textAlign: 'center' }}>
           つぎのランクまであと {nextReq} まい
         </p>
       )}
       {isMax && (
-        <div className="text-center mt-1">
-          <span className="text-xs text-pink-500 font-bold animate-pulse">
+        <div style={{ textAlign: 'center', marginTop: '4px' }}>
+          <span style={{ fontSize: '12px', color: '#EC4899', fontWeight: 'bold' }}>
             🎉 ランクMAXたっせい！ 🎉
           </span>
         </div>
@@ -86,15 +113,28 @@ const RankMeter: React.FC<{ totalAcquired: number }> = ({ totalAcquired }) => {
 // シールタイプバッジ
 const TypeBadge: React.FC<{ type: 'normal' | 'puffy' | 'sparkle' }> = ({ type }) => {
   const typeInfo = {
-    normal: { label: 'ふつう', emoji: '📄', color: 'bg-gray-100 text-gray-700' },
-    puffy: { label: 'ぷっくり', emoji: '🫧', color: 'bg-blue-100 text-blue-700' },
-    sparkle: { label: 'キラキラ', emoji: '✨', color: 'bg-yellow-100 text-yellow-700' }
+    normal: { label: 'ふつう', emoji: '📄', bg: '#F3F4F6', color: '#374151' },
+    puffy: { label: 'ぷっくり', emoji: '🫧', bg: '#DBEAFE', color: '#1D4ED8' },
+    sparkle: { label: 'キラキラ', emoji: '✨', bg: '#FEF9C3', color: '#A16207' }
   }
 
   const info = typeInfo[type]
 
   return (
-    <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${info.color}`}>
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      paddingLeft: '12px',
+      paddingRight: '12px',
+      paddingTop: '4px',
+      paddingBottom: '4px',
+      borderRadius: '9999px',
+      fontSize: '14px',
+      fontWeight: 500,
+      background: info.bg,
+      color: info.color,
+    }}>
       <span>{info.emoji}</span>
       <span>{info.label}</span>
     </span>
@@ -108,29 +148,41 @@ const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) =
   // ランクを計算
   const actualRank = (totalAcquired ? calculateRank(totalAcquired) : 1) as RankLevel
 
-  // キラキラエフェクト用のクラス
-  const sparkleClass = type === 'sparkle' ? 'animate-pulse' : ''
   // ぷっくりシール用のシャドウ
-  const puffyStyle = type === 'puffy' ? { boxShadow: '0 8px 24px rgba(107, 63, 160, 0.3)' } : {}
+  const puffyShadow = type === 'puffy' ? '0 8px 24px rgba(107, 63, 160, 0.3)' : undefined
 
   const previewContent = (
     <div
-      className={`
-        relative w-40 h-40 mx-auto rounded-2xl overflow-hidden
-        ${owned ? 'bg-white' : 'bg-gray-200'}
-        border-4 ${owned ? 'border-purple-300' : 'border-gray-300'}
-      `}
-      style={puffyStyle}
+      style={{
+        position: 'relative',
+        width: '160px',
+        height: '160px',
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        background: owned ? '#FFFFFF' : '#E5E7EB',
+        border: owned ? '4px solid #D8B4FE' : '4px solid #D1D5DB',
+        boxShadow: puffyShadow,
+      }}
     >
-      <div className={`
-        w-full h-full flex items-center justify-center
-        ${!owned ? 'opacity-30 grayscale' : ''}
-        ${sparkleClass}
-      `}>
+      <div style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: !owned ? 0.3 : 1,
+        filter: !owned ? 'grayscale(100%)' : 'none',
+      }}>
         {imageUrl ? (
-          <img src={imageUrl} alt={sticker.name} className="w-full h-full object-contain p-4" />
+          <img
+            src={imageUrl}
+            alt={sticker.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '16px' }}
+          />
         ) : (
-          <div className="text-7xl">
+          <div style={{ fontSize: '70px' }}>
             {type === 'sparkle' ? '✨' : type === 'puffy' ? '🌟' : '⭐'}
           </div>
         )}
@@ -138,15 +190,40 @@ const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) =
 
       {/* 未所持オーバーレイ */}
       {!owned && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-          <span className="text-5xl">❓</span>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 0, 0, 0.2)',
+        }}>
+          <span style={{ fontSize: '48px' }}>❓</span>
         </div>
       )}
 
       {/* キラキラエフェクト */}
       {owned && type === 'sparkle' && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-white/40 to-transparent animate-shine" />
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(to bottom right, transparent, rgba(255, 255, 255, 0.4), transparent)',
+          }} />
         </div>
       )}
     </div>
@@ -185,43 +262,86 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
   const totalAcquired = sticker.totalAcquired || sticker.quantity || 1
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
       {/* オーバーレイ */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+        }}
       />
 
       {/* モーダル本体 */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+      <div style={{
+        position: 'relative',
+        background: 'white',
+        borderRadius: '24px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        width: '100%',
+        maxWidth: '384px',
+        overflow: 'hidden',
+      }}>
         {/* 閉じるボタン */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-10"
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '50%',
+            background: '#F3F4F6',
+            border: 'none',
+            cursor: 'pointer',
+            zIndex: 10,
+            transition: 'background 0.2s',
+          }}
         >
-          <span className="text-gray-500 text-lg">✕</span>
+          <span style={{ color: '#6B7280', fontSize: '18px' }}>✕</span>
         </button>
 
         {/* ヘッダー背景 */}
-        <div className="h-24 bg-gradient-to-r from-purple-400 to-pink-400" />
+        <div style={{ height: '96px', background: 'linear-gradient(to right, #C084FC, #F472B6)' }} />
 
         {/* コンテンツ */}
-        <div className="px-6 pb-6 -mt-16">
+        <div style={{ paddingLeft: '24px', paddingRight: '24px', paddingBottom: '24px', marginTop: '-64px' }}>
           {/* シールプレビュー */}
           <StickerPreview sticker={sticker} />
 
           {/* シール名 */}
-          <h2 className="text-xl font-bold text-center text-purple-800 mt-4">
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', textAlign: 'center', color: '#6B21A8', marginTop: '16px' }}>
             {sticker.owned ? sticker.name : '???'}
           </h2>
 
           {/* シリーズ */}
-          <p className="text-sm text-center text-purple-500 mb-3">
+          <p style={{ fontSize: '14px', textAlign: 'center', color: '#8B5CF6', marginBottom: '12px' }}>
             {sticker.series}
           </p>
 
           {/* レアリティと種類 */}
-          <div className="flex items-center justify-center gap-3 mb-4">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
             <RarityStars rarity={sticker.rarity} />
             <TypeBadge type={sticker.type} />
           </div>
@@ -229,10 +349,10 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
           {sticker.owned ? (
             <>
               {/* 所持情報 */}
-              <div className="bg-purple-50 rounded-xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-purple-700">もっている枚数</span>
-                  <span className="text-2xl font-bold text-purple-600">{sticker.quantity} 枚</span>
+              <div style={{ background: '#FAF5FF', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED' }}>もっている枚数</span>
+                  <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#9333EA' }}>{sticker.quantity} 枚</span>
                 </div>
 
                 {/* ランクメーター */}
@@ -241,23 +361,38 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
 
               {/* 初入手日 */}
               {sticker.firstAcquiredAt && (
-                <p className="text-xs text-center text-purple-400 mb-4">
+                <p style={{ fontSize: '12px', textAlign: 'center', color: '#A78BFA', marginBottom: '16px' }}>
                   初ゲット: {new Date(sticker.firstAcquiredAt).toLocaleDateString('ja-JP')}
                 </p>
               )}
 
               {/* スターポイント変換ボタン */}
               {sticker.quantity > 0 && onConvertToPoints && (
-                <div className="border-t border-purple-100 pt-4">
+                <div style={{ borderTop: '1px solid #E9D5FF', paddingTop: '16px' }}>
                   <button
                     onClick={handleOpenConvert}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold shadow-lg flex items-center justify-center gap-2"
+                    style={{
+                      width: '100%',
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(to right, #FBBF24, #FB923C)',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
                   >
                     <span>⭐</span>
                     <span>ポイントにかえる</span>
-                    <span className="text-xs opacity-80">（1枚 {pointsPerSticker} SP〜）</span>
+                    <span style={{ fontSize: '12px', opacity: 0.8 }}>（1枚 {pointsPerSticker} SP〜）</span>
                   </button>
-                  <p className="text-xs text-center text-purple-400 mt-2">
+                  <p style={{ fontSize: '12px', textAlign: 'center', color: '#A78BFA', marginTop: '8px' }}>
                     ※ランクは下がりません
                   </p>
                 </div>
@@ -265,12 +400,12 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
             </>
           ) : (
             /* 未所持 */
-            <div className="bg-gray-50 rounded-xl p-6 text-center">
-              <span className="text-4xl mb-2 block">🔒</span>
-              <p className="text-sm text-gray-500">
+            <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '24px', textAlign: 'center' }}>
+              <span style={{ fontSize: '32px', marginBottom: '8px', display: 'block' }}>🔒</span>
+              <p style={{ fontSize: '14px', color: '#6B7280' }}>
                 このシールはまだもっていません
               </p>
-              <p className="text-xs text-gray-400 mt-2">
+              <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '8px' }}>
                 ガチャやこうかんでゲットしよう！
               </p>
             </div>

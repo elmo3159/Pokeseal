@@ -51,12 +51,13 @@ const Confetti: React.FC<{ count: number; colors: string[] }> = ({ count, colors
   }, [count, colors])
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       {confettiPieces.map(piece => (
         <div
           key={piece.id}
-          className="absolute animate-confetti"
+          className="animate-confetti"
           style={{
+            position: 'absolute',
             left: `${piece.left}%`,
             animationDelay: `${piece.delay}s`,
             width: `${piece.size}px`,
@@ -72,35 +73,68 @@ const Confetti: React.FC<{ count: number; colors: string[] }> = ({ count, colors
 
 // バースト効果コンポーネント
 const BurstEffect: React.FC<{ color: string }> = ({ color }) => (
-  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-    <div className={`w-full h-full rounded-full animate-burst opacity-50`} style={{ backgroundColor: color }} />
-    <div className={`absolute w-3/4 h-3/4 rounded-full animate-burst opacity-30`} style={{ backgroundColor: color, animationDelay: '0.1s' }} />
-    <div className={`absolute w-1/2 h-1/2 rounded-full animate-burst opacity-20`} style={{ backgroundColor: color, animationDelay: '0.2s' }} />
+  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+    <div className="animate-burst" style={{ width: '100%', height: '100%', borderRadius: '9999px', opacity: 0.5, backgroundColor: color }} />
+    <div className="animate-burst" style={{ position: 'absolute', width: '75%', height: '75%', borderRadius: '9999px', opacity: 0.3, backgroundColor: color, animationDelay: '0.1s' }} />
+    <div className="animate-burst" style={{ position: 'absolute', width: '50%', height: '50%', borderRadius: '9999px', opacity: 0.2, backgroundColor: color, animationDelay: '0.2s' }} />
   </div>
 )
 
 // 光線エフェクトコンポーネント
 const LightRays: React.FC = () => (
-  <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', overflow: 'hidden' }}>
     {Array.from({ length: 12 }, (_, i) => (
       <div
         key={i}
-        className="absolute w-1 h-64 bg-gradient-to-t from-transparent via-yellow-200 to-transparent opacity-60"
-        style={{ transform: `rotate(${i * 30}deg)`, transformOrigin: 'center' }}
+        style={{
+          position: 'absolute',
+          width: '4px',
+          height: '256px',
+          background: 'linear-gradient(to top, transparent, rgba(254, 240, 138, 0.6), transparent)',
+          opacity: 0.6,
+          transform: `rotate(${i * 30}deg)`,
+          transformOrigin: 'center',
+        }}
       />
     ))}
   </div>
 )
 
+// レアリティ別の背景グラデーション（インライン用）
+const rarityGradients: Record<number, string> = {
+  1: 'linear-gradient(to bottom right, #9CA3AF, #6B7280)',
+  2: 'linear-gradient(to bottom right, #4ADE80, #22C55E)',
+  3: 'linear-gradient(to bottom right, #60A5FA, #3B82F6)',
+  4: 'linear-gradient(to bottom right, #A78BFA, #8B5CF6)',
+  5: 'linear-gradient(to bottom right, #FACC15, #F97316, #EC4899)',
+}
+
 // シングル結果表示 - モダンなカード風デザイン
 const SingleResult: React.FC<{ sticker: GachaResultSticker; revealed: boolean; showEffects: boolean }> = ({ sticker, revealed, showEffects }) => {
   const burstColor = sticker.rarity === 5 ? '#FFD700' : sticker.rarity === 4 ? '#9B6FD0' : '#60A5FA'
 
+  const typeBadgeStyle = sticker.type === 'sparkle'
+    ? { background: 'linear-gradient(to right, #FCD34D, #FB923C)', color: '#78350F' }
+    : sticker.type === 'puffy'
+    ? { background: 'linear-gradient(to right, #7DD3FC, #C4B5FD)', color: '#5B21B6' }
+    : { background: 'linear-gradient(to right, #E2E8F0, #CBD5E1)', color: '#334155' }
+
   return (
-    <div className={`
-      relative w-full max-w-sm mx-auto flex flex-col items-center
-      ${revealed ? 'animate-zoom-reveal' : 'scale-0 opacity-0'}
-    `}>
+    <div
+      className={revealed ? 'animate-zoom-reveal' : ''}
+      style={{
+        position: 'relative',
+        width: '288px',
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transform: revealed ? undefined : 'scale(0)',
+        opacity: revealed ? 1 : 0,
+      }}
+    >
       {/* バースト効果（レア以上） */}
       {showEffects && sticker.rarity >= 3 && (
         <BurstEffect color={burstColor} />
@@ -112,83 +146,134 @@ const SingleResult: React.FC<{ sticker: GachaResultSticker; revealed: boolean; s
       )}
 
       {/* メインカード - グラスモーフィズム風 */}
-      <div className="relative w-full">
+      <div style={{ position: 'relative', width: '100%' }}>
         {/* 背景グロー */}
-        <div className={`
-          absolute inset-0 rounded-[32px] blur-2xl opacity-60
-          bg-gradient-to-br ${rarityColors[sticker.rarity]}
-          ${sticker.rarity === 5 ? 'animate-pulse' : ''}
-        `} />
+        <div
+          className={sticker.rarity === 5 ? 'animate-pulse' : ''}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: '32px',
+            filter: 'blur(24px)',
+            opacity: 0.6,
+            background: rarityGradients[sticker.rarity],
+          }}
+        />
 
         {/* カード本体 */}
-        <div className={`
-          relative rounded-[32px] overflow-hidden
-          bg-gradient-to-br ${rarityColors[sticker.rarity]}
-          ${rarityEffects[sticker.rarity]}
-          border-4 border-white/60
-          shadow-[0_20px_60px_rgba(0,0,0,0.3)]
-        `}>
+        <div
+          style={{
+            position: 'relative',
+            borderRadius: '32px',
+            overflow: 'hidden',
+            background: rarityGradients[sticker.rarity],
+            border: '4px solid rgba(255, 255, 255, 0.6)',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }}
+        >
           {/* 上部デコレーション */}
-          <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-white/30 to-transparent" />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '64px', background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.3), transparent)' }} />
 
           {/* シール画像エリア */}
-          <div className="relative w-full aspect-square flex items-center justify-center p-6">
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
             {sticker.imageUrl ? (
               <img
                 src={sticker.imageUrl}
                 alt={sticker.name}
-                className={`w-full h-full object-contain ${sticker.rarity >= 4 ? 'drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]' : 'drop-shadow-lg'}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  filter: sticker.rarity >= 4 ? 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.9))' : 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))',
+                }}
               />
             ) : (
-              <div className={`text-8xl ${sticker.rarity >= 4 ? 'animate-bounce' : ''}`}>
-                {sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'}
+              <div className={sticker.rarity >= 4 ? 'animate-bounce' : ''} style={{ fontSize: '96px', color: '#FFD700', textShadow: '0 0 20px rgba(255, 215, 0, 0.8)' }}>
+                ★
               </div>
             )}
 
-            {/* キラキラエフェクト */}
+            {/* キラキラエフェクト - CSSベースのスパークル */}
             {sticker.rarity >= 4 && (
-              <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute top-4 left-8 text-2xl animate-sparkle">✨</div>
-                <div className="absolute top-12 right-6 text-xl animate-sparkle" style={{ animationDelay: '0.2s' }}>⭐</div>
-                <div className="absolute bottom-8 left-4 text-lg animate-sparkle" style={{ animationDelay: '0.4s' }}>✨</div>
-                <div className="absolute bottom-4 right-8 text-2xl animate-sparkle" style={{ animationDelay: '0.6s' }}>⭐</div>
-                <div className="absolute top-1/2 left-2 text-xl animate-sparkle" style={{ animationDelay: '0.3s' }}>💫</div>
-                <div className="absolute top-1/2 right-2 text-xl animate-sparkle" style={{ animationDelay: '0.5s' }}>💫</div>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' }}>
+                <div className="animate-sparkle" style={{ position: 'absolute', top: '16px', left: '32px', width: '12px', height: '12px', background: 'radial-gradient(circle, #FFD700 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 8px #FFD700' }} />
+                <div className="animate-sparkle" style={{ position: 'absolute', top: '48px', right: '24px', width: '10px', height: '10px', background: 'radial-gradient(circle, #FFF 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 6px #FFF', animationDelay: '0.2s' }} />
+                <div className="animate-sparkle" style={{ position: 'absolute', bottom: '32px', left: '16px', width: '8px', height: '8px', background: 'radial-gradient(circle, #FFD700 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 6px #FFD700', animationDelay: '0.4s' }} />
+                <div className="animate-sparkle" style={{ position: 'absolute', bottom: '16px', right: '32px', width: '12px', height: '12px', background: 'radial-gradient(circle, #FFF 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 8px #FFF', animationDelay: '0.6s' }} />
+                <div className="animate-sparkle" style={{ position: 'absolute', top: '50%', left: '8px', width: '10px', height: '10px', background: 'radial-gradient(circle, #FFD700 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 6px #FFD700', animationDelay: '0.3s' }} />
+                <div className="animate-sparkle" style={{ position: 'absolute', top: '50%', right: '8px', width: '10px', height: '10px', background: 'radial-gradient(circle, #FFF 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 6px #FFF', animationDelay: '0.5s' }} />
               </div>
             )}
 
             {/* 光線エフェクト（高レア） */}
             {sticker.rarity === 5 && (
-              <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shine" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-yellow-200/20 to-transparent animate-shine" style={{ animationDelay: '0.5s' }} />
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+                <div className="animate-shine" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4), transparent)' }} />
+                <div className="animate-shine" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to bottom, transparent, rgba(254, 240, 138, 0.2), transparent)', animationDelay: '0.5s' }} />
               </div>
             )}
           </div>
 
           {/* NEWバッジ */}
           {sticker.isNew && (
-            <div className="absolute top-4 left-4 px-4 py-1.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-sm font-bold rounded-full animate-bounce shadow-lg flex items-center gap-1">
-              <span>✨</span>
+            <div
+              className="animate-bounce"
+              style={{
+                position: 'absolute',
+                top: '16px',
+                left: '16px',
+                paddingLeft: '16px',
+                paddingRight: '16px',
+                paddingTop: '6px',
+                paddingBottom: '6px',
+                background: 'linear-gradient(to right, #F43F5E, #EC4899)',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                borderRadius: '9999px',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span style={{ fontSize: '10px' }}>★</span>
               <span>NEW!</span>
             </div>
           )}
 
           {/* 下部情報エリア - グラスモーフィズム */}
-          <div className="relative px-6 py-5 bg-black/20 backdrop-blur-md">
+          <div style={{ position: 'relative', paddingLeft: '24px', paddingRight: '24px', paddingTop: '20px', paddingBottom: '20px', background: 'rgba(0, 0, 0, 0.2)', backdropFilter: 'blur(12px)' }}>
             {/* シール名 - 横書き固定 */}
-            <h3 className="text-2xl font-bold text-white text-center whitespace-nowrap overflow-hidden text-ellipsis drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-                style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
+            <h3 style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: 'white',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            }}>
               {sticker.name}
             </h3>
 
             {/* レアリティ星 */}
-            <div className="flex items-center justify-center gap-1.5 mt-3">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '12px' }}>
               {Array.from({ length: 5 }, (_, i) => (
                 <span
                   key={i}
-                  className={`text-2xl transition-all duration-300 ${i < sticker.rarity ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(255,215,0,0.9)]' : 'text-white/20'}`}
-                  style={{ animationDelay: `${i * 0.1}s` }}
+                  style={{
+                    fontSize: '24px',
+                    transition: 'all 0.3s',
+                    color: i < sticker.rarity ? '#FDE047' : 'rgba(255, 255, 255, 0.2)',
+                    textShadow: i < sticker.rarity ? '0 0 12px rgba(255, 215, 0, 0.9)' : 'none',
+                    animationDelay: `${i * 0.1}s`,
+                  }}
                 >
                   ★
                 </span>
@@ -196,18 +281,24 @@ const SingleResult: React.FC<{ sticker: GachaResultSticker; revealed: boolean; s
             </div>
 
             {/* タイプバッジ */}
-            <div className="flex justify-center mt-4">
-              <span className={`
-                inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-bold shadow-lg
-                ${sticker.type === 'sparkle'
-                  ? 'bg-gradient-to-r from-amber-300 to-orange-300 text-amber-900'
-                  : sticker.type === 'puffy'
-                  ? 'bg-gradient-to-r from-sky-300 to-violet-300 text-violet-900'
-                  : 'bg-gradient-to-r from-slate-200 to-slate-300 text-slate-700'}
-              `}>
-                {sticker.type === 'sparkle' ? '✨ キラキラ' :
-                 sticker.type === 'puffy' ? '🫧 ぷっくり' :
-                 '📄 ふつう'}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                paddingLeft: '20px',
+                paddingRight: '20px',
+                paddingTop: '8px',
+                paddingBottom: '8px',
+                borderRadius: '9999px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                ...typeBadgeStyle,
+              }}>
+                {sticker.type === 'sparkle' ? 'キラキラ' :
+                 sticker.type === 'puffy' ? 'ぷっくり' :
+                 'ふつう'}
               </span>
             </div>
           </div>
@@ -220,40 +311,67 @@ const SingleResult: React.FC<{ sticker: GachaResultSticker; revealed: boolean; s
 // マルチ結果表示
 const MultiResult: React.FC<{ stickers: GachaResultSticker[]; revealedCount: number }> = ({ stickers, revealedCount }) => {
   return (
-    <div className="grid grid-cols-5 gap-2 w-full max-w-md mx-auto">
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(5, 1fr)',
+      gap: '8px',
+      width: '100%',
+      maxWidth: '448px',
+      marginLeft: 'auto',
+      marginRight: 'auto',
+    }}>
       {stickers.map((sticker, index) => (
         <div
           key={sticker.id}
-          className={`
-            relative aspect-square rounded-xl overflow-hidden
-            transition-all duration-300
-            ${index < revealedCount ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}
-            bg-gradient-to-br ${rarityColors[sticker.rarity]}
-            ${rarityEffects[sticker.rarity]}
-          `}
-          style={{ transitionDelay: `${index * 100}ms` }}
+          className={sticker.rarity >= 3 ? 'animate-pulse' : ''}
+          style={{
+            position: 'relative',
+            aspectRatio: '1',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            transition: 'all 0.3s',
+            transitionDelay: `${index * 100}ms`,
+            transform: index < revealedCount ? 'scale(1)' : 'scale(0.5)',
+            opacity: index < revealedCount ? 1 : 0,
+            background: rarityGradients[sticker.rarity],
+            boxShadow: sticker.rarity >= 4 ? '0 25px 50px -12px rgba(0, 0, 0, 0.25)' : sticker.rarity >= 3 ? '0 20px 25px -5px rgba(0, 0, 0, 0.1)' : '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          }}
         >
           {/* シール画像 */}
-          <div className="w-full h-full flex items-center justify-center p-2">
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
             {sticker.imageUrl ? (
-              <img src={sticker.imageUrl} alt={sticker.name} className="w-full h-full object-contain" />
+              <img src={sticker.imageUrl} alt={sticker.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : (
-              <div className="text-2xl">
-                {sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'}
+              <div style={{ fontSize: '24px', color: '#FFD700', textShadow: '0 0 8px rgba(255, 215, 0, 0.8)' }}>
+                ★
               </div>
             )}
           </div>
 
           {/* NEWバッジ */}
           {sticker.isNew && (
-            <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: '2px',
+              width: '16px',
+              height: '16px',
+              background: '#EF4444',
+              color: 'white',
+              fontSize: '8px',
+              fontWeight: 'bold',
+              borderRadius: '9999px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
               N
             </div>
           )}
 
           {/* レア度表示 */}
-          <div className="absolute bottom-0.5 left-0 right-0 text-center">
-            <span className="text-[8px] text-yellow-300 drop-shadow">
+          <div style={{ position: 'absolute', bottom: '2px', left: 0, right: 0, textAlign: 'center' }}>
+            <span style={{ fontSize: '8px', color: '#FDE047', textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)' }}>
               {'★'.repeat(sticker.rarity)}
             </span>
           </div>
@@ -330,16 +448,39 @@ export const GachaResultModal: React.FC<GachaResultModalProps> = ({
 
   if (!isOpen) return null
 
+  const bgStyle = phase === 'loading' ? 'black' :
+    hasUltraRare ? 'linear-gradient(to bottom, rgba(113, 63, 18, 0.9), rgba(124, 45, 18, 0.9), rgba(131, 24, 67, 0.9))' :
+    hasRare ? 'linear-gradient(to bottom, rgba(88, 28, 135, 0.9), rgba(107, 33, 168, 0.9), rgba(131, 24, 67, 0.9))' :
+    'linear-gradient(to bottom, rgba(30, 58, 138, 0.9), rgba(88, 28, 135, 0.9), rgba(131, 24, 67, 0.9))'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
+    >
       {/* 背景 */}
-      <div className={`
-        absolute inset-0 transition-colors duration-1000
-        ${phase === 'loading' ? 'bg-black' :
-          hasUltraRare ? 'bg-gradient-to-b from-yellow-900/90 via-orange-900/90 to-pink-900/90' :
-          hasRare ? 'bg-gradient-to-b from-purple-900/90 via-purple-800/90 to-pink-900/90' :
-          'bg-gradient-to-b from-blue-900/90 via-purple-900/90 to-pink-900/90'}
-      `} />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: bgStyle,
+          transition: 'background 1s',
+        }}
+      />
 
       {/* 紙吹雪エフェクト（結果表示時） */}
       {(phase === 'reveal' || phase === 'complete') && (
@@ -347,31 +488,52 @@ export const GachaResultModal: React.FC<GachaResultModalProps> = ({
       )}
 
       {/* コンテンツ */}
-      <div className="relative w-full max-w-lg px-6 py-8 z-10">
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '512px',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '32px',
+          paddingBottom: '32px',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
         {/* ローディング */}
         {phase === 'loading' && (
-          <div className="flex flex-col items-center justify-center">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             {/* カプセル落下アニメーション */}
-            <div className="relative w-24 h-24 mb-8">
-              <div className={`
-                w-24 h-24 rounded-full
-                ${hasUltraRare ? 'bg-gradient-to-br from-yellow-400 via-orange-400 to-pink-400' :
-                  hasRare ? 'bg-gradient-to-br from-purple-400 to-pink-400' :
-                  'bg-gradient-to-br from-blue-400 to-purple-400'}
-                animate-bounce shadow-2xl
-              `}>
+            <div style={{ position: 'relative', width: '96px', height: '96px', marginBottom: '32px' }}>
+              <div
+                className="animate-bounce"
+                style={{
+                  width: '96px',
+                  height: '96px',
+                  borderRadius: '9999px',
+                  background: hasUltraRare
+                    ? 'linear-gradient(to bottom right, #FACC15, #FB923C, #EC4899)'
+                    : hasRare
+                    ? 'linear-gradient(to bottom right, #A78BFA, #EC4899)'
+                    : 'linear-gradient(to bottom right, #60A5FA, #A78BFA)',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                }}
+              >
                 {/* カプセルの光沢 */}
-                <div className="absolute top-2 left-2 w-4 h-4 bg-white/50 rounded-full" />
+                <div style={{ position: 'absolute', top: '8px', left: '8px', width: '16px', height: '16px', background: 'rgba(255, 255, 255, 0.5)', borderRadius: '9999px' }} />
               </div>
-              <div className="absolute inset-0 rounded-full bg-white/30 animate-ping" />
-              {/* キラキラ */}
-              <div className="absolute -top-2 -right-2 text-xl animate-sparkle">✨</div>
-              <div className="absolute -bottom-2 -left-2 text-xl animate-sparkle" style={{ animationDelay: '0.3s' }}>✨</div>
+              <div className="animate-ping" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: '9999px', background: 'rgba(255, 255, 255, 0.3)' }} />
+              {/* キラキラ - CSSベース */}
+              <div className="animate-sparkle" style={{ position: 'absolute', top: '-8px', right: '-8px', width: '12px', height: '12px', background: 'radial-gradient(circle, #FFD700 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 8px #FFD700' }} />
+              <div className="animate-sparkle" style={{ position: 'absolute', bottom: '-8px', left: '-8px', width: '12px', height: '12px', background: 'radial-gradient(circle, #FFD700 0%, transparent 70%)', borderRadius: '50%', boxShadow: '0 0 8px #FFD700', animationDelay: '0.3s' }} />
             </div>
-            <p className="text-white text-xl font-bold animate-pulse">
-              {isSingle ? '🎰 ガチャ中...' : '🎰 10連ガチャ中...'}
+            <p className="animate-pulse" style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>
+              {isSingle ? 'ガチャ中...' : '10連ガチャ中...'}
             </p>
-            <p className="text-white/60 text-sm mt-2">ドキドキ...</p>
+            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px', marginTop: '8px' }}>ドキドキ...</p>
           </div>
         )}
 
@@ -382,32 +544,52 @@ export const GachaResultModal: React.FC<GachaResultModalProps> = ({
               <SingleResult sticker={results[0]} revealed={revealedCount > 0} showEffects={showEffects} />
             ) : (
               <>
-                <h2 className="text-white text-xl font-bold text-center mb-6 drop-shadow-lg">
+                <h2 style={{
+                  color: 'white',
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  marginBottom: '24px',
+                  textShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                }}>
                   10連ガチャ結果
                 </h2>
                 <MultiResult stickers={results} revealedCount={revealedCount} />
 
                 {/* サマリー */}
                 {phase === 'complete' && (
-                  <div className="mt-6 bg-white/20 backdrop-blur rounded-xl p-4">
-                    <div className="grid grid-cols-3 gap-2 text-center text-white text-sm">
+                  <div style={{
+                    marginTop: '24px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(8px)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                  }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '8px',
+                      textAlign: 'center',
+                      color: 'white',
+                      fontSize: '14px',
+                    }}>
                       <div>
-                        <span className="block text-2xl font-bold text-yellow-300">
+                        <span style={{ display: 'block', fontSize: '24px', fontWeight: 'bold', color: '#FDE047' }}>
                           {results.filter(s => s.rarity >= 4).length}
                         </span>
-                        <span className="text-xs">レア以上</span>
+                        <span style={{ fontSize: '12px' }}>レア以上</span>
                       </div>
                       <div>
-                        <span className="block text-2xl font-bold text-red-400">
+                        <span style={{ display: 'block', fontSize: '24px', fontWeight: 'bold', color: '#F87171' }}>
                           {results.filter(s => s.isNew).length}
                         </span>
-                        <span className="text-xs">NEW</span>
+                        <span style={{ fontSize: '12px' }}>NEW</span>
                       </div>
                       <div>
-                        <span className="block text-2xl font-bold text-green-400">
+                        <span style={{ display: 'block', fontSize: '24px', fontWeight: 'bold', color: '#4ADE80' }}>
                           {results.filter(s => !s.isNew).length}
                         </span>
-                        <span className="text-xs">ダブり</span>
+                        <span style={{ fontSize: '12px' }}>ダブり</span>
                       </div>
                     </div>
                   </div>
@@ -419,16 +601,52 @@ export const GachaResultModal: React.FC<GachaResultModalProps> = ({
 
         {/* ボタン */}
         {phase === 'complete' && (
-          <div className="flex gap-4 mt-8">
+          <div style={{
+            display: 'flex',
+            gap: '16px',
+            marginTop: '32px',
+            width: '100%',
+            maxWidth: '320px',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
             <button
               onClick={onClose}
-              className="flex-1 py-3 px-4 rounded-xl bg-white/20 text-white font-bold backdrop-blur hover:bg-white/30 transition-colors"
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                paddingLeft: '16px',
+                paddingRight: '16px',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                fontWeight: 'bold',
+                backdropFilter: 'blur(8px)',
+                transition: 'background 0.2s',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               とじる
             </button>
             <button
               onClick={onContinue}
-              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg hover:shadow-xl transition-all"
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                paddingLeft: '16px',
+                paddingRight: '16px',
+                borderRadius: '12px',
+                background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                color: 'white',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               もう一回！
             </button>
@@ -442,7 +660,21 @@ export const GachaResultModal: React.FC<GachaResultModalProps> = ({
               setRevealedCount(results.length)
               setPhase('complete')
             }}
-            className="absolute bottom-4 right-4 px-4 py-2 text-white/60 text-sm hover:text-white transition-colors"
+            style={{
+              position: 'absolute',
+              bottom: '16px',
+              right: '16px',
+              paddingLeft: '16px',
+              paddingRight: '16px',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '14px',
+              transition: 'color 0.2s',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
           >
             スキップ ▶
           </button>

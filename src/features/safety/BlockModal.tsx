@@ -64,16 +64,39 @@ export const BlockModal: React.FC<BlockModalProps> = ({
   // 完了画面
   if (showConfirm) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-[scaleIn_0.2s_ease-out]">
-          <div className="text-6xl mb-4">
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
+        <div style={{
+          position: 'relative',
+          background: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          width: '100%',
+          maxWidth: '384px',
+          overflow: 'hidden',
+          padding: '24px',
+          textAlign: 'center',
+          animation: 'scaleIn 0.2s ease-out',
+        }}>
+          <div style={{ fontSize: '60px', marginBottom: '16px' }}>
             {action === 'block' ? '🚫' : '✅'}
           </div>
-          <h2 className="text-xl font-bold text-purple-800 mb-2">
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#6B21A8', marginBottom: '8px' }}>
             {action === 'block' ? 'ブロックしました' : 'ブロックかいじょ'}
           </h2>
-          <p className="text-sm text-purple-600 mb-6">
+          <p style={{ fontSize: '14px', color: '#9333EA', marginBottom: '24px' }}>
             {action === 'block' ? (
               <>
                 {userName}さんからの<br />
@@ -89,7 +112,18 @@ export const BlockModal: React.FC<BlockModalProps> = ({
           </p>
           <button
             onClick={handleClose}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg"
+            style={{
+              width: '100%',
+              paddingTop: '12px',
+              paddingBottom: '12px',
+              borderRadius: '12px',
+              background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+              color: 'white',
+              fontWeight: 'bold',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
           >
             とじる
           </button>
@@ -101,46 +135,89 @@ export const BlockModal: React.FC<BlockModalProps> = ({
   // ブロック解除画面
   if (isBlocked) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
+        <div style={{
+          position: 'relative',
+          background: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          width: '100%',
+          maxWidth: '384px',
+          overflow: 'hidden',
+          animation: 'scaleIn 0.2s ease-out',
+        }}>
           {/* ヘッダー */}
-          <div className="bg-gradient-to-r from-gray-400 to-gray-500 p-4">
-            <h2 className="text-white font-bold text-lg text-center">
+          <div style={{ background: 'linear-gradient(to right, #9CA3AF, #6B7280)', padding: '16px' }}>
+            <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px', textAlign: 'center' }}>
               🚫 ブロック中
             </h2>
           </div>
 
           {/* コンテンツ */}
-          <div className="p-4">
-            <div className="bg-gray-50 rounded-xl p-4 mb-4 text-center">
-              <p className="text-4xl mb-2">👤</p>
-              <p className="font-bold text-purple-700">{userName}</p>
-              <p className="text-xs text-gray-500 mt-1">
+          <div style={{ padding: '16px' }}>
+            <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px', marginBottom: '16px', textAlign: 'center' }}>
+              <p style={{ fontSize: '32px', marginBottom: '8px' }}>👤</p>
+              <p style={{ fontWeight: 'bold', color: '#6B21A8' }}>{userName}</p>
+              <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
                 この人をブロックしています
               </p>
             </div>
 
-            <div className="bg-yellow-50 rounded-xl p-3 mb-4">
-              <p className="text-xs text-yellow-700">
-                <span className="font-bold">ブロックすると：</span><br />
+            <div style={{ background: '#FEFCE8', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
+              <p style={{ fontSize: '12px', color: '#A16207' }}>
+                <span style={{ fontWeight: 'bold' }}>ブロックすると：</span><br />
                 • こうかん申し込みがとどかない<br />
                 • 投稿やコメントがみえない<br />
                 • あなたの投稿も相手にみえない
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={handleClose}
-                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-bold"
+                style={{
+                  flex: 1,
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  borderRadius: '12px',
+                  background: '#F3F4F6',
+                  color: '#4B5563',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 とじる
               </button>
               <button
                 onClick={handleUnblock}
                 disabled={isSubmitting}
-                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-400 to-emerald-400 text-white font-bold shadow-lg"
+                style={{
+                  flex: 1,
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(to right, #4ADE80, #34D399)',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  border: 'none',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  opacity: isSubmitting ? 0.7 : 1,
+                }}
               >
                 {isSubmitting ? '...' : 'かいじょする'}
               </button>
@@ -153,26 +230,47 @@ export const BlockModal: React.FC<BlockModalProps> = ({
 
   // ブロック確認画面
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
+      <div style={{
+        position: 'relative',
+        background: 'white',
+        borderRadius: '24px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        width: '100%',
+        maxWidth: '384px',
+        overflow: 'hidden',
+        animation: 'scaleIn 0.2s ease-out',
+      }}>
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-gray-600 to-gray-700 p-4">
-          <h2 className="text-white font-bold text-lg text-center">
+        <div style={{ background: 'linear-gradient(to right, #4B5563, #374151)', padding: '16px' }}>
+          <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px', textAlign: 'center' }}>
             🚫 ブロックしますか？
           </h2>
         </div>
 
         {/* コンテンツ */}
-        <div className="p-4">
-          <div className="bg-gray-50 rounded-xl p-4 mb-4 text-center">
-            <p className="text-4xl mb-2">👤</p>
-            <p className="font-bold text-purple-700">{userName}</p>
+        <div style={{ padding: '16px' }}>
+          <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '16px', marginBottom: '16px', textAlign: 'center' }}>
+            <p style={{ fontSize: '32px', marginBottom: '8px' }}>👤</p>
+            <p style={{ fontWeight: 'bold', color: '#6B21A8' }}>{userName}</p>
           </div>
 
-          <div className="bg-yellow-50 rounded-xl p-3 mb-4">
-            <p className="text-xs text-yellow-700">
-              <span className="font-bold">ブロックすると：</span><br />
+          <div style={{ background: '#FEFCE8', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '12px', color: '#A16207' }}>
+              <span style={{ fontWeight: 'bold' }}>ブロックすると：</span><br />
               • こうかん申し込みがとどかない<br />
               • 投稿やコメントがみえない<br />
               • あなたの投稿も相手にみえない<br />
@@ -181,31 +279,61 @@ export const BlockModal: React.FC<BlockModalProps> = ({
           </div>
 
           {/* 理由入力（任意） */}
-          <p className="text-sm font-bold text-purple-700 mb-2">
+          <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#6B21A8', marginBottom: '8px' }}>
             メモ（じぶんよう）
           </p>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value.slice(0, MAX_BLOCK_REASON_LENGTH))}
             placeholder="ブロックする理由をメモできます..."
-            className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-purple-400 focus:outline-none resize-none text-sm"
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '12px',
+              border: '2px solid #E5E7EB',
+              resize: 'none',
+              fontSize: '14px',
+              outline: 'none',
+            }}
             rows={2}
           />
-          <p className="text-xs text-gray-400 text-right mt-1">
+          <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'right', marginTop: '4px' }}>
             {reason.length}/{MAX_BLOCK_REASON_LENGTH}
           </p>
 
-          <div className="flex gap-2 mt-4">
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
             <button
               onClick={handleClose}
-              className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-bold"
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                borderRadius: '12px',
+                background: '#F3F4F6',
+                color: '#4B5563',
+                fontWeight: 'bold',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               やめる
             </button>
             <button
               onClick={handleBlock}
               disabled={isSubmitting}
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold shadow-lg"
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                borderRadius: '12px',
+                background: 'linear-gradient(to right, #4B5563, #374151)',
+                color: 'white',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                border: 'none',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
             >
               {isSubmitting ? '...' : 'ブロックする'}
             </button>

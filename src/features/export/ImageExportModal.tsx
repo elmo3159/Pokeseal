@@ -70,24 +70,41 @@ const PagePreviewContent: React.FC<{
     <div style={pageStyle}>
       {/* パターンオーバーレイ */}
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={getPatternStyle()}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          ...getPatternStyle(),
+        }}
       />
 
       {/* 配置されたシール */}
       {page.stickers.map((sticker: PlacedSticker, index: number) => (
         <div
           key={sticker.id || index}
-          className="absolute"
           style={{
+            position: 'absolute',
             left: `${sticker.position.x * 100}%`,
             top: `${sticker.position.y * 100}%`,
             transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
             width: '80px',
-            height: '80px'
+            height: '80px',
           }}
         >
-          <div className="w-full h-full bg-gradient-to-br from-pink-200 to-purple-200 rounded-lg flex items-center justify-center text-3xl shadow-md">
+          <div style={{
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(to bottom right, #FBCFE8, #E9D5FF)',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '30px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}>
             {sticker.stickerId.includes('pikachu') ? '⚡' :
              sticker.stickerId.includes('star') ? '⭐' :
              sticker.stickerId.includes('heart') ? '❤️' :
@@ -99,10 +116,20 @@ const PagePreviewContent: React.FC<{
 
       {/* ページが空の場合 */}
       {page.stickers.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-purple-300">
-          <div className="text-center">
-            <span className="text-5xl">📖</span>
-            <p className="text-sm mt-2">シールをはってね</p>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#D8B4FE',
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <span style={{ fontSize: '60px' }}>📖</span>
+            <p style={{ fontSize: '14px', marginTop: '8px' }}>シールをはってね</p>
           </div>
         </div>
       )}
@@ -189,102 +216,223 @@ export const ImageExportModal: React.FC<ImageExportModalProps> = ({
   const previewSize = getPreviewSize()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
       {/* オーバーレイ */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+        }}
+        onClick={onClose}
+      />
 
       {/* モーダル本体 */}
-      <div className="relative bg-gradient-to-b from-purple-50 to-pink-50 w-full max-w-sm mx-4 rounded-3xl overflow-hidden animate-[scaleIn_0.2s_ease-out] max-h-[90vh] overflow-y-auto">
+      <div style={{
+        position: 'relative',
+        background: 'linear-gradient(to bottom, #FAF5FF, #FDF2F8)',
+        width: '100%',
+        maxWidth: '384px',
+        marginLeft: '16px',
+        marginRight: '16px',
+        borderRadius: '24px',
+        overflow: 'hidden',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+      }}>
         {/* ヘッダー */}
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-white font-bold text-lg">📸 がぞうにほぞん</h2>
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '16px',
+          paddingBottom: '16px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px' }}>📸 がぞうにほぞん</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               ✕
             </button>
           </div>
         </div>
 
-        <div className="p-4">
+        <div style={{ padding: '16px' }}>
           {/* ステップ1: アスペクト比選択 */}
           {!exportResult && (
             <>
-              <div className="mb-4">
-                <h3 className="text-purple-700 font-bold text-sm mb-2">
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>
                   📐 サイズをえらんでね
                 </h3>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => setAspectRatio('1:1')}
-                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
-                      aspectRatio === '1:1'
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                        : 'bg-white text-purple-600 border-2 border-purple-200'
-                    }`}
+                    style={{
+                      flex: 1,
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      paddingLeft: '16px',
+                      paddingRight: '16px',
+                      borderRadius: '12px',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s',
+                      background: aspectRatio === '1:1' ? 'linear-gradient(to right, #8B5CF6, #EC4899)' : 'white',
+                      color: aspectRatio === '1:1' ? 'white' : '#7C3AED',
+                      border: aspectRatio === '1:1' ? 'none' : '2px solid #E9D5FF',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <span className="text-xl block mb-1">⬜</span>
+                    <span style={{ fontSize: '24px', display: 'block', marginBottom: '4px' }}>⬜</span>
                     しかく (1:1)
-                    <span className="text-xs block text-purple-300 mt-0.5">Instagram</span>
+                    <span style={{ fontSize: '12px', display: 'block', color: aspectRatio === '1:1' ? 'rgba(255,255,255,0.8)' : '#D8B4FE', marginTop: '2px' }}>Instagram</span>
                   </button>
                   <button
                     onClick={() => setAspectRatio('9:16')}
-                    className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
-                      aspectRatio === '9:16'
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                        : 'bg-white text-purple-600 border-2 border-purple-200'
-                    }`}
+                    style={{
+                      flex: 1,
+                      paddingTop: '12px',
+                      paddingBottom: '12px',
+                      paddingLeft: '16px',
+                      paddingRight: '16px',
+                      borderRadius: '12px',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s',
+                      background: aspectRatio === '9:16' ? 'linear-gradient(to right, #8B5CF6, #EC4899)' : 'white',
+                      color: aspectRatio === '9:16' ? 'white' : '#7C3AED',
+                      border: aspectRatio === '9:16' ? 'none' : '2px solid #E9D5FF',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <span className="text-xl block mb-1">📱</span>
+                    <span style={{ fontSize: '24px', display: 'block', marginBottom: '4px' }}>📱</span>
                     たてなが (9:16)
-                    <span className="text-xs block text-purple-300 mt-0.5">ストーリーズ</span>
+                    <span style={{ fontSize: '12px', display: 'block', color: aspectRatio === '9:16' ? 'rgba(255,255,255,0.8)' : '#D8B4FE', marginTop: '2px' }}>ストーリーズ</span>
                   </button>
                 </div>
               </div>
 
               {/* ウォーターマークオプション */}
-              <div className="mb-4">
-                <label className="flex items-center gap-3 bg-white rounded-xl p-3 cursor-pointer">
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  background: 'white',
+                  borderRadius: '12px',
+                  padding: '12px',
+                  cursor: 'pointer',
+                }}>
                   <input
                     type="checkbox"
                     checked={includeWatermark}
                     onChange={(e) => setIncludeWatermark(e.target.checked)}
-                    className="w-5 h-5 rounded accent-purple-500"
+                    style={{ width: '20px', height: '20px', accentColor: '#8B5CF6' }}
                   />
                   <div>
-                    <span className="text-purple-700 font-bold text-sm">ロゴをいれる</span>
-                    <span className="text-xs text-purple-400 block">「Made with ポケシル」</span>
+                    <span style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: '14px' }}>ロゴをいれる</span>
+                    <span style={{ fontSize: '12px', color: '#A78BFA', display: 'block' }}>「Made with ポケシル」</span>
                   </div>
                 </label>
               </div>
 
               {/* プレビュー */}
-              <div className="mb-4">
-                <h3 className="text-purple-700 font-bold text-sm mb-2">
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>
                   👀 プレビュー
                 </h3>
                 <div
-                  className="mx-auto bg-white rounded-2xl shadow-lg overflow-hidden"
-                  style={{ width: previewSize.width, height: Math.min(previewSize.height, 350) }}
+                  style={{
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                    background: 'white',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    overflow: 'hidden',
+                    width: previewSize.width,
+                    height: Math.min(previewSize.height, 350),
+                  }}
                 >
                   <div
                     ref={previewRef}
-                    className="relative"
-                    style={{ width: previewSize.width, height: previewSize.height }}
+                    style={{
+                      position: 'relative',
+                      width: previewSize.width,
+                      height: previewSize.height,
+                    }}
                   >
                     {/* フレーム */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-100 to-pink-100 p-4">
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'linear-gradient(to bottom right, #F3E8FF, #FCE7F3)',
+                      padding: '16px',
+                    }}>
                       {/* シール帳風フレーム */}
-                      <div className="absolute inset-3 rounded-xl overflow-hidden shadow-inner border-4 border-purple-200">
+                      <div style={{
+                        position: 'absolute',
+                        top: '12px',
+                        left: '12px',
+                        right: '12px',
+                        bottom: '12px',
+                        borderRadius: '12px',
+                        overflow: 'hidden',
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+                        border: '4px solid #E9D5FF',
+                      }}>
                         <PagePreviewContent page={page} theme={theme} />
                       </div>
                     </div>
 
                     {/* ウォーターマークプレビュー */}
                     {includeWatermark && (
-                      <div className="absolute bottom-2 right-2 text-xs text-purple-400 font-bold">
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '8px',
+                        right: '8px',
+                        fontSize: '12px',
+                        color: '#A78BFA',
+                        fontWeight: 'bold',
+                      }}>
                         Made with ポケシル 🩷
                       </div>
                     )}
@@ -294,7 +442,14 @@ export const ImageExportModal: React.FC<ImageExportModalProps> = ({
 
               {/* エラー表示 */}
               {error && (
-                <div className="mb-4 p-3 bg-red-100 rounded-xl text-red-600 text-sm">
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: '#FEE2E2',
+                  borderRadius: '12px',
+                  color: '#DC2626',
+                  fontSize: '14px',
+                }}>
                   ⚠️ {error}
                 </div>
               )}
@@ -303,15 +458,30 @@ export const ImageExportModal: React.FC<ImageExportModalProps> = ({
               <button
                 onClick={handleExport}
                 disabled={isExporting}
-                className={`w-full py-4 rounded-2xl text-white font-bold text-lg transition-all ${
-                  isExporting
-                    ? 'bg-gray-400'
-                    : 'bg-gradient-to-r from-purple-500 to-pink-500 active:scale-95'
-                }`}
+                style={{
+                  width: '100%',
+                  paddingTop: '16px',
+                  paddingBottom: '16px',
+                  borderRadius: '16px',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '18px',
+                  transition: 'all 0.2s',
+                  background: isExporting ? '#9CA3AF' : 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                  border: 'none',
+                  cursor: isExporting ? 'not-allowed' : 'pointer',
+                }}
               >
                 {isExporting ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '20px',
+                      height: '20px',
+                      border: '2px solid white',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                    }} />
                     <span>つくってるよ... {progress}%</span>
                   </div>
                 ) : (
@@ -324,44 +494,92 @@ export const ImageExportModal: React.FC<ImageExportModalProps> = ({
           {/* ステップ2: 結果表示 */}
           {exportResult && (
             <>
-              <div className="mb-4 text-center">
-                <div className="inline-block text-5xl mb-2 animate-bounce">🎉</div>
-                <h3 className="text-purple-700 font-bold text-lg">できたよ！</h3>
+              <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                <div style={{ display: 'inline-block', fontSize: '60px', marginBottom: '8px' }}>🎉</div>
+                <h3 style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: '18px' }}>できたよ！</h3>
               </div>
 
               {/* 生成された画像プレビュー */}
-              <div className="mb-4 flex justify-center">
+              <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
                 <img
                   src={exportResult.dataUrl}
                   alt="エクスポート画像"
-                  className="max-w-full max-h-64 rounded-xl shadow-lg object-contain"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '256px',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    objectFit: 'contain',
+                  }}
                 />
               </div>
 
               {/* 成功メッセージ */}
               {showSuccess && (
-                <div className="mb-4 p-3 bg-green-100 rounded-xl text-green-600 text-sm text-center animate-pulse">
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: '#DCFCE7',
+                  borderRadius: '12px',
+                  color: '#16A34A',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                }}>
                   ✅ ほぞんしたよ！
                 </div>
               )}
 
               {/* アクションボタン */}
-              <div className="space-y-2">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <button
                   onClick={handleShare}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold text-lg active:scale-95 transition-all"
+                  style={{
+                    width: '100%',
+                    paddingTop: '16px',
+                    paddingBottom: '16px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(to right, #3B82F6, #8B5CF6)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '18px',
+                    transition: 'all 0.2s',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
                 >
                   📤 シェアする
                 </button>
                 <button
                   onClick={handleDownload}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-lg active:scale-95 transition-all"
+                  style={{
+                    width: '100%',
+                    paddingTop: '16px',
+                    paddingBottom: '16px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '18px',
+                    transition: 'all 0.2s',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
                 >
                   💾 ほぞんする
                 </button>
                 <button
                   onClick={handleReset}
-                  className="w-full py-3 rounded-xl bg-white text-purple-600 font-bold border-2 border-purple-200"
+                  style={{
+                    width: '100%',
+                    paddingTop: '12px',
+                    paddingBottom: '12px',
+                    borderRadius: '12px',
+                    background: 'white',
+                    color: '#7C3AED',
+                    fontWeight: 'bold',
+                    border: '2px solid #E9D5FF',
+                    cursor: 'pointer',
+                  }}
                 >
                   ← サイズをかえる
                 </button>

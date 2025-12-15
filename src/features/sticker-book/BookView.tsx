@@ -6,6 +6,8 @@ import './book.css'
 import { StickerBookTheme, CoverDesign, getCoverDesignById } from '@/domain/theme'
 import type { PlacedSticker } from './StickerPlacement'
 import type { Sticker } from './StickerTray'
+import type { PlacedDecoItem } from '@/domain/decoItems'
+import { playSoundIfEnabled } from '@/utils'
 
 // Dynamic import for SSR compatibility
 const HTMLFlipBook = dynamic(() => import('react-pageflip').then(mod => mod.default), {
@@ -42,10 +44,15 @@ interface BookViewProps {
   onExportButtonClick?: () => void // 画像エクスポートボタンクリック
   renderNavigation?: boolean // ナビゲーションを内部でレンダリングするか（デフォルト: true）
   disableSwipeFlip?: boolean // スワイプでのページめくりを無効化（見開き時に横スクロールと競合させないため）
+  hideHints?: boolean // 「よこにスライド」「シールをはってね」などのヒント文を非表示にする
   // シールをページ内に埋め込むためのprops
   placedStickers?: PlacedSticker[] // 配置済みシール
   editingStickerId?: string | null // 編集中のシールID（非表示にする）
   onStickerLongPress?: (sticker: PlacedSticker) => void // シール長押し時のコールバック
+  // デコアイテムをページ内に埋め込むためのprops
+  placedDecoItems?: PlacedDecoItem[] // 配置済みデコアイテム
+  editingDecoItemId?: string | null // 編集中のデコアイテムID（非表示にする）
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void // デコアイテム長押し時のコールバック
 }
 
 // 外部からBookViewを制御するためのハンドル
@@ -67,9 +74,13 @@ interface PageProps {
   pageStickers?: PlacedSticker[] // このページのシール
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
+  pageDecoItems?: PlacedDecoItem[] // このページのデコアイテム
+  editingDecoItemId?: string | null
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
+  hideHints?: boolean // ヒント文を非表示にする
 }
 
-const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookTheme, coverDesign, pageStickers, editingStickerId, onStickerLongPress }, ref) => {
+const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookTheme, coverDesign, pageStickers, editingStickerId, onStickerLongPress, pageDecoItems, editingDecoItemId, onDecoItemLongPress, hideHints }, ref) => {
   // ハードページを使用（シールが3D変形に正しく追従するため）
   // ソフトページはcanvasレンダリングを使用し、DOM要素が追従しない問題がある
   return (
@@ -86,36 +97,54 @@ const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookThem
         pageStickers={pageStickers}
         editingStickerId={editingStickerId}
         onStickerLongPress={onStickerLongPress}
+        pageDecoItems={pageDecoItems}
+        editingDecoItemId={editingDecoItemId}
+        onDecoItemLongPress={onDecoItemLongPress}
+        hideHints={hideHints}
       />
     </div>
   )
 })
 Page.displayName = 'Page'
 
-// 上部スクロールゾーンコンポーネント - 横スクロール用
-// 本の上半分を占め、ここをドラッグすると横スクロールができる
-// SwipeZoneが下半分でページめくりを担当するのに対し、こちらは横スクロール専用
-interface ScrollZoneProps {
-  heightPercent?: number // 本の何%を占めるか（デフォルト50%）
+// 統合スクロールゾーンコンポーネント - 横スクロール + 端でページめくり
+// 全画面をカバーし、横スクロール可能
+// スクロール端に達した状態でさらにスワイプするとページめくりをトリガー
+interface UnifiedScrollZoneProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bookRef: React.RefObject<any>
   bookHeight: number
+  bookWidth: number
+  hideHints?: boolean // ヒント文を非表示にする
+  disabled?: boolean // 無効化（編集中など）
+  isOnCover?: boolean // 表紙上かどうか
+  isOnBackCover?: boolean // 裏表紙上かどうか
 }
 
-function ScrollZone({
-  heightPercent = 50,
+function UnifiedScrollZone({
+  bookRef,
   bookHeight,
-}: ScrollZoneProps) {
+  bookWidth,
+  hideHints = false,
+  disabled = false,
+  isOnCover = false,
+  isOnBackCover = false,
+}: UnifiedScrollZoneProps) {
   const zoneRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const startX = useRef<number>(0)
+  const startY = useRef<number>(0)
   const scrollStartLeft = useRef<number>(0)
+  const wasAtLeftEdge = useRef(false)
+  const wasAtRightEdge = useRef(false)
+  const totalDeltaX = useRef(0)
 
-  // 高さをピクセルで計算
-  const zoneHeight = bookHeight * (heightPercent / 100)
+  // スワイプしきい値（これを超えるとページめくり）
+  const SWIPE_THRESHOLD = bookWidth * 0.25
 
   // 親のスクロールコンテナを検索
   const findScrollContainer = useCallback(() => {
-    // .overflow-x-auto クラスを持つ親要素を探す
-    let element: HTMLElement | null = document.querySelector('.scroll-zone')
+    let element: HTMLElement | null = zoneRef.current
     while (element) {
       element = element.parentElement
       if (element && element.classList.contains('overflow-x-auto')) {
@@ -125,15 +154,35 @@ function ScrollZone({
     return null
   }, [])
 
-  // ドラッグ開始
-  const handleDragStart = useCallback((clientX: number) => {
-    const scrollContainer = findScrollContainer()
-    if (!scrollContainer) return
+  // スクロール位置が左端かどうか
+  const isAtLeftEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft <= 1
+  }, [])
 
+  // スクロール位置が右端かどうか
+  const isAtRightEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft + container.clientWidth >= container.scrollWidth - 1
+  }, [])
+
+  // ドラッグ開始
+  const handleDragStart = useCallback((clientX: number, clientY: number) => {
+    console.log('[UnifiedScrollZone] handleDragStart called at:', clientX, clientY)
+    const scrollContainer = findScrollContainer()
+
+    // スクロールコンテナがなくても表紙・裏表紙でのスワイプは有効
     isDragging.current = true
     startX.current = clientX
-    scrollStartLeft.current = scrollContainer.scrollLeft
-  }, [findScrollContainer])
+    startY.current = clientY
+
+    if (scrollContainer) {
+      scrollStartLeft.current = scrollContainer.scrollLeft
+      totalDeltaX.current = 0
+      // 開始時のエッジ状態を記録
+      wasAtLeftEdge.current = isAtLeftEdge(scrollContainer)
+      wasAtRightEdge.current = isAtRightEdge(scrollContainer)
+    }
+    console.log('[UnifiedScrollZone] drag started, scrollContainer:', !!scrollContainer)
+  }, [findScrollContainer, isAtLeftEdge, isAtRightEdge])
 
   // ドラッグ中 - スクロール位置を更新
   const handleDragMove = useCallback((clientX: number) => {
@@ -143,37 +192,91 @@ function ScrollZone({
     if (!scrollContainer) return
 
     const deltaX = startX.current - clientX
+    totalDeltaX.current = deltaX
+
+    // スクロール位置を更新
     scrollContainer.scrollLeft = scrollStartLeft.current + deltaX
   }, [findScrollContainer])
 
-  // ドラッグ終了
-  const handleDragEnd = useCallback(() => {
+  // ドラッグ終了 - 端でのスワイプならページめくり
+  const handleDragEnd = useCallback((clientX: number) => {
+    console.log('[UnifiedScrollZone] handleDragEnd called, isDragging:', isDragging.current)
+    if (!isDragging.current) return
     isDragging.current = false
-  }, [])
 
-  // 指定座標にあるシール要素を取得（座標ベースでチェック）
-  const getStickerElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
-    // その座標にある全要素を取得
+    // 無効化されている場合はページめくりしない
+    if (disabled) {
+      console.log('[UnifiedScrollZone] disabled, skipping')
+      return
+    }
+
+    const pageFlip = bookRef.current?.pageFlip()
+    if (!pageFlip) {
+      console.log('[UnifiedScrollZone] no pageFlip')
+      return
+    }
+
+    const swipeDistance = startX.current - clientX
+    const scrollContainer = findScrollContainer()
+    console.log('[UnifiedScrollZone] swipeDistance:', swipeDistance, 'threshold:', SWIPE_THRESHOLD, 'scrollContainer:', !!scrollContainer)
+
+    // 表紙・裏表紙ではスクロールコンテナがないため、スワイプ距離のみで判定
+    if (!scrollContainer) {
+      // 右へスワイプ（swipeDistance < 0）した場合 → 前のページ（裏表紙から戻る場合など）
+      if (swipeDistance < -SWIPE_THRESHOLD) {
+        console.log('[UnifiedScrollZone] flipPrev (back cover swipe right)')
+        pageFlip.flipPrev()
+        return
+      }
+      // 左へスワイプ（swipeDistance > 0）した場合 → 次のページ（表紙から進む場合など）
+      if (swipeDistance > SWIPE_THRESHOLD) {
+        console.log('[UnifiedScrollZone] flipNext (cover swipe left)')
+        pageFlip.flipNext()
+        return
+      }
+      console.log('[UnifiedScrollZone] swipe not enough, no flip')
+      return
+    }
+
+    const currentAtLeftEdge = isAtLeftEdge(scrollContainer)
+    const currentAtRightEdge = isAtRightEdge(scrollContainer)
+
+    // 左端にいて、右へスワイプ（swipeDistance < 0）した場合 → 前のページ
+    if (wasAtLeftEdge.current && currentAtLeftEdge && swipeDistance < -SWIPE_THRESHOLD) {
+      pageFlip.flipPrev()
+      return
+    }
+
+    // 右端にいて、左へスワイプ（swipeDistance > 0）した場合 → 次のページ
+    if (wasAtRightEdge.current && currentAtRightEdge && swipeDistance > SWIPE_THRESHOLD) {
+      pageFlip.flipNext()
+      return
+    }
+  }, [disabled, findScrollContainer, bookRef, isAtLeftEdge, isAtRightEdge, SWIPE_THRESHOLD])
+
+  // 指定座標にあるシール/デコ要素を取得（座標ベースでチェック）
+  const getInteractiveElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
     const elements = document.elementsFromPoint(clientX, clientY)
-    // data-sticker-id属性を持つ要素を探す
     for (const el of elements) {
       if (el.hasAttribute('data-sticker-id')) return el
-      const parent = el.closest('[data-sticker-id]')
-      if (parent) return parent
+      if (el.hasAttribute('data-deco-id')) return el
+      const stickerParent = el.closest('[data-sticker-id]')
+      if (stickerParent) return stickerParent
+      const decoParent = el.closest('[data-deco-id]')
+      if (decoParent) return decoParent
     }
     return null
   }, [])
 
-  // タッチイベントリスナーを { passive: false } で登録
-  // React の onTouchMove は passive がデフォルトのため、preventDefault() が効かない
+  // タッチイベントリスナー
   useEffect(() => {
     const zone = zoneRef.current
     if (!zone) return
 
     const touchStartHandler = (e: TouchEvent) => {
       const touch = e.touches[0]
-      const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
-      if (stickerElement) {
+      const interactiveElement = getInteractiveElementAtPoint(touch.clientX, touch.clientY)
+      if (interactiveElement) {
         const pointerEvent = new PointerEvent('pointerdown', {
           bubbles: true,
           cancelable: true,
@@ -183,10 +286,10 @@ function ScrollZone({
           pointerType: 'touch',
           isPrimary: true,
         })
-        stickerElement.dispatchEvent(pointerEvent)
+        interactiveElement.dispatchEvent(pointerEvent)
         return
       }
-      handleDragStart(touch.clientX)
+      handleDragStart(touch.clientX, touch.clientY)
     }
 
     const touchMoveHandler = (e: TouchEvent) => {
@@ -196,8 +299,9 @@ function ScrollZone({
       handleDragMove(touch.clientX)
     }
 
-    const touchEndHandler = () => {
-      handleDragEnd()
+    const touchEndHandler = (e: TouchEvent) => {
+      const touch = e.changedTouches[0]
+      handleDragEnd(touch.clientX)
     }
 
     zone.addEventListener('touchstart', touchStartHandler, { passive: false })
@@ -209,14 +313,12 @@ function ScrollZone({
       zone.removeEventListener('touchmove', touchMoveHandler)
       zone.removeEventListener('touchend', touchEndHandler)
     }
-  }, [getStickerElementAtPoint, handleDragStart, handleDragMove, handleDragEnd])
+  }, [getInteractiveElementAtPoint, handleDragStart, handleDragMove, handleDragEnd])
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // シール要素へのクリックはシールに転送
-    const stickerElement = getStickerElementAtPoint(e.clientX, e.clientY)
-    if (stickerElement) {
-      // シール要素にPointerEventを転送
+    const interactiveElement = getInteractiveElementAtPoint(e.clientX, e.clientY)
+    if (interactiveElement) {
       const pointerEvent = new PointerEvent('pointerdown', {
         bubbles: true,
         cancelable: true,
@@ -226,44 +328,58 @@ function ScrollZone({
         pointerType: 'mouse',
         isPrimary: true,
       })
-      stickerElement.dispatchEvent(pointerEvent)
+      interactiveElement.dispatchEvent(pointerEvent)
       return
     }
 
     e.preventDefault()
-    handleDragStart(e.clientX)
+    handleDragStart(e.clientX, e.clientY)
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       handleDragMove(moveEvent.clientX)
     }
 
-    const handleMouseUp = () => {
-      handleDragEnd()
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      handleDragEnd(upEvent.clientX)
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd, getStickerElementAtPoint])
+  }, [handleDragStart, handleDragMove, handleDragEnd, getInteractiveElementAtPoint])
 
   return (
     <div
       ref={zoneRef}
-      className="scroll-zone absolute left-0 right-0 top-0 z-20 cursor-grab active:cursor-grabbing"
+      className="unified-scroll-zone absolute inset-0 z-20 cursor-grab active:cursor-grabbing"
       style={{
-        height: `${zoneHeight}px`,
-        // タッチ操作を無効化してカスタムハンドラで処理
         touchAction: 'none',
-        // ポインターイベントを有効化
         pointerEvents: 'auto',
-        // 透明（視覚的に見えない）
-        background: 'transparent',
-        // デバッグ用: コメントを外すとゾーンが見える
-        // background: 'rgba(0, 255, 0, 0.1)',
+        borderRadius: '8px',
       }}
       onMouseDown={handleMouseDown}
-    />
+    >
+      {/* 表紙・裏表紙の場合のみヒントを表示 */}
+      {!hideHints && (isOnCover || isOnBackCover) && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-2 opacity-40">
+            <span className="text-sm" style={{ color: '#8B5CF6' }}>←</span>
+            <span
+              className="text-xs font-medium px-3 py-1 rounded-full"
+              style={{
+                color: '#8B5CF6',
+                fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                background: 'rgba(139, 92, 246, 0.1)',
+              }}
+            >
+              スワイプでページめくり
+            </span>
+            <span className="text-sm" style={{ color: '#8B5CF6' }}>→</span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -280,6 +396,8 @@ interface SwipeZoneProps {
   bookHeight: number
   isOnCover: boolean
   isOnBackCover: boolean
+  hideHints?: boolean // ヒント文を非表示にする
+  disabled?: boolean // スワイプ無効化（編集中など）
 }
 
 function SwipeZone({
@@ -289,22 +407,27 @@ function SwipeZone({
   bookWidth,
   bookHeight,
   isOnCover,
-  isOnBackCover
+  isOnBackCover,
+  hideHints = false,
+  disabled = false,
 }: SwipeZoneProps) {
   const zoneRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
   const dragStartY = useRef(0)
 
-  // 指定座標にあるシール要素を取得（座標ベースでチェック）
-  const getStickerElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
+  // 指定座標にあるシール/デコ要素を取得（座標ベースでチェック）
+  const getInteractiveElementAtPoint = useCallback((clientX: number, clientY: number): Element | null => {
     // その座標にある全要素を取得
     const elements = document.elementsFromPoint(clientX, clientY)
-    // data-sticker-id属性を持つ要素を探す
+    // data-sticker-id または data-deco-id 属性を持つ要素を探す
     for (const el of elements) {
       if (el.hasAttribute('data-sticker-id')) return el
-      const parent = el.closest('[data-sticker-id]')
-      if (parent) return parent
+      if (el.hasAttribute('data-deco-id')) return el
+      const stickerParent = el.closest('[data-sticker-id]')
+      if (stickerParent) return stickerParent
+      const decoParent = el.closest('[data-deco-id]')
+      if (decoParent) return decoParent
     }
     return null
   }, [])
@@ -414,8 +537,8 @@ function SwipeZone({
 
     const touchStartHandler = (e: TouchEvent) => {
       const touch = e.touches[0]
-      const stickerElement = getStickerElementAtPoint(touch.clientX, touch.clientY)
-      if (stickerElement) {
+      const interactiveElement = getInteractiveElementAtPoint(touch.clientX, touch.clientY)
+      if (interactiveElement) {
         const pointerEvent = new PointerEvent('pointerdown', {
           bubbles: true,
           cancelable: true,
@@ -425,20 +548,26 @@ function SwipeZone({
           pointerType: 'touch',
           isPrimary: true,
         })
-        stickerElement.dispatchEvent(pointerEvent)
+        interactiveElement.dispatchEvent(pointerEvent)
         return
       }
+      // 無効化されている場合はページめくりを開始しない
+      if (disabled) return
       e.preventDefault()
       handleDragStart(touch.clientX, touch.clientY)
     }
 
     const touchMoveHandler = (e: TouchEvent) => {
+      // 無効化されている場合はページめくりを行わない
+      if (disabled) return
       e.preventDefault()
       const touch = e.touches[0]
       handleDragMove(touch.clientX, touch.clientY)
     }
 
     const touchEndHandler = (e: TouchEvent) => {
+      // 無効化されている場合はページめくりを行わない
+      if (disabled) return
       e.preventDefault()
       const touch = e.changedTouches[0]
       handleDragEnd(touch.clientX, touch.clientY)
@@ -453,13 +582,13 @@ function SwipeZone({
       zone.removeEventListener('touchmove', touchMoveHandler)
       zone.removeEventListener('touchend', touchEndHandler)
     }
-  }, [getStickerElementAtPoint, handleDragStart, handleDragMove, handleDragEnd])
+  }, [getInteractiveElementAtPoint, handleDragStart, handleDragMove, handleDragEnd, disabled])
 
   // マウスイベントハンドラ
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     // シール要素へのクリックはシールに転送
-    const stickerElement = getStickerElementAtPoint(e.clientX, e.clientY)
-    if (stickerElement) {
+    const interactiveElement = getInteractiveElementAtPoint(e.clientX, e.clientY)
+    if (interactiveElement) {
       // シール要素にPointerEventを転送
       const pointerEvent = new PointerEvent('pointerdown', {
         bubbles: true,
@@ -470,19 +599,24 @@ function SwipeZone({
         pointerType: 'mouse',
         isPrimary: true,
       })
-      stickerElement.dispatchEvent(pointerEvent)
+      interactiveElement.dispatchEvent(pointerEvent)
       return
     }
+
+    // 無効化されている場合はページめくりを開始しない
+    if (disabled) return
 
     e.preventDefault()
     handleDragStart(e.clientX, e.clientY)
 
     // マウスムーブとマウスアップをドキュメントレベルで監視
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (disabled) return
       handleDragMove(moveEvent.clientX, moveEvent.clientY)
     }
 
     const handleMouseUp = (upEvent: MouseEvent) => {
+      if (disabled) return
       handleDragEnd(upEvent.clientX, upEvent.clientY)
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
@@ -490,7 +624,7 @@ function SwipeZone({
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [handleDragStart, handleDragMove, handleDragEnd, getStickerElementAtPoint])
+  }, [handleDragStart, handleDragMove, handleDragEnd, getInteractiveElementAtPoint, disabled])
 
   // 高さをピクセルで計算
   const zoneHeight = bookHeight * (heightPercent / 100)
@@ -515,8 +649,8 @@ function SwipeZone({
       }}
       onMouseDown={handleMouseDown}
     >
-      {/* スワイプヒント - 見開きページのみ表示 */}
-      {!isFullPage && (
+      {/* スワイプヒント - 見開きページのみ表示、hideHintsがtrueの場合は非表示 */}
+      {!isFullPage && !hideHints && (
         <div className="flex items-center gap-2 opacity-50 pointer-events-none pb-3">
           <span className="text-sm" style={{ color: '#8B5CF6' }}>👈</span>
           <span
@@ -547,9 +681,13 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
   onExportButtonClick,
   renderNavigation = true,
   disableSwipeFlip = false,
+  hideHints = false,
   placedStickers = [],
   editingStickerId = null,
   onStickerLongPress,
+  placedDecoItems = [],
+  editingDecoItemId = null,
+  onDecoItemLongPress,
 }, ref) => {
   // 表紙デザインを取得
   const coverDesign = coverDesignId ? getCoverDesignById(coverDesignId) : undefined
@@ -585,6 +723,18 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
     return map
   }, [placedStickers])
 
+  // ページごとのデコアイテムをマッピング
+  const decoItemsByPage = useMemo(() => {
+    const map: Record<string, PlacedDecoItem[]> = {}
+    for (const deco of placedDecoItems) {
+      if (!map[deco.pageId]) {
+        map[deco.pageId] = []
+      }
+      map[deco.pageId].push(deco)
+    }
+    return map
+  }, [placedDecoItems])
+
   // シール状態を含むキー（シール変更時にリマウントするため）
   // 編集中のシールは除外する（位置変更中にリマウントが発生してチラつくのを防ぐ）
   const stickersKey = useMemo(() => {
@@ -601,8 +751,12 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
 
   // ページめくりイベント
   const onFlip = useCallback((e: { data: number }) => {
+    console.log('[BookView] onFlip called:', e.data)
     setCurrentPage(e.data)
     onPageChange?.(e.data)
+    // ページめくり効果音
+    console.log('[BookView] Playing flip sound...')
+    playSoundIfEnabled('flip', 0.4)
   }, [onPageChange])
 
   // ページめくりのコントロール
@@ -645,11 +799,20 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
   }
 
   return (
-    <div className="flex flex-col items-center">
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}
+    >
       {/* シール帳本体 - 3Dリアル表現 */}
       <div
-        className="relative"
         style={{
+          position: 'relative',
           perspective: '1500px',
           transformStyle: 'preserve-3d',
           // 見開き状態では幅を明示的に設定
@@ -813,30 +976,24 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
                 pageStickers={stickersByPage[page.id] || []}
                 editingStickerId={editingStickerId}
                 onStickerLongPress={onStickerLongPress}
+                pageDecoItems={decoItemsByPage[page.id] || []}
+                editingDecoItemId={editingDecoItemId}
+                onDecoItemLongPress={onDecoItemLongPress}
+                hideHints={hideHints}
               />
             ))}
           </HTMLFlipBook>
           </div>
 
-          {/* スクロールゾーン - 横スクロール用（見開きページの上半分） */}
-          {/* 表紙・裏表紙では非表示（SwipeZoneが全面をカバー） */}
-          {!(isOnCover || isOnBackCover) && (
-            <ScrollZone
-              bookHeight={height}
-              heightPercent={50}
-            />
-          )}
-
-          {/* スワイプゾーン - ページめくり用 */}
-          {/* 表紙・裏表紙では全面、見開きページでは下半分のみ（上半分は横スクロール用） */}
-          <SwipeZone
+          {/* 統合スクロールゾーン - 横スクロール + 端でページめくり */}
+          <UnifiedScrollZone
             bookRef={bookRef}
-            bookContainerRef={bookContainerRef}
-            bookWidth={width}
             bookHeight={height}
+            bookWidth={width}
+            hideHints={hideHints}
+            disabled={!!(editingStickerId || editingDecoItemId)}
             isOnCover={isOnCover}
             isOnBackCover={isOnBackCover}
-            heightPercent={(isOnCover || isOnBackCover) ? 100 : 50}
           />
         </div>
 
@@ -984,11 +1141,10 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
       }}
     >
       {stickers.map((sticker) => {
-        // 編集中のシールはFloatingEditStickerで表示するため、ここでは非表示
+        // 編集中のシールはFloatingEditStickerで表示するため非表示
         if (sticker.id === editingStickerId) {
           return null
         }
-        const isEditing = false // 編集中シールは上でフィルタ済み
 
         const stickerSize = 60 * sticker.scale
         const x = sticker.x * 100
@@ -1026,7 +1182,7 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
               top: `${y}%`,
               width: `${stickerSize}px`,
               height: `${stickerSize}px`,
-              zIndex: sticker.zIndex ?? 0, // 実際のzIndexを使用（編集中も重なり順を表示するため）
+              zIndex: sticker.zIndex ?? 0,
               // 3D変形継承
               transformStyle: 'preserve-3d',
               backfaceVisibility: 'hidden',
@@ -1087,6 +1243,123 @@ function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersP
   )
 }
 
+// ページ内デコアイテム表示コンポーネント
+interface PageDecosProps {
+  decoItems: PlacedDecoItem[]
+  editingDecoItemId?: string | null
+  onLongPress?: (decoItem: PlacedDecoItem) => void
+}
+
+function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps) {
+  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  const handlePointerDown = (decoItem: PlacedDecoItem) => {
+    longPressTimerRef.current = setTimeout(() => {
+      onLongPress?.(decoItem)
+    }, 500)
+  }
+
+  const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        // 3D変形時にシールが親要素の境界でクリップされないように
+        backfaceVisibility: 'hidden',
+        zIndex: 50, // シールやコンテンツより上に配置
+      }}
+    >
+      {decoItems.map((deco) => {
+        // 編集中のデコアイテムは非表示（FloatingEditDecoで表示）
+        if (deco.id === editingDecoItemId) {
+          return null
+        }
+
+        // デコアイテムのサイズ（width/heightがあればそれを使用、なければbaseWidth/baseHeight）
+        const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+        const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+
+        return (
+          <div
+            key={deco.id}
+            data-deco-id={deco.id}
+            className="absolute select-none pointer-events-auto"
+            style={{
+              left: `${deco.x * 100}%`,
+              top: `${deco.y * 100}%`,
+              width: decoWidth,
+              height: decoHeight,
+              transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+              zIndex: 50 + (deco.zIndex ?? 1), // 確実に上に配置
+              cursor: 'pointer',
+              touchAction: 'none', // タッチスクロール防止（クラスから移動）
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId)
+              } catch {}
+              handlePointerDown(deco)
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+              } catch {}
+              handlePointerUp()
+            }}
+            onPointerCancel={(e) => {
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId)
+              } catch {}
+              handlePointerUp()
+            }}
+            // タッチイベントのフォールバック（モバイル互換性向上）
+            onTouchStart={(e) => {
+              e.stopPropagation()
+              handlePointerDown(deco)
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              handlePointerUp()
+            }}
+            onTouchCancel={() => {
+              handlePointerUp()
+            }}
+          >
+            {deco.decoItem.imageUrl ? (
+              <img
+                src={deco.decoItem.imageUrl}
+                alt={deco.decoItem.name}
+                className="w-full h-full object-cover pointer-events-none select-none"
+                draggable={false}
+                style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
+              />
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center bg-pink-100 rounded text-2xl pointer-events-none"
+              >
+                {deco.decoItem.type === 'tape' && '📏'}
+                {deco.decoItem.type === 'lace' && '🎀'}
+                {deco.decoItem.type === 'stamp' && '🔖'}
+                {deco.decoItem.type === 'glitter' && '✨'}
+                {deco.decoItem.type === 'frame' && '🖼️'}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ページコンテンツコンポーネント
 interface PageContentProps {
   page: BookPage
@@ -1096,9 +1369,13 @@ interface PageContentProps {
   pageStickers?: PlacedSticker[]
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
+  pageDecoItems?: PlacedDecoItem[]
+  editingDecoItemId?: string | null
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
+  hideHints?: boolean // ヒント文を非表示にする
 }
 
-function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = [], editingStickerId, onStickerLongPress }: PageContentProps) {
+function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false }: PageContentProps) {
   // 表紙のスタイルを生成 - パステルカラー
   const getCoverStyle = (): React.CSSProperties => {
     if (!bookTheme) {
@@ -1360,6 +1637,9 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
         pageStickers={pageStickers}
         editingStickerId={editingStickerId}
         onStickerLongPress={onStickerLongPress}
+        pageDecoItems={pageDecoItems}
+        editingDecoItemId={editingDecoItemId}
+        onDecoItemLongPress={onDecoItemLongPress}
       />
     )
   }
@@ -1372,6 +1652,10 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
       pageStickers={pageStickers}
       editingStickerId={editingStickerId}
       onStickerLongPress={onStickerLongPress}
+      pageDecoItems={pageDecoItems}
+      editingDecoItemId={editingDecoItemId}
+      onDecoItemLongPress={onDecoItemLongPress}
+      hideHints={hideHints}
     />
   )
 }
@@ -1383,10 +1667,13 @@ interface LeftPageProps {
   pageStickers?: PlacedSticker[]
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
+  pageDecoItems?: PlacedDecoItem[]
+  editingDecoItemId?: string | null
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
 }
 
 // 左ページコンポーネント（装飾・テーマ表示用）- パステルカラー
-function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress }: LeftPageProps) {
+function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress }: LeftPageProps) {
   const theme = page.theme || {}
   const bgColor = theme.backgroundColor || '#FEFBFF'
   const pattern = theme.pattern || 'dots'
@@ -1477,18 +1764,9 @@ function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onSti
         </>
       )}
 
-      {/* 見開き表示のラベル */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-        <div className="text-4xl mb-2 opacity-20">📝</div>
-        <p
-          className="text-xs opacity-40"
-          style={{
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            color: '#A78BFA',
-          }}
-        >
-          メモページ
-        </p>
+      {/* 見開き表示の装飾 - シンプルなデザイン */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+        <div className="text-3xl opacity-15">✨</div>
       </div>
 
       {/* ページコンテンツ */}
@@ -1502,6 +1780,13 @@ function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onSti
         editingStickerId={editingStickerId}
         onLongPress={onStickerLongPress}
       />
+
+      {/* ページ内デコアイテム表示 - ページと一緒にめくれる */}
+      <PageDecos
+        decoItems={pageDecoItems}
+        editingDecoItemId={editingDecoItemId}
+        onLongPress={onDecoItemLongPress}
+      />
     </div>
   )
 }
@@ -1513,10 +1798,14 @@ interface RightPageProps {
   pageStickers?: PlacedSticker[]
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
+  pageDecoItems?: PlacedDecoItem[]
+  editingDecoItemId?: string | null
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
+  hideHints?: boolean // ヒント文を非表示にする
 }
 
 // 右ページコンポーネント（シール貼り付けメインスペース）- パステルカラー
-function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress }: RightPageProps) {
+function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false }: RightPageProps) {
   return (
     <div
       className="w-full h-full p-4 relative"
@@ -1559,7 +1848,7 @@ function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onSt
 
       {/* ページコンテンツ */}
       <div className="relative z-10 w-full h-full">
-        {page.content || (
+        {page.content || (!hideHints && (
           <div className="flex items-center justify-center h-full text-center">
             <div>
               <div className="text-3xl mb-2 opacity-30">✨</div>
@@ -1574,7 +1863,7 @@ function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onSt
               </p>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
       {/* ページ内シール表示 - ページと一緒にめくれる */}
@@ -1582,6 +1871,13 @@ function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onSt
         stickers={pageStickers}
         editingStickerId={editingStickerId}
         onLongPress={onStickerLongPress}
+      />
+
+      {/* ページ内デコアイテム表示 - ページと一緒にめくれる */}
+      <PageDecos
+        decoItems={pageDecoItems}
+        editingDecoItemId={editingDecoItemId}
+        onLongPress={onDecoItemLongPress}
       />
     </div>
   )

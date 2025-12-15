@@ -1,6 +1,11 @@
 'use client'
 
 import React, { useState } from 'react'
+import {
+  HandshakeIcon,
+  UserIcon,
+  SparkleIcon,
+} from '@/components/icons/TradeIcons'
 
 // 交換モード
 export type TradeMode = 'menu' | 'matching' | 'session'
@@ -55,7 +60,7 @@ const MatchingButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shine" />
 
       <div className="relative flex items-center justify-center gap-3">
-        <span className="text-3xl animate-bounce">🤝</span>
+        <span className="animate-bounce"><HandshakeIcon size={32} color="white" /></span>
         <div className="flex flex-col items-start">
           <span className="text-2xl">マッチングスタート！</span>
           <span className="text-sm font-normal opacity-80">
@@ -85,11 +90,11 @@ const FriendCard: React.FC<{
     >
       {/* アバター */}
       <div className="relative">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-300/80 to-pink-300/80 flex items-center justify-center text-2xl">
+        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-300/80 to-pink-300/80 flex items-center justify-center">
           {friend.avatarUrl ? (
             <img src={friend.avatarUrl} alt={friend.name} className="w-full h-full rounded-full object-cover" />
           ) : (
-            '👤'
+            <UserIcon size={28} color="#A855F7" />
           )}
         </div>
         {/* オンライン状態 */}
@@ -155,11 +160,11 @@ const HistoryCard: React.FC<{
       style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
     >
       {/* パートナーアバター */}
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-200/80 to-pink-200/80 flex items-center justify-center text-lg">
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-200/80 to-pink-200/80 flex items-center justify-center">
         {history.partnerAvatarUrl ? (
           <img src={history.partnerAvatarUrl} alt={history.partnerName} className="w-full h-full rounded-full object-cover" />
         ) : (
-          '👤'
+          <UserIcon size={24} color="#A855F7" />
         )}
       </div>
 
@@ -188,14 +193,14 @@ const HistoryCard: React.FC<{
 
 // セクションヘッダー
 const SectionHeader: React.FC<{
-  icon: string
+  icon: React.ReactNode
   title: string
   action?: { label: string; onClick: () => void }
 }> = ({ icon, title, action }) => {
   return (
     <div className="flex items-center justify-between mb-3">
       <div className="flex items-center gap-2">
-        <span className="text-xl">{icon}</span>
+        <span className="flex items-center">{icon}</span>
         <h3 className="font-bold text-purple-700">{title}</h3>
       </div>
       {action && (
@@ -229,7 +234,7 @@ export const TradeView: React.FC<TradeViewProps> = ({
     <div className="flex flex-col h-full overflow-y-auto pb-4" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
       {/* マッチングセクション */}
       <section className="mb-6">
-        <SectionHeader icon="✨" title="ランダムこうかん" />
+        <SectionHeader icon={<SparkleIcon size={20} color="#FBBF24" />} title="ランダムこうかん" />
         <MatchingButton onClick={onStartMatching} />
         <p className="text-xs text-center text-purple-400 mt-2">
           ボタンをおすと、せかいのだれかとマッチング！

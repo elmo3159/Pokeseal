@@ -7,6 +7,24 @@ import dynamic from 'next/dynamic'
 import type { PlacedSticker } from '../sticker-book/StickerPlacement'
 import type { BookPage, PageTheme } from '../sticker-book/BookView'
 import { getCoverDesignById, type CoverDesign } from '@/domain/theme'
+import { filterContent, isKidSafe, getFilterReason, FilterResult } from '@/utils/contentFilter'
+import {
+  UserIcon,
+  StarIcon,
+  SparkleIcon,
+  CelebrationIcon,
+  ChatIcon,
+  GiftIcon,
+  TargetIcon,
+  WarningIcon,
+  SmileIcon,
+  SearchIcon,
+  BookOpenPurpleIcon,
+  BookOpenPinkIcon,
+  StickerBookIcon,
+  ArrowBothIcon,
+  HandshakeIcon,
+} from '@/components/icons/TradeIcons'
 
 // react-pageflip用のスタイルをインポート
 import '../sticker-book/book.css'
@@ -63,7 +81,7 @@ interface TradeMessage {
   timestamp: Date
 }
 
-// 交換用スタンプ（子ども向けシール交換に最適化）
+// 交換用スタンプ（子ども向けシール交換に最適化）- 絵文字は最大2個
 const STAMPS: Record<StampType, { emoji: string; label: string }> = {
   please: { emoji: '🙏✨', label: 'おねがい！' },
   thinking: { emoji: '🤔💭', label: 'うーん...' },
@@ -71,12 +89,12 @@ const STAMPS: Record<StampType, { emoji: string; label: string }> = {
   ok: { emoji: '🎉🤝', label: 'いいよ！' },
   thanks: { emoji: '💕', label: 'ありがとう！' },
   cute: { emoji: '🩷', label: 'かわいい～' },
-  no: { emoji: '😢', label: 'ムリ...' },
+  no: { emoji: '😢💦', label: 'ムリ...' },
   wait: { emoji: '⏳', label: 'まってね' },
   this: { emoji: '👀✨', label: 'これ！' },
-  rare: { emoji: '🌟🌟🌟', label: 'レア！' },
+  rare: { emoji: '🌟✨', label: 'レア！' },
   instead: { emoji: '🔄', label: 'かわりに？' },
-  great: { emoji: '👍', label: 'オッケー！' },
+  great: { emoji: '👍✨', label: 'オッケー！' },
 }
 
 // 交換用定型文
@@ -105,6 +123,24 @@ const RARITY_COLORS: Record<number, string> = {
 // ============================================
 // Props
 // ============================================
+// Supabaseから受け取るメッセージの型
+interface SupabaseTradeMessage {
+  id: string
+  stamp_id: string | null
+  user_id: string
+  created_at: string
+  message_type?: 'stamp' | 'text' | 'preset'
+  content?: string | null
+}
+
+// Supabaseから受け取るシール選択の型
+interface SupabaseTradeItem {
+  id: string
+  user_id: string
+  user_sticker_id: string
+  sticker_id?: string
+}
+
 interface TradeSessionFullProps {
   myUser: TradeUser
   partnerUser: TradeUser
@@ -115,6 +151,18 @@ interface TradeSessionFullProps {
   onTradeComplete: (myOffers: string[], partnerOffers: string[]) => void
   onCancel: () => void
   onFollowPartner?: (partnerId: string) => void
+  // Supabase連携用
+  supabaseMessages?: SupabaseTradeMessage[]
+  onSendStamp?: (stampId: string) => Promise<void>
+  onSendText?: (content: string) => Promise<void>
+  partnerReady?: boolean
+  onSetReady?: () => Promise<void>
+  tradeCompleted?: boolean     // Supabase経由で交換が完了したか
+  // シール選択の同期用
+  supabaseMyItems?: SupabaseTradeItem[]      // 自分が選択したシール（相手に渡すシール）
+  supabasePartnerItems?: SupabaseTradeItem[] // 相手が選択したシール（自分が受け取るシール）
+  onSelectMySticker?: (userStickerId: string) => Promise<void>
+  onDeselectMySticker?: (itemId: string) => Promise<void>
 }
 
 // ============================================
@@ -133,8 +181,8 @@ const ChatBubble: React.FC<{
   return (
     <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
       {!isMe && (
-        <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center mr-1 flex-shrink-0 text-[10px]">
-          👤
+        <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center mr-1 flex-shrink-0">
+          <UserIcon size={16} color="#A855F7" />
         </div>
       )}
       <div
@@ -180,8 +228,9 @@ const ChatArea: React.FC<{
       style={{ scrollBehavior: 'smooth' }}
     >
       {messages.length === 0 ? (
-        <div className="h-full flex items-center justify-center text-purple-300 text-sm">
-          💬 スタンプでやりとりしよう！
+        <div className="h-full flex items-center justify-center text-purple-300 text-sm gap-2">
+          <ChatIcon size={20} color="#D8B4FE" />
+          <span>スタンプでやりとりしよう！</span>
         </div>
       ) : (
         messages.map((msg) => (
@@ -221,7 +270,7 @@ const ChatAreaExpanded: React.FC<{
     >
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-purple-300">
-          <span className="text-2xl mb-2">💬</span>
+          <span className="mb-2"><ChatIcon size={32} color="#D8B4FE" /></span>
           <span className="text-sm">スタンプでやりとりしよう！</span>
         </div>
       ) : (
@@ -251,14 +300,44 @@ const MessagePanel: React.FC<{
 }> = ({ onSendStamp, onSendPreset, onSendText, cooldownRemaining }) => {
   const [activeTab, setActiveTab] = useState<'stamps' | 'presets'>('stamps')
   const [textInput, setTextInput] = useState('')
+  const [filterResult, setFilterResult] = useState<FilterResult | null>(null)
+  const [showFilterWarning, setShowFilterWarning] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isCooldown = cooldownRemaining > 0
 
+  // テキスト入力時にフィルターチェック
+  useEffect(() => {
+    if (textInput.trim()) {
+      const result = filterContent(textInput)
+      setFilterResult(result)
+    } else {
+      setFilterResult(null)
+    }
+    setShowFilterWarning(false)
+  }, [textInput])
+
   const handleSendText = () => {
     if (textInput.trim() && !isCooldown) {
+      // フィルターチェック
+      const result = filterContent(textInput.trim())
+      if (!result.isClean) {
+        setShowFilterWarning(true)
+        return
+      }
+      // 子ども向け追加チェック
+      if (!isKidSafe(textInput.trim())) {
+        setShowFilterWarning(true)
+        setFilterResult({
+          isClean: false,
+          filteredText: textInput.trim(),
+          detectedIssues: ['個人情報の可能性']
+        })
+        return
+      }
       onSendText(textInput.trim())
       setTextInput('')
+      setShowFilterWarning(false)
     }
   }
 
@@ -270,120 +349,220 @@ const MessagePanel: React.FC<{
   }
 
   return (
-    <div className="bg-white/95 rounded-xl border border-purple-100 overflow-hidden">
-      {/* タブ切り替え */}
-      <div className="flex border-b border-purple-100">
-        <button
-          onClick={() => setActiveTab('stamps')}
-          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'stamps'
-              ? 'bg-purple-100 text-purple-700'
-              : 'text-purple-400'
-          }`}
-        >
-          😊 スタンプ
-        </button>
-        <button
-          onClick={() => setActiveTab('presets')}
-          className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'presets'
-              ? 'bg-purple-100 text-purple-700'
-              : 'text-purple-400'
-          }`}
-        >
-          💬 定型文
-        </button>
-      </div>
+    <div className="relative">
+      {/* 毛糸フレーム背景画像 - サイズ確保用（非表示） */}
+      <img
+        src={activeTab === 'stamps'
+          ? '/images/koukan_ui/Purple_tab.png'
+          : '/images/koukan_ui/Yellow_tab.png'
+        }
+        alt=""
+        className="w-full h-auto invisible"
+        draggable={false}
+        aria-hidden="true"
+      />
 
-      {/* スタンプ・定型文コンテンツ */}
-      <div className="p-2 max-h-20 overflow-y-auto">
-        {activeTab === 'stamps' ? (
-          <div className="grid grid-cols-6 gap-1">
-            {(Object.keys(STAMPS) as StampType[]).map((type) => (
-              <motion.button
-                key={type}
-                whileTap={!isCooldown ? { scale: 0.85 } : {}}
-                onClick={() => !isCooldown && onSendStamp(type)}
-                disabled={isCooldown}
-                className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center transition-colors ${
-                  isCooldown
-                    ? 'bg-gray-100 opacity-50 cursor-not-allowed'
-                    : 'bg-purple-50 hover:bg-purple-100'
-                }`}
-              >
-                <span className="text-lg leading-none">{STAMPS[type].emoji}</span>
-              </motion.button>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {PRESET_MESSAGES.map((text, i) => (
-              <button
-                key={i}
-                onClick={() => !isCooldown && onSendPreset(text)}
-                disabled={isCooldown}
-                className={`px-2 py-1 rounded-full border text-[10px] whitespace-nowrap ${
-                  isCooldown
-                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-purple-50 border-purple-200 text-purple-600 active:bg-purple-100'
-                }`}
-              >
-                {text}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* フレーム画像オーバーレイ（テキスト入力の上に表示） */}
+      <img
+        src={activeTab === 'stamps'
+          ? '/images/koukan_ui/Purple_tab.png'
+          : '/images/koukan_ui/Yellow_tab.png'
+        }
+        alt=""
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        draggable={false}
+        style={{ zIndex: 10 }}
+      />
 
-      {/* LINE風テキスト入力 */}
-      <div className="px-2 pb-2 pt-1 border-t border-purple-100">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value.slice(0, 50))}
-              onKeyDown={handleKeyDown}
-              placeholder={isCooldown ? `${cooldownRemaining}秒後に送信可能` : 'メッセージを入力...'}
-              disabled={isCooldown}
-              maxLength={50}
-              className={`w-full px-3 py-2 rounded-full text-xs border transition-all ${
-                isCooldown
-                  ? 'bg-gray-100 border-gray-200 text-gray-400'
-                  : 'bg-purple-50 border-purple-200 text-purple-800 focus:border-purple-400 focus:ring-1 focus:ring-purple-200'
+      {/* 上部エリア: タブ + スタンプ/定型文グリッド（フレームの上に表示） */}
+      <div className="absolute flex flex-col" style={{ zIndex: 15, pointerEvents: 'none', top: 0, left: 0, right: 0, bottom: '80px' }}>
+        <div className="h-full flex flex-col">
+          {/* タブ切り替えエリア（画像のタブ位置に合わせて配置） */}
+          <div className="flex pt-0.5 pl-3">
+            <button
+              onClick={() => setActiveTab('stamps')}
+              className={`px-3 py-0.5 text-[13px] font-black transition-colors ${
+                activeTab === 'stamps'
+                  ? 'text-purple-700'
+                  : 'text-purple-400'
               }`}
-            />
-            {textInput.length > 0 && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-purple-400">
-                {textInput.length}/50
-              </span>
+              style={{
+                position: 'relative',
+                left: '50px',
+                top: '24px',
+                color: 'rgb(194, 103, 0)',
+                pointerEvents: 'auto',
+                textShadow: '-1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 -1.5px 0 #fff, 0 1.5px 0 #fff, -1.5px 0 0 #fff, 1.5px 0 0 #fff',
+              }}
+            >
+              スタンプ
+            </button>
+            <button
+              onClick={() => setActiveTab('presets')}
+              className={`px-3 py-0.5 text-[13px] font-black transition-colors ${
+                activeTab === 'presets'
+                  ? 'text-yellow-700'
+                  : 'text-yellow-500'
+              }`}
+              style={{
+                position: 'relative',
+                left: '160px',
+                top: '23px',
+                color: 'rgb(193, 103, 1)',
+                pointerEvents: 'auto',
+                textShadow: '-1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff, 0 -1.5px 0 #fff, 0 1.5px 0 #fff, -1.5px 0 0 #fff, 1.5px 0 0 #fff',
+              }}
+            >
+              定型文
+            </button>
+          </div>
+
+          {/* スタンプ・定型文コンテンツ - 枠内に収めてスクロール可能 */}
+          <div
+            className="overflow-y-scroll overflow-x-hidden"
+            style={{
+              pointerEvents: 'auto',
+              position: 'absolute',
+              left: '32px',
+              top: '50px',
+              width: '300px',
+              height: '72px',
+              padding: '2px 4px',
+              scrollbarWidth: 'thin',
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y',
+              overscrollBehavior: 'contain',
+            }}
+          >
+            {activeTab === 'stamps' ? (
+              <div
+                className="grid grid-cols-4 gap-1"
+                style={{ pointerEvents: 'auto', width: '100%' }}
+              >
+                {(Object.keys(STAMPS) as StampType[]).map((type) => (
+                  <motion.button
+                    key={type}
+                    whileTap={!isCooldown ? { scale: 0.85 } : {}}
+                    onClick={() => !isCooldown && onSendStamp(type)}
+                    disabled={isCooldown}
+                    className={`h-7 px-1 rounded-md flex items-center justify-center transition-all ${
+                      isCooldown
+                        ? 'bg-white/40 opacity-50 cursor-not-allowed'
+                        : 'bg-white/90 active:bg-white shadow-sm border border-purple-200'
+                    }`}
+                    style={{ pointerEvents: 'auto', minWidth: 0 }}
+                  >
+                    <span className="text-sm leading-none whitespace-nowrap">{STAMPS[type].emoji}</span>
+                  </motion.button>
+                ))}
+              </div>
+            ) : (
+              <div
+                className="flex flex-wrap gap-1 content-start"
+                style={{ pointerEvents: 'auto', width: '100%' }}
+              >
+                {PRESET_MESSAGES.map((text, i) => (
+                  <button
+                    key={i}
+                    onClick={() => !isCooldown && onSendPreset(text)}
+                    disabled={isCooldown}
+                    className={`px-1.5 py-0.5 rounded-full border text-[8px] font-medium whitespace-nowrap transition-all ${
+                      isCooldown
+                        ? 'bg-white/40 border-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-white/90 border-yellow-400 text-yellow-800 active:bg-yellow-50'
+                    }`}
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-          <motion.button
-            whileTap={!isCooldown && textInput.trim() ? { scale: 0.9 } : {}}
-            onClick={handleSendText}
-            disabled={isCooldown || !textInput.trim()}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-              isCooldown || !textInput.trim()
-                ? 'bg-gray-200 text-gray-400'
-                : 'bg-gradient-to-r from-pink-400 to-purple-500 text-white shadow-md'
-            }`}
-          >
-            {isCooldown ? (
-              <span className="text-xs font-bold">{cooldownRemaining}</span>
-            ) : (
-              <span className="text-lg">↑</span>
-            )}
-          </motion.button>
         </div>
       </div>
+
+      {/* 下部エリア: テキスト入力（フレームの後ろに表示） */}
+      <div
+        className="absolute overflow-hidden"
+        style={{
+          zIndex: 5,
+          height: '62px',
+          bottom: '-2px',
+          left: '14px',
+          right: '90px',
+        }}
+      >
+        {/* フィルター警告 */}
+        {showFilterWarning && filterResult && !filterResult.isClean && (
+          <div className="absolute -top-6 left-0 right-0 px-2 py-0.5 bg-yellow-100/95 rounded" style={{ zIndex: 20 }}>
+            <p className="text-[8px] text-yellow-700 flex items-center gap-1">
+              <WarningIcon size={12} color="#B45309" />
+              <span>{getFilterReason(filterResult)}</span>
+            </p>
+          </div>
+        )}
+
+        {/* テキスト入力 */}
+        <div className="h-full flex items-center">
+          <div className="flex items-center gap-2 w-full">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value.slice(0, 50))}
+                onKeyDown={handleKeyDown}
+                placeholder={isCooldown ? `${cooldownRemaining}秒後` : 'メッセージを入力...'}
+                disabled={isCooldown}
+                maxLength={50}
+                className={`w-full px-3 py-1 rounded-full text-[11px] border transition-all ${
+                  isCooldown
+                    ? 'bg-gray-100 border-gray-200 text-gray-400'
+                    : showFilterWarning && filterResult && !filterResult.isClean
+                      ? 'bg-yellow-50 border-yellow-400 text-yellow-800'
+                      : 'bg-white border-pink-300 text-purple-800 focus:border-purple-400'
+                }`}
+                style={{ marginLeft: '40px' }}
+              />
+              {textInput.length > 0 && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] text-purple-400">
+                  {textInput.length}/50
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 送信ボタン（フレームの前に表示） */}
+      <motion.button
+        whileTap={!isCooldown && textInput.trim() ? { scale: 0.9 } : {}}
+        onClick={handleSendText}
+        disabled={isCooldown || !textInput.trim()}
+        className={`absolute w-7 h-7 rounded-full flex items-center justify-center transition-all shadow ${
+          isCooldown || !textInput.trim()
+            ? 'bg-gray-200 text-gray-400'
+            : 'bg-gradient-to-r from-pink-400 to-purple-500 text-white'
+        }`}
+        style={{
+          zIndex: 15,
+          bottom: '18px',
+          right: '60px',
+        }}
+      >
+        {isCooldown ? (
+          <span className="text-[8px] font-bold">{cooldownRemaining}</span>
+        ) : (
+          <span className="text-sm">↑</span>
+        )}
+      </motion.button>
     </div>
   )
 }
 
 // ============================================
-// 希望シール枠（全シール表示・レート警告付き）
+// 希望シール枠（全シール表示・レート警告付き）- 毛糸フレームUI
 // ============================================
 const CompactWishlist: React.FC<{
   myWants: PlacedSticker[]
@@ -406,162 +585,168 @@ const CompactWishlist: React.FC<{
   const hasHighRarityOffer = partnerWants.some(s => s.sticker.rarity >= 4)
 
   return (
-    <div className={`rounded-xl p-2 shadow-sm border ${
-      isLosingTrade ? 'bg-red-50/95 border-red-200' : 'bg-white/95 border-purple-100'
-    }`}>
+    <div className="relative">
+      {/* 毛糸フレーム背景 */}
+      <div className="relative">
+        <img
+          src="/images/koukan_ui/Koukan_UI.png"
+          alt=""
+          className="w-full h-auto"
+          draggable={false}
+        />
+
+        {/* フレーム内のコンテンツ - 左にラベル+pt、右にシール3x2グリッド */}
+        <div className="absolute inset-0 flex items-center" style={{ padding: '1px 4px 1px 18px' }}>
+          <div className="flex-1 flex items-center gap-1">
+            {/* 希望シール（もらう）- 左にラベル、右にシール3x2グリッド */}
+            <div className="flex-1 flex items-start gap-1 min-w-0">
+              {/* ラベル部分（縦並び） */}
+              <div className="flex flex-col items-center flex-shrink-0 pt-1" style={{ minWidth: '30px' }}>
+                <span className="text-[9px] text-purple-700 font-bold leading-tight">もらう</span>
+                <span className={`text-[11px] font-bold leading-tight ${
+                  myRate > 0 ? 'text-green-600' : 'text-gray-400'
+                }`}>+{myRate}</span>
+              </div>
+              {/* シール部分（3x2グリッド） */}
+              <div className="grid grid-cols-3 gap-0.5 flex-1">
+                {myWants.length > 0 ? (
+                  myWants.slice(0, 6).map((s) => (
+                    <div key={s.id} className="relative flex flex-col items-center">
+                      <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
+                        s.sticker.rarity >= 4 ? 'border-yellow-400' : 'border-purple-300'
+                      }`}>
+                        {s.sticker.imageUrl && (
+                          <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                        )}
+                      </div>
+                      <span className="text-[8px] text-yellow-500 leading-none mt-0.5">
+                        {'★'.repeat(Math.min(s.sticker.rarity, 5))}
+                      </span>
+                      <button
+                        onClick={() => onRemoveMyWant(s.id)}
+                        className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-white text-[6px] flex items-center justify-center shadow"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[8px] text-purple-400 col-span-3">タップでえらぶ</span>
+                )}
+              </div>
+            </div>
+
+            {/* 交換アイコン */}
+            <div className="flex-shrink-0 px-0.5">
+              <span className={`text-base ${isBalanced ? 'text-purple-500' : isLosingTrade ? 'text-red-500' : 'text-orange-400'}`}>
+                ⇄
+              </span>
+            </div>
+
+            {/* 提供シール（あげる）- 左にラベル、右にシール3x2グリッド */}
+            <div className="flex-1 flex items-start gap-1 min-w-0">
+              {/* ラベル部分（縦並び） */}
+              <div className="flex flex-col items-center flex-shrink-0 pt-1" style={{ minWidth: '30px' }}>
+                <span className="text-[9px] text-pink-700 font-bold leading-tight">あげる</span>
+                <span className={`text-[11px] font-bold leading-tight ${
+                  partnerRate > myRate ? 'text-red-600' : 'text-pink-600'
+                }`}>-{partnerRate}</span>
+              </div>
+              {/* シール部分（3x2グリッド） */}
+              <div className="grid grid-cols-3 gap-0.5 flex-1">
+                {partnerWants.length > 0 ? (
+                  partnerWants.slice(0, 6).map((s) => (
+                    <div key={s.id} className="relative flex flex-col items-center">
+                      <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
+                        s.sticker.rarity >= 4 ? 'border-red-400' : 'border-pink-300'
+                      }`}>
+                        {s.sticker.imageUrl && (
+                          <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                        )}
+                      </div>
+                      <span className="text-[8px] text-yellow-500 leading-none mt-0.5">
+                        {'★'.repeat(Math.min(s.sticker.rarity, 5))}
+                      </span>
+                      <button
+                        onClick={() => onRemovePartnerWant(s.id)}
+                        className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-gray-500 rounded-full text-white text-[6px] flex items-center justify-center shadow"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-[8px] text-pink-400 col-span-3">あいてがえらぶ</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ステータス＋OKボタン */}
+          <div className="flex flex-col items-center ml-1">
+            {/* ステータス表示 */}
+            <div className="flex flex-col items-center gap-0 mb-0.5">
+              <span className={`text-[9px] font-bold ${myConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
+                {myConfirmed ? '●' : '○'}じぶん
+              </span>
+              <span className={`text-[9px] font-bold ${partnerConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
+                {partnerConfirmed ? '●' : '○'}あいて
+              </span>
+            </div>
+
+            {/* 毛糸ハートOKボタン - 大きめサイズ */}
+            <motion.button
+              onClick={onConfirm}
+              disabled={!canConfirm || myConfirmed}
+              whileTap={canConfirm && !myConfirmed ? { scale: 0.9 } : {}}
+              className={`relative w-14 h-14 ${
+                !canConfirm || myConfirmed ? 'opacity-40 grayscale' : ''
+              }`}
+            >
+              <img
+                src="/images/koukan_ui/OK_Button.png"
+                alt="OK"
+                className="w-full h-full object-contain drop-shadow-md"
+                draggable={false}
+              />
+              {myConfirmed && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.span
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    className="text-white text-sm drop-shadow-md"
+                  >
+                    ⏳
+                  </motion.span>
+                </div>
+              )}
+              {!myConfirmed && canConfirm && (
+                <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold drop-shadow-lg">
+                  OK!
+                </span>
+              )}
+            </motion.button>
+          </div>
+        </div>
+      </div>
+
       {/* 警告バナー（損する交換の場合） */}
       {isLosingTrade && (
-        <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg mb-2 flex items-center justify-center gap-1">
-          <span>⚠️</span>
+        <div className="bg-red-500/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-lg mt-1 flex items-center justify-center gap-1">
+          <WarningIcon size={14} color="#FFF" />
           <span>あなたが {rateDiff}pt 多く渡す交換です！</span>
         </div>
       )}
-
-      <div className="flex gap-2 items-stretch">
-        {/* 希望シール（もらう） - 相手のシールをタップで追加 */}
-        <div className="flex-1 bg-purple-50/80 rounded-lg p-1.5 min-h-[52px]">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-purple-500">👤→わたし</span>
-            <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1 rounded">+{myRate}pt</span>
-          </div>
-          <div className="flex gap-1 flex-wrap max-h-[72px] overflow-y-auto">
-            {myWants.length > 0 ? (
-              myWants.map((s) => (
-                <div key={s.id} className="relative group">
-                  <div className={`w-8 h-8 rounded-md overflow-hidden border-2 bg-white ${
-                    s.sticker.rarity >= 4 ? 'border-yellow-400' : 'border-purple-300'
-                  }`}>
-                    {s.sticker.imageUrl ? (
-                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-xs flex items-center justify-center h-full">⭐</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => onRemoveMyWant(s.id)}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-white text-[7px] flex items-center justify-center shadow-sm"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))
-            ) : (
-              <span className="text-[9px] text-purple-300">相手のシールをタップ</span>
-            )}
-          </div>
-        </div>
-
-        {/* 交換アイコン */}
-        <div className="flex flex-col items-center justify-center">
-          <div className={`text-xl ${isBalanced ? 'text-green-500' : isLosingTrade ? 'text-red-500' : 'text-orange-400'}`}>
-            ⇄
-          </div>
-          {!isBalanced && (
-            <span className={`text-[8px] font-bold ${isLosingTrade ? 'text-red-500' : 'text-orange-500'}`}>
-              {isLosingTrade ? '損!' : '得!'}
-            </span>
-          )}
-        </div>
-
-        {/* 提供シール（あげる） - 相手が欲しがっている私のシール */}
-        <div className={`flex-1 rounded-lg p-1.5 min-h-[52px] ${
-          hasHighRarityOffer ? 'bg-red-100/80 border border-red-300' : 'bg-pink-50/80'
-        }`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-pink-500">わたし→👤</span>
-            <span className={`text-[10px] font-bold px-1 rounded ${
-              partnerRate > myRate ? 'text-red-600 bg-red-100' : 'text-pink-600 bg-pink-100'
-            }`}>-{partnerRate}pt</span>
-          </div>
-          <div className="flex gap-1 flex-wrap max-h-[72px] overflow-y-auto">
-            {partnerWants.length > 0 ? (
-              partnerWants.map((s) => (
-                <div key={s.id} className="relative group">
-                  <div className={`w-8 h-8 rounded-md overflow-hidden border-2 bg-white ${
-                    s.sticker.rarity >= 4 ? 'border-red-400 ring-1 ring-red-300' : 'border-pink-300'
-                  }`}>
-                    {s.sticker.imageUrl ? (
-                      <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                    ) : (
-                      <span className="text-xs flex items-center justify-center h-full">⭐</span>
-                    )}
-                  </div>
-                  {/* 高レアシール警告マーク */}
-                  {s.sticker.rarity >= 4 && (
-                    <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full text-white text-[6px] flex items-center justify-center shadow-sm animate-pulse">
-                      !
-                    </div>
-                  )}
-                  <button
-                    onClick={() => onRemovePartnerWant(s.id)}
-                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-gray-500 rounded-full text-white text-[7px] flex items-center justify-center shadow-sm"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))
-            ) : (
-              <span className="text-[9px] text-pink-300">相手が選択中</span>
-            )}
-          </div>
-        </div>
-
-        {/* 交換OKボタン */}
-        <motion.button
-          onClick={onConfirm}
-          disabled={!canConfirm || myConfirmed}
-          whileTap={canConfirm && !myConfirmed ? { scale: 0.95 } : {}}
-          className={`
-            w-14 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition-all
-            ${myConfirmed
-              ? 'bg-green-500 text-white'
-              : !canConfirm
-                ? 'bg-gray-200 text-gray-400'
-                : isLosingTrade
-                  ? 'bg-gradient-to-b from-orange-400 to-red-500 text-white shadow-lg'
-                  : 'bg-gradient-to-b from-pink-400 to-purple-500 text-white shadow-lg'}
-          `}
-        >
-          {myConfirmed ? (
-            <>
-              <motion.span
-                animate={{ rotate: 360 }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                className="text-lg"
-              >
-                ⏳
-              </motion.span>
-              <span className="text-[8px]">まち中</span>
-            </>
-          ) : (
-            <>
-              <span className="text-lg">🤝</span>
-              <span>OK!</span>
-            </>
-          )}
-        </motion.button>
-      </div>
-
-      {/* ステータス表示 */}
-      <div className="flex justify-center items-center gap-2 mt-1.5">
-        <div className={`flex items-center gap-1 text-[10px] ${myConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
-          <span>{myConfirmed ? '✓' : '○'}</span>
-          <span>わたし</span>
-        </div>
-        <div className={`flex items-center gap-1 text-[10px] ${partnerConfirmed ? 'text-green-600' : 'text-gray-400'}`}>
-          <span>{partnerConfirmed ? '✓' : '○'}</span>
-          <span>相手</span>
-        </div>
-      </div>
 
       {/* 高レアシール警告 */}
       {hasHighRarityOffer && !myConfirmed && (
         <motion.div
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-1.5 bg-yellow-100 border border-yellow-400 rounded-lg px-2 py-1 text-[10px] text-yellow-800 text-center"
+          className="mt-1 bg-yellow-100/90 border border-yellow-400 rounded-lg px-2 py-0.5 text-[9px] text-yellow-800 text-center flex items-center justify-center gap-1"
         >
-          ⚠️ <strong>★4以上のレアシール</strong>をあげようとしています。本当に交換しますか？
+          <WarningIcon size={12} color="#CA8A04" />
+          <span><strong>★4以上のレアシール</strong>をあげようとしています</span>
         </motion.div>
       )}
     </div>
@@ -634,7 +819,7 @@ const TradeBookPageComponent = React.forwardRef<
                 style={{ backgroundImage: page.theme.pattern }}
               />
             )}
-            <div className="text-4xl mb-2 drop-shadow-lg">📘</div>
+            <div className="mb-2 drop-shadow-lg"><BookOpenPurpleIcon size={40} /></div>
             <p className="text-white font-bold text-sm drop-shadow-lg">シール帳</p>
           </div>
         )
@@ -652,7 +837,7 @@ const TradeBookPageComponent = React.forwardRef<
         ) : (
           // カバーデザインがない場合のデフォルト裏表紙
           <div className={`w-full h-full flex flex-col items-center justify-center ${getCoverBackground(page.theme)} opacity-90`}>
-            <div className="text-3xl mb-2">📕</div>
+            <div className="mb-2"><BookOpenPinkIcon size={32} /></div>
             <p className="text-white/80 text-xs">おわり</p>
           </div>
         )
@@ -678,8 +863,8 @@ const TradeBookPageComponent = React.forwardRef<
           <div className="absolute inset-0">
             {stickers.map((sticker) => {
               const isSelected = selectedStickers.includes(sticker.id)
-              // シールサイズを大きくして見やすく
-              const size = Math.min(52, 48 * sticker.scale)
+              // ホームと同じ60pxベースサイズを使用
+              const size = 60 * sticker.scale
               const rarity = sticker.sticker.rarity
 
               return (
@@ -717,8 +902,8 @@ const TradeBookPageComponent = React.forwardRef<
                         draggable={false}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xl">
-                        ⭐
+                      <div className="w-full h-full flex items-center justify-center">
+                        <StarIcon size={20} color="#FBBF24" />
                       </div>
                     )}
                     {/* レア度表示 */}
@@ -816,7 +1001,7 @@ const CleanPageComponent = React.forwardRef<
                 style={{ backgroundImage: page.theme.pattern }}
               />
             )}
-            <div className="text-4xl mb-2 drop-shadow-lg">📘</div>
+            <div className="mb-2 drop-shadow-lg"><BookOpenPurpleIcon size={40} /></div>
             <p className="text-white font-bold text-sm drop-shadow-lg">シール帳</p>
           </div>
         )
@@ -840,7 +1025,7 @@ const CleanPageComponent = React.forwardRef<
             className={`flex flex-col items-center justify-center ${getCoverBackground(page.theme)} opacity-90`}
             style={{ width: pageWidth, height: pageHeight }}
           >
-            <div className="text-3xl mb-2">📕</div>
+            <div className="mb-2"><BookOpenPinkIcon size={32} /></div>
             <p className="text-white/80 text-xs">おわり</p>
           </div>
         )
@@ -894,8 +1079,8 @@ const CleanPageComponent = React.forwardRef<
                       draggable={false}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-2xl">
-                      ⭐
+                    <div className="w-full h-full flex items-center justify-center">
+                      <StarIcon size={24} color="#FBBF24" />
                     </div>
                   )}
                 </div>
@@ -981,7 +1166,7 @@ const SelectablePageComponent = React.forwardRef<
                 style={{ backgroundImage: page.theme.pattern }}
               />
             )}
-            <div className="text-4xl mb-2 drop-shadow-lg">📘</div>
+            <div className="mb-2 drop-shadow-lg"><BookOpenPurpleIcon size={40} /></div>
             <p className="text-white font-bold text-sm drop-shadow-lg">シール帳</p>
           </div>
         )
@@ -1004,7 +1189,7 @@ const SelectablePageComponent = React.forwardRef<
             className={`flex flex-col items-center justify-center ${getCoverBackground(page.theme)} opacity-90`}
             style={{ width: pageWidth, height: pageHeight }}
           >
-            <div className="text-3xl mb-2">📕</div>
+            <div className="mb-2"><BookOpenPinkIcon size={32} /></div>
             <p className="text-white/80 text-xs">おわり</p>
           </div>
         )
@@ -1069,14 +1254,14 @@ const SelectablePageComponent = React.forwardRef<
                     />
                   ) : (
                     <div
-                      className="w-full h-full flex items-center justify-center text-2xl"
+                      className="w-full h-full flex items-center justify-center"
                       style={{
                         filter: isSelected
                           ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
                           : 'none',
                       }}
                     >
-                      ⭐
+                      <StarIcon size={24} color="#FBBF24" />
                     </div>
                   )}
                   {/* 選択時のチェックマーク */}
@@ -1118,8 +1303,11 @@ const EnlargedBookModal: React.FC<{
   const bookRef = useRef<any>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentPage, setCurrentPage] = useState(0)
-  const [isDraggingSwipe, setIsDraggingSwipe] = useState(false)
-  const [swipeStartX, setSwipeStartX] = useState(0)
+
+  // 端検出スワイプ用のstate/ref
+  const startX = useRef(0)
+  const wasAtLeftEdge = useRef(false)
+  const wasAtRightEdge = useRef(false)
 
   // カバーデザインを取得
   const coverDesign = coverDesignId ? getCoverDesignById(coverDesignId) : undefined
@@ -1137,6 +1325,8 @@ const EnlargedBookModal: React.FC<{
   const isOnBackCover = currentPage === pages.length - 1
   const isSinglePageView = isOnCover || isOnBackCover
 
+  const SWIPE_THRESHOLD = pageWidth * 0.25
+
   // ページめくりボタン
   const goToPrev = useCallback(() => {
     bookRef.current?.pageFlip()?.flipPrev()
@@ -1146,32 +1336,66 @@ const EnlargedBookModal: React.FC<{
     bookRef.current?.pageFlip()?.flipNext()
   }, [])
 
-  // スワイプゾーン用のハンドラー
-  const handleSwipeStart = useCallback((clientX: number) => {
-    setIsDraggingSwipe(true)
-    setSwipeStartX(clientX)
+  // 端検出ヘルパー
+  const isAtLeftEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft <= 1
   }, [])
 
-  const handleSwipeEnd = useCallback((clientX: number) => {
-    if (!isDraggingSwipe) return
-    setIsDraggingSwipe(false)
+  const isAtRightEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft + container.clientWidth >= container.scrollWidth - 1
+  }, [])
 
-    const diffX = clientX - swipeStartX
-    const threshold = 50
+  // スワイプ開始
+  const handleDragStart = useCallback((clientX: number) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    startX.current = clientX
+    wasAtLeftEdge.current = isAtLeftEdge(container)
+    wasAtRightEdge.current = isAtRightEdge(container)
+  }, [isAtLeftEdge, isAtRightEdge])
 
-    if (diffX < -threshold) {
-      goToNext()
-    } else if (diffX > threshold) {
+  // スワイプ終了
+  const handleDragEnd = useCallback((clientX: number) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const swipeDistance = startX.current - clientX
+    const currentAtLeftEdge = isAtLeftEdge(container)
+    const currentAtRightEdge = isAtRightEdge(container)
+
+    // 左端にいて、右へスワイプ → 前のページ
+    if (wasAtLeftEdge.current && currentAtLeftEdge && swipeDistance < -SWIPE_THRESHOLD) {
       goToPrev()
+      return
     }
-  }, [isDraggingSwipe, swipeStartX, goToPrev, goToNext])
+
+    // 右端にいて、左へスワイプ → 次のページ
+    if (wasAtRightEdge.current && currentAtRightEdge && swipeDistance > SWIPE_THRESHOLD) {
+      goToNext()
+      return
+    }
+  }, [isAtLeftEdge, isAtRightEdge, goToPrev, goToNext, SWIPE_THRESHOLD])
+
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-black/70 flex flex-col items-center justify-center p-4"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 100,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
       onClick={onClose}
     >
       <motion.div
@@ -1179,8 +1403,13 @@ const EnlargedBookModal: React.FC<{
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', duration: 0.4 }}
-        className="flex flex-col items-center w-full"
-        style={{ maxWidth: pageWidth * 2 + 32 }} // 見開き幅 + パディング
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: pageWidth * 2 + 32,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ヘッダー - 固定幅で位置を安定させる（画面に収まるよう調整） */}
@@ -1189,7 +1418,7 @@ const EnlargedBookModal: React.FC<{
           style={{ width: '100%', maxWidth: pageWidth * 2 }} // 見開き幅を最大に、画面に収まるよう調整
         >
           <div className="flex items-center gap-2">
-            <span className="text-lg">👤</span>
+            <UserIcon size={20} color="#FFFFFF" />
             <span className="text-white font-bold text-sm">{userName}のシール帳</span>
           </div>
           <button
@@ -1202,12 +1431,13 @@ const EnlargedBookModal: React.FC<{
 
         {/* 選択数表示 */}
         <div className="flex items-center justify-center gap-2 mb-2">
-          <span className="px-3 py-1 bg-pink-500/90 text-white text-xs font-bold rounded-full shadow-lg">
-            🎯 ほしい: {selectedStickers.length}/{maxSelections}
+          <span className="px-3 py-1 bg-pink-500/90 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
+            <TargetIcon size={14} color="#FFFFFF" />
+            <span>ほしい: {selectedStickers.length}/{maxSelections}</span>
           </span>
         </div>
 
-        {/* 横スクロールコンテナ - 画面幅を超える場合はスクロールで対応 */}
+        {/* 横スクロールコンテナ - 端でスワイプするとページめくり */}
         <div
           ref={scrollContainerRef}
           className="w-full overflow-x-auto overflow-y-hidden rounded-lg"
@@ -1215,7 +1445,12 @@ const EnlargedBookModal: React.FC<{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'thin',
             touchAction: 'pan-x',
+            overscrollBehaviorX: 'none',
           }}
+          onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
+          onTouchEnd={(e) => handleDragEnd(e.changedTouches[0].clientX)}
+          onMouseDown={(e) => handleDragStart(e.clientX)}
+          onMouseUp={(e) => handleDragEnd(e.clientX)}
         >
           {/* 内部ラッパー - min-w-max で縮小を防ぎ、スクロール可能にする */}
           <div
@@ -1232,8 +1467,7 @@ const EnlargedBookModal: React.FC<{
               style={{
                 // 表紙・裏表紙時は1ページ幅、見開き時は2ページ幅
                 width: isSinglePageView ? pageWidth : pageWidth * 2,
-                // 明示的な高さ（スワイプゾーン分を追加）
-                height: pageHeight + 50,
+                height: pageHeight,
                 transition: 'width 0.3s ease-out',
                 position: 'relative',
                 flexShrink: 0,
@@ -1288,39 +1522,6 @@ const EnlargedBookModal: React.FC<{
                 ))}
               </HTMLFlipBook>
             </div>
-
-            {/* スワイプゾーン - ページめくり専用エリア */}
-            <div
-              className="swipe-zone absolute left-0 right-0 bottom-0 bg-gradient-to-t from-purple-200/50 to-transparent flex items-center justify-center"
-              style={{
-                height: 50,
-                cursor: isDraggingSwipe ? 'grabbing' : 'grab',
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation()
-                handleSwipeStart(e.touches[0].clientX)
-              }}
-              onTouchMove={(e) => e.stopPropagation()}
-              onTouchEnd={(e) => {
-                e.stopPropagation()
-                handleSwipeEnd(e.changedTouches[0].clientX)
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation()
-                handleSwipeStart(e.clientX)
-              }}
-              onMouseUp={(e) => {
-                e.stopPropagation()
-                handleSwipeEnd(e.clientX)
-              }}
-              onMouseLeave={() => setIsDraggingSwipe(false)}
-            >
-              <div className="flex items-center gap-2 text-purple-600/70 text-xs font-medium">
-                <span>◀</span>
-                <span>← スワイプでページめくり →</span>
-                <span>▶</span>
-              </div>
-            </div>
           </div>
           </div>
         </div>
@@ -1347,7 +1548,7 @@ const EnlargedBookModal: React.FC<{
         </div>
 
         {/* 説明テキスト */}
-        <p className="text-white/60 text-xs mt-3">シールをタップで選択 • 横スクロールで全体を見る • 下のエリアでページめくり</p>
+        <p className="text-white/60 text-xs mt-3">シールをタップで選択 • 横スクロール＋端でページめくり</p>
       </motion.div>
     </motion.div>
   )
@@ -1368,8 +1569,11 @@ const MyBookEnlargedModal: React.FC<{
   const bookRef = useRef<any>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentPage, setCurrentPage] = useState(0)
-  const [isDraggingSwipe, setIsDraggingSwipe] = useState(false)
-  const [swipeStartX, setSwipeStartX] = useState(0)
+
+  // 端検出スワイプ用のstate/ref
+  const startX = useRef(0)
+  const wasAtLeftEdge = useRef(false)
+  const wasAtRightEdge = useRef(false)
 
   // カバーデザインを取得
   const coverDesign = coverDesignId ? getCoverDesignById(coverDesignId) : undefined
@@ -1385,6 +1589,8 @@ const MyBookEnlargedModal: React.FC<{
   const isOnBackCover = currentPage === pages.length - 1
   const isSinglePageView = isOnCover || isOnBackCover
 
+  const SWIPE_THRESHOLD = pageWidth * 0.25
+
   const goToPrev = useCallback(() => {
     bookRef.current?.pageFlip()?.flipPrev()
   }, [])
@@ -1393,30 +1599,68 @@ const MyBookEnlargedModal: React.FC<{
     bookRef.current?.pageFlip()?.flipNext()
   }, [])
 
-  // スワイプゾーンでのページめくり処理
-  const handleSwipeStart = useCallback((clientX: number) => {
-    setIsDraggingSwipe(true)
-    setSwipeStartX(clientX)
+  // 端検出ヘルパー
+  const isAtLeftEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft <= 1
   }, [])
 
-  const handleSwipeEnd = useCallback((clientX: number) => {
-    if (!isDraggingSwipe) return
-    const diff = clientX - swipeStartX
-    const threshold = 50
-    if (diff > threshold) {
+  const isAtRightEdge = useCallback((container: HTMLElement) => {
+    return container.scrollLeft + container.clientWidth >= container.scrollWidth - 1
+  }, [])
+
+  // スワイプ開始
+  const handleDragStart = useCallback((clientX: number) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    startX.current = clientX
+    wasAtLeftEdge.current = isAtLeftEdge(container)
+    wasAtRightEdge.current = isAtRightEdge(container)
+  }, [isAtLeftEdge, isAtRightEdge])
+
+  // スワイプ終了
+  const handleDragEnd = useCallback((clientX: number) => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const swipeDistance = startX.current - clientX
+    const currentAtLeftEdge = isAtLeftEdge(container)
+    const currentAtRightEdge = isAtRightEdge(container)
+
+    // 左端にいて、右へスワイプ → 前のページ
+    if (wasAtLeftEdge.current && currentAtLeftEdge && swipeDistance < -SWIPE_THRESHOLD) {
       goToPrev()
-    } else if (diff < -threshold) {
-      goToNext()
+      return
     }
-    setIsDraggingSwipe(false)
-  }, [isDraggingSwipe, swipeStartX, goToPrev, goToNext])
+
+    // 右端にいて、左へスワイプ → 次のページ
+    if (wasAtRightEdge.current && currentAtRightEdge && swipeDistance > SWIPE_THRESHOLD) {
+      goToNext()
+      return
+    }
+  }, [isAtLeftEdge, isAtRightEdge, goToPrev, goToNext, SWIPE_THRESHOLD])
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-black/70 flex flex-col items-center justify-start pt-8 pb-4 px-2"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 100,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: '32px',
+        paddingBottom: '16px',
+        paddingLeft: '8px',
+        paddingRight: '8px',
+      }}
       onClick={onClose}
     >
       <motion.div
@@ -1424,16 +1668,30 @@ const MyBookEnlargedModal: React.FC<{
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', duration: 0.4 }}
-        className="flex flex-col items-center w-full max-w-full"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: '100%',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ヘッダー */}
         <div
-          className="flex items-center justify-between mb-2 px-2 w-full"
-          style={{ maxWidth: 400 }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '8px',
+            paddingLeft: '8px',
+            paddingRight: '8px',
+            width: '100%',
+            maxWidth: 400,
+          }}
         >
           <div className="flex items-center gap-2">
-            <span className="text-lg">😊</span>
+            <SmileIcon size={20} color="#FBBF24" />
             <span className="text-white font-bold text-sm">わたしのシール帳</span>
           </div>
           <button
@@ -1446,17 +1704,19 @@ const MyBookEnlargedModal: React.FC<{
 
         {/* 選択数表示 */}
         <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
-          <span className="px-3 py-1 bg-pink-500/90 text-white text-xs font-bold rounded-full shadow-lg">
-            🎁 あげる: {selectedStickers.length}/{maxSelections}
+          <span className="px-3 py-1 bg-pink-500/90 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
+            <GiftIcon size={14} color="#FFFFFF" />
+            <span>あげる: {selectedStickers.length}/{maxSelections}</span>
           </span>
           {partnerSelectedStickers.length > 0 && (
-            <span className="px-3 py-1 bg-purple-500/90 text-white text-xs font-bold rounded-full shadow-lg animate-pulse">
-              👤 相手がほしいシール: {partnerSelectedStickers.length}個
+            <span className="px-3 py-1 bg-purple-500/90 text-white text-xs font-bold rounded-full shadow-lg animate-pulse flex items-center gap-1">
+              <UserIcon size={14} color="#FFFFFF" />
+              <span>相手がほしいシール: {partnerSelectedStickers.length}個</span>
             </span>
           )}
         </div>
 
-        {/* 横スクロール可能なシール帳エリア */}
+        {/* 横スクロールコンテナ - 端でスワイプするとページめくり */}
         <div
           ref={scrollContainerRef}
           className="w-full overflow-x-auto overflow-y-hidden rounded-lg"
@@ -1464,7 +1724,12 @@ const MyBookEnlargedModal: React.FC<{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'thin',
             touchAction: 'pan-x',
+            overscrollBehaviorX: 'none',
           }}
+          onTouchStart={(e) => handleDragStart(e.touches[0].clientX)}
+          onTouchEnd={(e) => handleDragEnd(e.changedTouches[0].clientX)}
+          onMouseDown={(e) => handleDragStart(e.clientX)}
+          onMouseUp={(e) => handleDragEnd(e.clientX)}
         >
           {/* 内部ラッパー - min-w-max で縮小を防ぎ、スクロール可能にする */}
           <div
@@ -1492,18 +1757,18 @@ const MyBookEnlargedModal: React.FC<{
                 transform: isOnCover ? `translateX(-${pageWidth}px)` : 'translateX(0)',
                 transition: 'transform 0.3s ease-out',
                 width: pageWidth * 2,
-                height: pageHeight - 50, // スワイプゾーン分の高さを確保
+                height: pageHeight,
               }}
             >
               <HTMLFlipBook
                 ref={bookRef}
                 width={pageWidth}
-                height={pageHeight - 50}
+                height={pageHeight}
                 size="fixed"
                 minWidth={pageWidth}
                 maxWidth={pageWidth * 2}
-                minHeight={pageHeight - 50}
-                maxHeight={pageHeight - 50}
+                minHeight={pageHeight}
+                maxHeight={pageHeight}
                 showCover={true}
                 mobileScrollSupport={false}
                 onFlip={handleFlip}
@@ -1528,30 +1793,13 @@ const MyBookEnlargedModal: React.FC<{
                     page={page}
                     coverDesign={coverDesign}
                     pageWidth={pageWidth}
-                    pageHeight={pageHeight - 50}
+                    pageHeight={pageHeight}
                     selectedStickers={selectedStickers}
                     partnerSelectedStickers={partnerSelectedStickers}
                     onStickerSelect={onStickerSelect}
                   />
                 ))}
               </HTMLFlipBook>
-            </div>
-
-            {/* スワイプゾーン - ページめくり専用エリア */}
-            <div
-              className="swipe-zone absolute left-0 right-0 bottom-0 bg-gradient-to-t from-purple-300/50 to-transparent"
-              style={{ height: 50 }}
-              onTouchStart={(e) => handleSwipeStart(e.touches[0].clientX)}
-              onTouchEnd={(e) => handleSwipeEnd(e.changedTouches[0].clientX)}
-              onMouseDown={(e) => handleSwipeStart(e.clientX)}
-              onMouseUp={(e) => handleSwipeEnd(e.clientX)}
-              onMouseLeave={() => setIsDraggingSwipe(false)}
-            >
-              <div className="flex items-center justify-center h-full gap-2">
-                <span className="text-purple-700/60 text-xs">◀</span>
-                <span className="text-purple-700/70 text-xs font-medium">← スワイプでページめくり →</span>
-                <span className="text-purple-700/60 text-xs">▶</span>
-              </div>
             </div>
           </div>
           </div>
@@ -1582,7 +1830,7 @@ const MyBookEnlargedModal: React.FC<{
           💜光っているシール = 相手がほしがっているシール
         </p>
         <p className="text-white/40 text-[10px] mt-1">
-          ↕️ 上側を横スクロールで全体表示 ↔️ 下側スワイプでページめくり
+          横スクロール＋端でページめくり
         </p>
       </motion.div>
     </motion.div>
@@ -1646,7 +1894,7 @@ const MyBookSelectablePage = React.forwardRef<
             className={`flex flex-col items-center justify-center ${getCoverBackground(page.theme)}`}
             style={{ width: pageWidth, height: pageHeight }}
           >
-            <div className="text-4xl mb-2 drop-shadow-lg">📘</div>
+            <div className="mb-2 drop-shadow-lg"><BookOpenPurpleIcon size={40} /></div>
             <p className="text-white font-bold text-sm drop-shadow-lg">シール帳</p>
           </div>
         )
@@ -1668,7 +1916,7 @@ const MyBookSelectablePage = React.forwardRef<
             className={`flex flex-col items-center justify-center ${getCoverBackground(page.theme)} opacity-90`}
             style={{ width: pageWidth, height: pageHeight }}
           >
-            <div className="text-3xl mb-2">📕</div>
+            <div className="mb-2"><BookOpenPinkIcon size={32} /></div>
             <p className="text-white/80 text-xs">おわり</p>
           </div>
         )
@@ -1733,7 +1981,7 @@ const MyBookSelectablePage = React.forwardRef<
                     />
                   ) : (
                     <div
-                      className="w-full h-full flex items-center justify-center text-2xl"
+                      className="w-full h-full flex items-center justify-center"
                       style={{
                         filter: isWantedByPartner
                           ? 'drop-shadow(0 0 6px #a855f7) drop-shadow(0 0 12px #9333ea)'
@@ -1742,13 +1990,13 @@ const MyBookSelectablePage = React.forwardRef<
                             : 'none',
                       }}
                     >
-                      ⭐
+                      <StarIcon size={28} color="#FBBF24" />
                     </div>
                   )}
                   {/* 相手が欲しがっているマーク */}
                   {isWantedByPartner && (
                     <div className="absolute -top-2 -left-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                      <span className="text-white text-xs">👤</span>
+                      <UserIcon size={14} color="#FFFFFF" />
                     </div>
                   )}
                   {/* 自分が選択中のマーク */}
@@ -1823,7 +2071,7 @@ const TradeBookViewer: React.FC<{
       {/* ヘッダー（コンパクト） */}
       <div className="flex items-center justify-between mb-1.5 px-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-base">{isPartner ? '👤' : '😊'}</span>
+          {isPartner ? <UserIcon size={18} color="#A855F7" /> : <SmileIcon size={18} color="#FBBF24" />}
           <span className="text-xs font-bold text-purple-700">{userName}</span>
           {/* 拡大ボタン（相手のシール帳のみ表示） */}
           {isPartner && onEnlarge && (
@@ -1832,7 +2080,7 @@ const TradeBookViewer: React.FC<{
               className="w-6 h-6 rounded-full bg-purple-500 text-white text-xs flex items-center justify-center shadow-sm active:scale-95 transition-transform ml-1"
               title="拡大表示"
             >
-              🔍
+              <SearchIcon size={14} color="#FFFFFF" />
             </button>
           )}
         </div>
@@ -1860,11 +2108,11 @@ const TradeBookViewer: React.FC<{
       {/* シール帳 - 中央配置 */}
       <div
         ref={containerRef}
-        className="flex justify-center items-center"
+        className="flex justify-center items-center overflow-x-auto"
         style={{ touchAction: 'pan-x pan-y' }}
       >
         <div
-          className="trade-book-container relative rounded-lg shadow-lg overflow-hidden border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
+          className="trade-book-container relative rounded-lg shadow-lg border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 flex-shrink-0"
           style={{
             width: pageWidth * 2,
             height: pageHeight,
@@ -1922,8 +2170,9 @@ const TradeBookViewer: React.FC<{
 
       {/* 選択数（大きめ） */}
       <div className="mt-1.5 text-center">
-        <span className={`text-xs font-bold ${isPartner ? 'text-purple-600' : 'text-pink-600'}`}>
-          {isPartner ? '🎯 ほしい' : '🎁 あげる'}: {selectedStickers.length}/{maxSelections}
+        <span className={`text-xs font-bold flex items-center justify-center gap-1 ${isPartner ? 'text-purple-600' : 'text-pink-600'}`}>
+          {isPartner ? <TargetIcon size={14} color="#9333EA" /> : <GiftIcon size={14} color="#DB2777" />}
+          <span>{isPartner ? 'ほしい' : 'あげる'}: {selectedStickers.length}/{maxSelections}</span>
         </span>
       </div>
     </div>
@@ -1998,7 +2247,7 @@ const PostTradeProfileScreen: React.FC<{
               repeat: Infinity,
             }}
           >
-            {['✨', '⭐', '💫', '🌟'][i % 4]}
+            {[<SparkleIcon key="sp" size={20} color="#FBBF24" />, <StarIcon key="st" size={20} color="#FBBF24" />, <SparkleIcon key="sp2" size={18} color="#F9A8D4" />, <StarIcon key="st2" size={18} color="#F9A8D4" />][i % 4]}
           </motion.div>
         ))}
       </div>
@@ -2014,9 +2263,9 @@ const PostTradeProfileScreen: React.FC<{
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.5, repeat: 3 }}
-            style={{ fontSize: '48px', marginBottom: '8px' }}
+            style={{ marginBottom: '8px', display: 'flex', justifyContent: 'center' }}
           >
-            🎉
+            <CelebrationIcon size={48} />
           </motion.div>
           <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', margin: 0 }}>こうかんせいりつ！</h2>
         </div>
@@ -2051,7 +2300,7 @@ const PostTradeProfileScreen: React.FC<{
                 {s.sticker.imageUrl ? (
                   <img src={s.sticker.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : (
-                  <span style={{ fontSize: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>⭐</span>
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><StarIcon size={24} color="#FBBF24" /></span>
                 )}
               </motion.div>
             ))}
@@ -2076,14 +2325,13 @@ const PostTradeProfileScreen: React.FC<{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '20px',
               border: '2px solid #d8b4fe',
               overflow: 'hidden',
             }}>
               {partner.avatarUrl ? (
                 <img src={partner.avatarUrl} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
               ) : (
-                '👤'
+                <UserIcon size={28} color="#A855F7" />
               )}
             </div>
             <div>
@@ -2126,7 +2374,7 @@ const PostTradeProfileScreen: React.FC<{
                 ),
               }}
             >
-              {isFollowing ? 'フォロー中' : '🤝 フォローする'}
+              {isFollowing ? 'フォロー中' : <><HandshakeIcon size={16} color="white" /> フォローする</>}
             </button>
             <button
               onClick={onClose}
@@ -2171,6 +2419,18 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   onTradeComplete,
   onCancel,
   onFollowPartner,
+  // Supabase連携用
+  supabaseMessages,
+  onSendStamp,
+  onSendText,
+  partnerReady,
+  onSetReady,
+  // シール選択の同期用
+  supabaseMyItems,
+  supabasePartnerItems,
+  onSelectMySticker,
+  onDeselectMySticker,
+  tradeCompleted,
 }) => {
   // 選択状態
   const [myWantIds, setMyWantIds] = useState<string[]>([]) // 相手からほしい
@@ -2180,13 +2440,47 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   // 交渉状態
   const [messages, setMessages] = useState<TradeMessage[]>([])
   const [myConfirmed, setMyConfirmed] = useState(false)
-  const [partnerConfirmed, setPartnerConfirmed] = useState(false)
+  // partnerConfirmedはpropsから受け取る（Supabase連携時）またはローカルstate
+  const [localPartnerConfirmed, setLocalPartnerConfirmed] = useState(false)
+  const partnerConfirmed = partnerReady ?? localPartnerConfirmed
   const [showComplete, setShowComplete] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [isFollowing, setIsFollowing] = useState(false)
   const [showEnlargedBook, setShowEnlargedBook] = useState(false)  // 相手のシール帳拡大表示
   const [showMyEnlargedBook, setShowMyEnlargedBook] = useState(false)  // 自分のシール帳拡大表示
   const [cooldownRemaining, setCooldownRemaining] = useState(0)  // メッセージクールダウン（秒）
+
+  // Supabase交換完了時の受け取りシールを保持するref
+  const completedWantsRef = useRef<string[]>([])
+  const completedOffersRef = useRef<string[]>([])
+  const completedWantStickersRef = useRef<PlacedSticker[]>([]) // 実際のシールオブジェクト
+  const hasHandledCompletionRef = useRef(false)
+
+  // Supabase経由で交換が完了した時の処理
+  useEffect(() => {
+    if (tradeCompleted && !hasHandledCompletionRef.current && !showComplete) {
+      console.log('[TradeSession] Trade completed via Supabase, showing complete screen')
+      console.log('[TradeSession] Preserving myWantIds:', myWantIds)
+      console.log('[TradeSession] Preserving myOfferIds:', myOfferIds)
+      // 現在の選択状態を保存（sync effectでクリアされる前に）
+      completedWantsRef.current = [...myWantIds]
+      completedOffersRef.current = [...myOfferIds]
+      // 実際のシールオブジェクトも保存（ページが更新されても表示できるように）
+      const wantStickers = myWantIds
+        .map((id) => {
+          for (const page of partnerPages) {
+            const found = page.stickers.find((s) => s.id === id)
+            if (found) return found
+          }
+          return null
+        })
+        .filter((s): s is PlacedSticker => s !== null)
+      completedWantStickersRef.current = wantStickers
+      console.log('[TradeSession] Preserved stickers:', wantStickers.length)
+      hasHandledCompletionRef.current = true
+      setShowComplete(true)
+    }
+  }, [tradeCompleted, showComplete, myWantIds, myOfferIds, partnerPages])
 
   const MAX_SELECTIONS = 5
   const COOLDOWN_SECONDS = 5
@@ -2210,33 +2504,63 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     [myOfferIds, myPages, getStickerFromPages]
   )
 
-  // 選択ハンドラ
-  const handleSelectPartnerSticker = useCallback((stickerId: string) => {
-    setMyWantIds((prev) => {
-      if (prev.includes(stickerId)) {
-        return prev.filter((id) => id !== stickerId)
-      }
-      if (prev.length < MAX_SELECTIONS) {
-        return [...prev, stickerId]
-      }
-      return prev
-    })
-    setMyConfirmed(false)
-    setPartnerConfirmed(false)
-  }, [])
+  // 選択ハンドラ - 相手のシール帳から欲しいものを選択
+  // Supabaseに同期してリアルタイムで相手側にも表示される
+  const handleSelectPartnerSticker = useCallback(async (stickerId: string) => {
+    // stickerId は placement.id (sticker_placements.id)
+    // Supabase連携には userStickerId (user_stickers.id) が必要
+    const placedSticker = getStickerFromPages(partnerPages, stickerId)
+    const userStickerId = placedSticker?.userStickerId
 
-  const handleSelectMySticker = useCallback((stickerId: string) => {
-    setMyOfferIds((prev) => {
-      if (prev.includes(stickerId)) {
-        return prev.filter((id) => id !== stickerId)
+    if (!userStickerId) {
+      console.error('[TradeSession] userStickerId not found for sticker:', stickerId)
+      // UI上の選択は許可（デモモード対応）
+    }
+
+    const isCurrentlySelected = myWantIds.includes(stickerId)
+
+    if (isCurrentlySelected) {
+      // 選択解除
+      setMyWantIds((prev) => prev.filter((id) => id !== stickerId))
+
+      // Supabase連携: アイテムを削除
+      if (onDeselectMySticker && supabaseMyItems && userStickerId) {
+        const item = supabaseMyItems.find(i => i.user_sticker_id === userStickerId)
+        if (item) {
+          try {
+            await onDeselectMySticker(item.id)
+          } catch (e) {
+            console.error('[TradeSession] Failed to deselect partner sticker:', e)
+          }
+        }
       }
-      if (prev.length < MAX_SELECTIONS) {
-        return [...prev, stickerId]
+    } else {
+      // 新規選択
+      if (myWantIds.length < MAX_SELECTIONS) {
+        setMyWantIds((prev) => [...prev, stickerId])
+
+        // Supabase連携: アイテムを追加（userStickerId を使用）
+        if (onSelectMySticker && userStickerId) {
+          try {
+            await onSelectMySticker(userStickerId)
+          } catch (e) {
+            console.error('[TradeSession] Failed to select partner sticker:', e)
+          }
+        }
       }
-      return prev
-    })
+    }
+
     setMyConfirmed(false)
-    setPartnerConfirmed(false)
+    setLocalPartnerConfirmed(false)
+  }, [myWantIds, partnerPages, getStickerFromPages, onSelectMySticker, onDeselectMySticker, supabaseMyItems])
+
+  // 自分のシール帳からの選択は無効化
+  // 相手が自分の帳面から選ぶ（partnerWantFromMeIdsで表示）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSelectMySticker = useCallback((_stickerId: string) => {
+    // 閲覧専用: 自分のシール帳からは選択できない
+    // 相手が選んでくれたシールが partnerWantFromMeIds に表示される
+    console.log('[TradeSession] Own book is view-only. Partner selects from your book.')
   }, [])
 
   // メッセージ送信（クールダウン開始）
@@ -2268,42 +2592,212 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   }, [cooldownRemaining])
 
   const handleSendStamp = useCallback(
-    (type: StampType) => addMessage('stamp', type, myUser.id),
-    [addMessage, myUser.id]
+    async (type: StampType) => {
+      // Supabase連携がある場合はSupabaseに送信
+      if (onSendStamp) {
+        try {
+          await onSendStamp(type)
+          // UIは即座に更新（Supabaseからのリアルタイム通知でも更新される）
+          addMessage('stamp', type, myUser.id)
+        } catch (e) {
+          console.error('[TradeSession] Failed to send stamp:', e)
+        }
+      } else {
+        // デモモード（Supabase連携なし）
+        addMessage('stamp', type, myUser.id)
+      }
+    },
+    [addMessage, myUser.id, onSendStamp]
   )
 
   const handleSendPreset = useCallback(
-    (text: string) => addMessage('preset', text, myUser.id),
-    [addMessage, myUser.id]
+    async (text: string) => {
+      // Supabase連携がある場合はSupabaseに送信
+      if (onSendText) {
+        try {
+          await onSendText(text)
+          addMessage('preset', text, myUser.id)
+        } catch (e) {
+          console.error('[TradeSession] Failed to send preset:', e)
+        }
+      } else {
+        addMessage('preset', text, myUser.id)
+      }
+    },
+    [addMessage, myUser.id, onSendText]
   )
 
   const handleSendText = useCallback(
-    (text: string) => addMessage('text', text, myUser.id),
-    [addMessage, myUser.id]
+    async (text: string) => {
+      // Supabase連携がある場合はSupabaseに送信
+      if (onSendText) {
+        try {
+          await onSendText(text)
+          addMessage('text', text, myUser.id)
+        } catch (e) {
+          console.error('[TradeSession] Failed to send text:', e)
+        }
+      } else {
+        addMessage('text', text, myUser.id)
+      }
+    },
+    [addMessage, myUser.id, onSendText]
   )
 
   // 交換OK
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (myWantIds.length === 0 || myOfferIds.length === 0) return
     setMyConfirmed(true)
 
-    // デモ: 相手も少し遅れてOK
-    setTimeout(() => {
-      setPartnerConfirmed(true)
-    }, 1500 + Math.random() * 1000)
-  }, [myWantIds.length, myOfferIds.length])
+    // Supabase連携がある場合はSupabaseにReady状態を送信
+    if (onSetReady) {
+      try {
+        await onSetReady()
+      } catch (e) {
+        console.error('[TradeSession] Failed to set ready:', e)
+      }
+    } else {
+      // デモモード（Supabase連携なし）: 相手も少し遅れてOK
+      setTimeout(() => {
+        setLocalPartnerConfirmed(true)
+      }, 1500 + Math.random() * 1000)
+    }
+  }, [myWantIds.length, myOfferIds.length, onSetReady])
 
   // 両者OK → 成立
   useEffect(() => {
-    if (myConfirmed && partnerConfirmed) {
+    if (myConfirmed && partnerConfirmed && !hasHandledCompletionRef.current) {
+      console.log('[TradeSession] Both confirmed, preserving stickers before complete')
+      // 完了画面表示前にシールデータを保存（syncでクリアされる前に）
+      completedWantsRef.current = [...myWantIds]
+      completedOffersRef.current = [...myOfferIds]
+      const wantStickers = myWantIds
+        .map((id) => {
+          for (const page of partnerPages) {
+            const found = page.stickers.find((s) => s.id === id)
+            if (found) return found
+          }
+          return null
+        })
+        .filter((s): s is PlacedSticker => s !== null)
+      completedWantStickersRef.current = wantStickers
+      hasHandledCompletionRef.current = true
+      console.log('[TradeSession] Preserved wants:', myWantIds.length, 'stickers:', wantStickers.length)
+
       setTimeout(() => {
         setShowComplete(true)
       }, 500)
     }
-  }, [myConfirmed, partnerConfirmed])
+  }, [myConfirmed, partnerConfirmed, myWantIds, myOfferIds, partnerPages])
 
-  // デモ: 相手のスタンプをランダム送信
+  // Supabaseメッセージを監視して表示
   useEffect(() => {
+    if (!supabaseMessages || supabaseMessages.length === 0) return
+
+    // 新しいメッセージを処理
+    supabaseMessages.forEach((msg) => {
+      // 既に表示済みのメッセージは無視
+      const exists = messages.some((m) => m.id === msg.id)
+      if (exists) return
+
+      // 相手からのメッセージのみ追加（自分のメッセージは送信時に追加済み）
+      if (msg.user_id !== myUser.id) {
+        // メッセージタイプを判定
+        const msgType = msg.message_type || 'stamp'
+        const content = msgType === 'stamp' ? msg.stamp_id : msg.content
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: msg.id,
+            type: msgType as 'stamp' | 'text' | 'preset',
+            content: content || '',
+            senderId: msg.user_id,
+            timestamp: new Date(msg.created_at),
+          },
+        ])
+      }
+    })
+  }, [supabaseMessages, messages, myUser.id])
+
+  // userStickerId から placement.id を検索するヘルパー関数
+  const findPlacementIdByUserStickerId = useCallback((pages: TradeBookPageFull[], userStickerId: string): string | null => {
+    for (const page of pages) {
+      const found = page.stickers.find((s) => s.userStickerId === userStickerId)
+      if (found) return found.id
+    }
+    return null
+  }, [])
+
+  // Supabase自分のアイテムを監視（自分が相手の帳面から選んだシール = myWantIds）
+  useEffect(() => {
+    if (!supabaseMyItems) return
+
+    // 交換完了後・完了画面表示中は同期しない（表示に影響するため）
+    if (tradeCompleted || hasHandledCompletionRef.current || showComplete) {
+      console.log('[TradeSession] Trade completed or showing complete, skipping myWantIds sync')
+      return
+    }
+
+    // SupabaseのアイテムIDリスト（user_stickers.id）を placement.id に変換
+    // 重複を除去（同じuser_sticker_idが複数回登録される場合があるため）
+    const uniqueUserStickerIds = [...new Set(supabaseMyItems.map(item => item.user_sticker_id))]
+    const placementIds = uniqueUserStickerIds
+      .map(userStickerId => findPlacementIdByUserStickerId(partnerPages, userStickerId))
+      .filter((id): id is string => id !== null)
+
+    // ローカル状態と異なる場合のみ更新（無限ループ防止）
+    const localIds = [...myWantIds].sort()
+    const remoteIds = [...placementIds].sort()
+    if (JSON.stringify(localIds) !== JSON.stringify(remoteIds)) {
+      // 重要: 既にアイテムがある状態から空になる場合は、交換完了のタイミングの可能性が高い
+      // tradeCompleted propの更新が遅延しているケースに対応するため、クリアをスキップ
+      if (myWantIds.length > 0 && placementIds.length === 0) {
+        console.log('[TradeSession] Skipping clear of myWantIds - likely trade completing (timing protection)')
+        return
+      }
+      console.log('[TradeSession] Syncing my wants from Supabase:', placementIds)
+      setMyWantIds(placementIds)
+    }
+  }, [supabaseMyItems, partnerPages, findPlacementIdByUserStickerId, tradeCompleted, showComplete]) // myWantIdsを依存配列に含めない（無限ループ防止）
+
+  // Supabaseパートナーアイテムを監視（相手が自分の帳面から選んだシール = partnerWantFromMeIds & myOfferIds）
+  useEffect(() => {
+    if (!supabasePartnerItems) return
+
+    // 交換完了後・完了画面表示中は同期しない（表示に影響するため）
+    if (tradeCompleted || hasHandledCompletionRef.current || showComplete) {
+      console.log('[TradeSession] Trade completed or showing complete, skipping myOfferIds sync')
+      return
+    }
+
+    // パートナーが選択したシールのID（user_stickers.id）を placement.id に変換
+    // 重複を除去（同じuser_sticker_idが複数回登録される場合があるため）
+    const uniqueUserStickerIds = [...new Set(supabasePartnerItems.map(item => item.user_sticker_id))]
+    const placementIds = uniqueUserStickerIds
+      .map(userStickerId => findPlacementIdByUserStickerId(myPages, userStickerId))
+      .filter((id): id is string => id !== null)
+
+    // 重要: 既にアイテムがある状態から空になる場合は、交換完了のタイミングの可能性が高い
+    // tradeCompleted propの更新が遅延しているケースに対応するため、クリアをスキップ
+    if (myOfferIds.length > 0 && placementIds.length === 0) {
+      console.log('[TradeSession] Skipping clear of myOfferIds - likely trade completing (timing protection)')
+      return
+    }
+
+    console.log('[TradeSession] Partner wants from me:', placementIds)
+    console.log('[TradeSession] Partner requests count:', placementIds.length)
+
+    // 相手が自分の帳面から選んだシール = 自分があげるシール
+    setPartnerWantFromMeIds(placementIds)
+    setMyOfferIds(placementIds)
+  }, [supabasePartnerItems, myPages, findPlacementIdByUserStickerId, tradeCompleted, showComplete])
+
+  // デモモード（Supabase連携なし）: 相手のスタンプをランダム送信
+  useEffect(() => {
+    // Supabase連携がある場合はデモを無効化
+    if (onSendStamp) return
+
     const interval = setInterval(() => {
       if (Math.random() > 0.65 && messages.length < 20) {
         const types: StampType[] = ['please', 'thinking', 'cute', 'ok', 'this', 'great']
@@ -2311,10 +2805,14 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
       }
     }, 3500)
     return () => clearInterval(interval)
-  }, [addMessage, partnerUser.id, messages.length])
+  }, [addMessage, partnerUser.id, messages.length, onSendStamp])
 
   // デモ: 相手が自分のシールをランダムに欲しがるシミュレーション
+  // Supabase連携時は無効化（supabasePartnerItemsから実際のデータを取得するため）
   useEffect(() => {
+    // Supabase連携がある場合はデモを無効化
+    if (onSelectMySticker) return
+
     // 初期化時に自分のシールからランダムに2〜3個を相手の欲しいものとして設定
     const allMyStickers: string[] = []
     myPages.forEach((page) => {
@@ -2327,7 +2825,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
       const count = Math.min(2 + Math.floor(Math.random() * 2), shuffled.length) // 2〜3個
       setPartnerWantFromMeIds(shuffled.slice(0, count))
     }
-  }, [myPages])
+  }, [myPages, onSelectMySticker])
 
   // フォロー処理
   const handleFollow = useCallback(() => {
@@ -2337,15 +2835,27 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
   // 完了して閉じる
   const handleClose = useCallback(() => {
-    onTradeComplete(myOfferIds, myWantIds)
+    // Supabase経由の完了時は保存したIDを使用
+    const offerIds = completedOffersRef.current.length > 0
+      ? completedOffersRef.current
+      : myOfferIds
+    const wantIds = completedWantsRef.current.length > 0
+      ? completedWantsRef.current
+      : myWantIds
+    onTradeComplete(offerIds, wantIds)
   }, [onTradeComplete, myOfferIds, myWantIds])
 
   // 成立画面
   if (showComplete) {
+    // Supabase経由の完了時は保存したシールを使用（ページ更新後も正しく表示）
+    const displayStickers = completedWantStickersRef.current.length > 0
+      ? completedWantStickersRef.current
+      : myWants
+    console.log('[TradeSession] Complete screen - displayStickers:', displayStickers.length)
     return (
       <PostTradeProfileScreen
         partner={partnerUser}
-        receivedStickers={myWants}
+        receivedStickers={displayStickers}
         onFollow={handleFollow}
         onClose={handleClose}
         isFollowing={isFollowing}
@@ -2357,13 +2867,32 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-gradient-to-b from-purple-100 via-pink-50 to-purple-100 flex flex-col"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif", zIndex: 9999 }}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(to bottom, #F3E8FF, #FDF2F8, #F3E8FF)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        zIndex: 9999,
+      }}
     >
       {/* ヘッダー */}
       <div
-        className="flex-shrink-0 bg-gradient-to-r from-purple-600 to-pink-500 px-3 flex items-center shadow-md"
-        style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))', paddingBottom: '12px' }}
+        style={{
+          flexShrink: 0,
+          background: 'linear-gradient(to right, #9333EA, #EC4899)',
+          paddingLeft: '12px',
+          paddingRight: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
+          paddingBottom: '12px',
+        }}
       >
         {/* 左側: 交換終了ボタン */}
         <button
@@ -2380,7 +2909,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             {partnerUser.avatarUrl ? (
               <img src={partnerUser.avatarUrl} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-sm">👤</span>
+              <UserIcon size={20} color="white" />
             )}
           </div>
           <div className="flex flex-col">
@@ -2401,9 +2930,20 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
       </div>
 
       {/* メインコンテンツ - flex-1で残り領域を埋め、justify-endで下寄せ */}
-      <div className="flex-1 overflow-y-auto px-2 py-1.5 flex flex-col">
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          paddingLeft: '8px',
+          paddingRight: '8px',
+          paddingTop: '6px',
+          paddingBottom: '6px',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* 上部スペーサー（コンテンツを下寄せするため） */}
-        <div className="flex-shrink-0 min-h-0" />
+        <div style={{ flexShrink: 0, minHeight: 0 }} />
 
         {/* 希望シール枠 + 交換OKボタン */}
         <div className="flex-shrink-0 mb-1.5">
@@ -2447,7 +2987,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             onClick={() => setShowEnlargedBook(true)}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2"
           >
-            <span className="text-lg">📖</span>
+            <BookOpenPurpleIcon size={20} />
             <span>{partnerUser.name}のシール帳</span>
             {myWantIds.length > 0 && (
               <span className="px-1.5 py-0.5 bg-white/30 rounded-full text-xs">
@@ -2460,7 +3000,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             onClick={() => setShowMyEnlargedBook(true)}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2"
           >
-            <span className="text-lg">📕</span>
+            <BookOpenPinkIcon size={20} />
             <span>わたしのシール帳</span>
             {myOfferIds.length > 0 && (
               <span className="px-1.5 py-0.5 bg-white/30 rounded-full text-xs">
@@ -2481,14 +3021,32 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 60,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+            }}
             onClick={() => setShowCancelConfirm(false)}
           >
             <motion.div
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
-              className="bg-white rounded-2xl p-4 max-w-xs w-full"
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '16px',
+                padding: '16px',
+                maxWidth: '320px',
+                width: '100%',
+              }}
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-bold text-purple-700 text-center mb-2">

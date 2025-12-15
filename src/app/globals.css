@@ -110,6 +110,39 @@ html {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* PWA スタンドアローンモード対応 */
+@media all and (display-mode: standalone) {
+  /* PWAモードでは上下のセーフエリアを確保 */
+  html {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* 固定下部要素にセーフエリアを追加 */
+  .fixed-bottom-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  }
+}
+
+/* iOS Safari PWA用 - standalone指定がないブラウザ向けフォールバック */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-inset-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-inset-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
 /* ============================================
    立体的なテキストスタイル
    ============================================ */
@@ -843,4 +876,456 @@ html {
 .trade-book .stf__item {
   z-index: 10 !important;
   transform-style: preserve-3d !important;
+}
+
+/* ============================================
+   モバイルアプリ向け絶対配置ユーティリティ
+   ============================================ */
+
+/* フルスクリーンコンテナ（ビューポート固定） */
+.app-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  overflow: hidden;
+}
+
+/* 中央配置（水平・垂直） */
+.center-absolute {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 水平中央配置 */
+.center-x {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 垂直中央配置 */
+.center-y {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* 下部固定（中央） */
+.bottom-center {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+}
+
+/* 上部固定（中央） */
+.top-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+/* 左側固定（垂直中央） */
+.left-center {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* 右側固定（垂直中央） */
+.right-center {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* アスペクト比を維持するコンテナ */
+.aspect-preserve {
+  position: relative;
+  width: 100%;
+  height: 0;
+}
+
+.aspect-preserve > * {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* 画像ボタン用（アスペクト比維持） */
+.img-btn {
+  position: relative;
+  display: inline-block;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.img-btn img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.img-btn-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* 固定サイズコンテナ（%ベース配置用） */
+.pos-container {
+  position: absolute;
+  inset: 0;
+}
+
+/* SafeArea対応のコンテンツエリア */
+.safe-content {
+  position: absolute;
+  top: env(safe-area-inset-top, 0);
+  left: env(safe-area-inset-left, 0);
+  right: env(safe-area-inset-right, 0);
+  bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* タブバー用の下部余白を持つコンテンツ */
+.content-with-tabbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 90px; /* TabBar height */
+  overflow: hidden;
+}
+
+/* タブバー用の下部余白 + SafeArea */
+.content-with-tabbar-safe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0));
+  overflow: hidden;
+}
+
+/* スクロール可能なコンテンツエリア */
+.scroll-content {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* グリッドレイアウト（絶対配置ベース） */
+.grid-absolute {
+  position: absolute;
+  display: grid;
+}
+
+/* フレックスレイアウト（絶対配置ベース） */
+.flex-absolute {
+  position: absolute;
+  display: flex;
+}
+
+/* ============================================
+   交換画面 メッセージパネル調整（モバイル向け）
+   ============================================ */
+
+/* ============================================
+   CSS Container Query Units (cqw, cqh, cqi, cqb)
+   最新のCSS技術でレスポンシブ崩れを完全防止
+   ============================================ */
+
+/* ゲームルートコンテナ - container-type: size を設定 */
+.game-container {
+  container-type: size;
+  container-name: game-root;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* サブコンテナ - inline-size のみ（高さは内容に依存） */
+.sub-container {
+  container-type: inline-size;
+  container-name: sub-container;
+  width: 100%;
+  position: relative;
+}
+
+/* Container Query ベースのフォントサイズユーティリティ */
+.cq-text-xs {
+  font-size: 2cqmin;
+}
+
+.cq-text-sm {
+  font-size: 3cqmin;
+}
+
+.cq-text-base {
+  font-size: 4cqmin;
+}
+
+.cq-text-lg {
+  font-size: 5cqmin;
+}
+
+.cq-text-xl {
+  font-size: 6cqmin;
+}
+
+.cq-text-2xl {
+  font-size: 8cqmin;
+}
+
+.cq-text-3xl {
+  font-size: 10cqmin;
+}
+
+/* Container Query ベースのスペーシングユーティリティ */
+.cq-p-xs {
+  padding: 1cqmin;
+}
+
+.cq-p-sm {
+  padding: 2cqmin;
+}
+
+.cq-p-md {
+  padding: 3cqmin;
+}
+
+.cq-p-lg {
+  padding: 4cqmin;
+}
+
+.cq-p-xl {
+  padding: 6cqmin;
+}
+
+.cq-m-xs {
+  margin: 1cqmin;
+}
+
+.cq-m-sm {
+  margin: 2cqmin;
+}
+
+.cq-m-md {
+  margin: 3cqmin;
+}
+
+.cq-m-lg {
+  margin: 4cqmin;
+}
+
+.cq-m-xl {
+  margin: 6cqmin;
+}
+
+/* Container Query ベースのギャップユーティリティ */
+.cq-gap-xs {
+  gap: 1cqw;
+}
+
+.cq-gap-sm {
+  gap: 2cqw;
+}
+
+.cq-gap-md {
+  gap: 3cqw;
+}
+
+.cq-gap-lg {
+  gap: 4cqw;
+}
+
+/* Container Query ベースの角丸ユーティリティ */
+.cq-rounded-sm {
+  border-radius: 1cqmin;
+}
+
+.cq-rounded-md {
+  border-radius: 2cqmin;
+}
+
+.cq-rounded-lg {
+  border-radius: 3cqmin;
+}
+
+.cq-rounded-xl {
+  border-radius: 4cqmin;
+}
+
+.cq-rounded-full {
+  border-radius: 50cqmin;
+}
+
+/* Container Query ベースのサイズユーティリティ */
+.cq-w-25 {
+  width: 25cqw;
+}
+
+.cq-w-50 {
+  width: 50cqw;
+}
+
+.cq-w-75 {
+  width: 75cqw;
+}
+
+.cq-w-full {
+  width: 100cqw;
+}
+
+.cq-h-25 {
+  height: 25cqh;
+}
+
+.cq-h-50 {
+  height: 50cqh;
+}
+
+.cq-h-75 {
+  height: 75cqh;
+}
+
+.cq-h-full {
+  height: 100cqh;
+}
+
+/* Container Query ベースの絶対配置ユーティリティ */
+.cq-inset-0 {
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.cq-center {
+  position: absolute;
+  top: 50cqh;
+  left: 50cqw;
+  transform: translate(-50%, -50%);
+}
+
+.cq-top-center {
+  position: absolute;
+  top: 0;
+  left: 50cqw;
+  transform: translateX(-50%);
+}
+
+.cq-bottom-center {
+  position: absolute;
+  bottom: 0;
+  left: 50cqw;
+  transform: translateX(-50%);
+}
+
+/* Container Query を使用したレスポンシブグリッド */
+@container game-root (width < 400px) {
+  .cq-responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2cqw;
+  }
+}
+
+@container game-root (width >= 400px) and (width < 600px) {
+  .cq-responsive-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3cqw;
+  }
+}
+
+@container game-root (width >= 600px) {
+  .cq-responsive-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4cqw;
+  }
+}
+
+/* Container Query フォールバック（非対応ブラウザ用） */
+@supports not (container-type: size) {
+  .game-container {
+    /* フォールバック：通常のレイアウト */
+  }
+
+  .cq-text-base {
+    font-size: 16px;
+  }
+
+  .cq-p-md {
+    padding: 16px;
+  }
+}
+
+@media (max-width:576px){
+
+ /* Overflow auto */
+ .min-h-screen .relative .overflow-y-auto{
+  min-height:0px;
+  position:relative;
+  top:57px;
+  left:48px;
+  padding-bottom:4px;
+  margin-bottom:0px;
+  padding-right:12px;
+  padding-left:12px;
+  padding-top:0px;
+  width:448px;
+  min-width:0px;
+  max-width:426px;
+  max-height:110px;
+  overflow:visible;
+ }
+
+ /* Overflow auto */
+ .min-h-screen .flex-1 .flex-col .overflow-y-auto .mb-1\.5 .relative .flex-col .flex-col .overflow-y-auto{
+  height:0px !important;
+ }
+
+ /* Items center */
+ .relative:nth-child(1) .flex-col:nth-child(2) .absolute > .items-center:nth-child(1){
+  transform:translatex(21px) translatey(-19px);
+  min-height:28px;
+  position:relative;
+  top:0px;
+  z-index:-10;
+  padding-right:6px;
+  height:21px;
+  width:441px;
+  min-width:0px;
+  max-width:461px;
+  max-height:0px;
+ }
+
+ /* Flex col */
+ .relative > .flex-col > .flex-col{
+  transform:translatex(54px) translatey(0px);
+  position:relative;
+  left:-50px;
+ }
+
 }

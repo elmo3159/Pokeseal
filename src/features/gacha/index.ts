@@ -1,6 +1,6 @@
 // 高品質版のガチャビュー（Framer Motion + リッチデザイン）
-export { GachaViewEnhanced as GachaView } from './GachaViewEnhanced'
-export type { GachaType, GachaBanner, UserCurrency } from './GachaViewEnhanced'
+export { GachaViewEnhanced as GachaView, GachaConfirmDialog, ConfirmCurrencyIcon } from './GachaViewEnhanced'
+export type { GachaType, GachaBanner, UserCurrency, GachaRate } from './GachaViewEnhanced'
 // 旧バージョン（必要な場合）
 export { GachaView as GachaViewLegacy } from './GachaView'
 // 高品質版のガチャ結果モーダル（Framer Motion + tsParticles）

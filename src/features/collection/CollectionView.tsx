@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, memo } from 'react'
-import { RankEffectOverlay } from '@/components'
+import { RankEffectOverlay, FloatingTooltip } from '@/components'
 import {
   RankLevel,
   calculateRank,
@@ -13,10 +13,16 @@ import { SearchFilterPanel } from '@/features/search'
 import {
   StickerSearchFilter,
   defaultSearchFilter,
-  filterStickers,
-  getTagsForSticker,
-  allThemeTags
+  filterStickers
 } from '@/domain/stickerTags'
+
+/**
+ * CollectionView - Container Query Units (cqw, cqh) を使用したレスポンシブ設計
+ *
+ * 親要素に container-type: size が設定されている前提で、
+ * すべてのサイズを cqw/cqh/cqmin 単位で指定することで、
+ * どの画面サイズでも崩れないレイアウトを実現
+ */
 
 // シールの型定義
 export interface CollectionSticker {
@@ -26,22 +32,26 @@ export interface CollectionSticker {
   rarity: 1 | 2 | 3 | 4 | 5
   type: 'normal' | 'puffy' | 'sparkle'
   series: string
+  character?: string
   owned: boolean
   quantity: number
-  rank: number // 1-5 (MAX is 5)
-  totalAcquired: number // 累計獲得数（ランク計算用）
-  baseRate?: number // 基本レート
+  rank: number
+  totalAcquired: number
+  baseRate?: number
   firstAcquiredAt?: string
 }
 
-// レアリティの星表示
+// レアリティの星表示 - cqmin単位でレスポンシブ
 const RarityStars: React.FC<{ rarity: number }> = ({ rarity }) => {
   return (
-    <div className="flex gap-0.5">
+    <div style={{ display: 'flex', gap: '0.5cqw' }}>
       {Array.from({ length: 5 }, (_, i) => (
         <span
           key={i}
-          className={`text-xs ${i < rarity ? 'text-yellow-400' : 'text-gray-300'}`}
+          style={{
+            fontSize: '3cqw',
+            color: i < rarity ? '#FACC15' : '#D1D5DB',
+          }}
         >
           ★
         </span>
@@ -50,7 +60,7 @@ const RarityStars: React.FC<{ rarity: number }> = ({ rarity }) => {
   )
 }
 
-// ランク進捗バー
+// ランク進捗バー - cqw単位でレスポンシブ
 const RankProgressBar: React.FC<{ totalAcquired: number }> = ({ totalAcquired }) => {
   const progress = getRankProgress(totalAcquired)
   const currentRank = calculateRank(totalAcquired) as RankLevel
@@ -58,21 +68,37 @@ const RankProgressBar: React.FC<{ totalAcquired: number }> = ({ totalAcquired })
 
   if (currentRank >= 5) {
     return (
-      <div className="text-center">
-        <span className="text-xs text-pink-500 font-bold">{rankNamesKids[5]}</span>
+      <div style={{ textAlign: 'center' }}>
+        <span style={{ fontSize: '3cqw', color: '#EC4899', fontWeight: 'bold' }}>
+          {rankNamesKids[5]}
+        </span>
       </div>
     )
   }
 
   return (
-    <div className="w-full">
-      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+    <div style={{ width: '100%' }}>
+      <div style={{
+        height: '1.5cqw',
+        background: '#E5E7EB',
+        borderRadius: '9999px',
+        overflow: 'hidden'
+      }}>
         <div
-          className="h-full bg-gradient-to-r from-purple-400 to-pink-400 transition-all duration-300"
-          style={{ width: `${progress}%` }}
+          style={{
+            height: '100%',
+            background: 'linear-gradient(to right, #A78BFA, #F472B6)',
+            transition: 'all 0.3s',
+            width: `${progress}%`,
+          }}
         />
       </div>
-      <p className="text-[10px] text-purple-400 text-center mt-0.5">
+      <p style={{
+        fontSize: '2.5cqw',
+        color: '#A78BFA',
+        textAlign: 'center',
+        marginTop: '0.5cqw'
+      }}>
         つぎまであと{nextReq}まい
       </p>
     </div>
@@ -86,10 +112,10 @@ const TypeIcon: React.FC<{ type: 'normal' | 'puffy' | 'sparkle' }> = ({ type }) 
     puffy: '🫧',
     sparkle: '✨'
   }
-  return <span className="text-sm">{icons[type]}</span>
+  return <span style={{ fontSize: '3.5cqw' }}>{icons[type]}</span>
 }
 
-// 個別シールカード
+// 個別シールカード - Container Query対応
 interface StickerCardProps {
   sticker: CollectionSticker
   onClick: (sticker: CollectionSticker) => void
@@ -97,35 +123,52 @@ interface StickerCardProps {
 
 const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
   const { owned, type, name, quantity, rank, imageUrl, totalAcquired } = sticker
-
-  // ランクを計算（totalAcquiredがあればそれを使用、なければrankを使用）
   const actualRank = (totalAcquired ? calculateRank(totalAcquired) : rank) as RankLevel
-
-  // ぷっくりシール用のシャドウ
-  const puffyClass = type === 'puffy' ? 'shadow-lg' : ''
 
   const cardContent = (
     <button
       onClick={() => onClick(sticker)}
-      className={`
-        relative w-full aspect-square rounded-2xl overflow-hidden
-        transition-all duration-200 active:scale-95
-        ${owned ? 'bg-white/70 backdrop-blur-sm' : 'bg-gray-200/50'}
-        ${puffyClass}
-        border ${owned ? 'border-purple-200/50' : 'border-gray-300/50'}
-        shadow-[0_2px_8px_rgba(139,92,246,0.1)]
-      `}
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1/1',
+        borderRadius: '4cqw',
+        overflow: 'hidden',
+        transition: 'all 0.2s',
+        background: owned ? 'rgba(255, 255, 255, 0.7)' : 'rgba(229, 231, 235, 0.5)',
+        border: owned ? '1px solid rgba(196, 181, 253, 0.5)' : '1px solid rgba(209, 213, 219, 0.5)',
+        boxShadow: type === 'puffy'
+          ? '0 2cqw 4cqw rgba(0, 0, 0, 0.1)'
+          : '0 0.5cqw 2cqw rgba(139, 92, 246, 0.1)',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        cursor: 'pointer',
+        padding: 0,
+      }}
     >
       {/* シール画像エリア */}
-      <div className={`
-        w-full h-full flex items-center justify-center
-        ${!owned ? 'opacity-30 grayscale' : ''}
-      `}>
+      <div style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: owned ? 1 : 0.3,
+        filter: owned ? 'none' : 'grayscale(100%)',
+      }}>
         {imageUrl ? (
-          <img src={imageUrl} alt={name} loading="lazy" className="w-full h-full object-contain p-2" />
+          <img
+            src={imageUrl}
+            alt={name}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              padding: '2cqw'
+            }}
+          />
         ) : (
-          <div className="text-4xl">
+          <div style={{ fontSize: '8cqw' }}>
             {type === 'sparkle' ? '✨' : type === 'puffy' ? '🌟' : '⭐'}
           </div>
         )}
@@ -133,28 +176,65 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
 
       {/* 未所持オーバーレイ */}
       {!owned && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-3xl">❓</span>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <span style={{ fontSize: '7cqw' }}>❓</span>
         </div>
       )}
 
       {/* 所持数バッジ */}
       {owned && quantity > 1 && (
-        <div className="absolute bottom-1 left-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold z-10">
+        <div style={{
+          position: 'absolute',
+          bottom: '1cqw',
+          left: '1cqw',
+          background: '#7C3AED',
+          color: 'white',
+          fontSize: '3cqw',
+          paddingLeft: '1.5cqw',
+          paddingRight: '1.5cqw',
+          paddingTop: '0.5cqw',
+          paddingBottom: '0.5cqw',
+          borderRadius: '9999px',
+          fontWeight: 'bold',
+          zIndex: 10,
+        }}>
           ×{quantity}
         </div>
       )}
 
-      {/* キラキラエフェクト（typeがsparkleの場合） */}
+      {/* キラキラエフェクト */}
       {owned && type === 'sparkle' && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-transparent via-white/30 to-transparent animate-shine" />
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          overflow: 'hidden',
+        }}>
+          <div className="animate-shine" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(to bottom right, transparent, rgba(255, 255, 255, 0.3), transparent)',
+          }} />
         </div>
       )}
     </button>
   )
 
-  // 所持している場合はランクエフェクトを適用
   if (owned && actualRank > 0) {
     return (
       <RankEffectOverlay rank={actualRank} size="sm">
@@ -166,18 +246,32 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
   return cardContent
 })
 
-// シール名表示
+// シール名表示 - Container Query対応
 const StickerLabel: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => {
   return (
-    <div className="mt-1 text-center">
-      <p className="text-xs font-medium text-purple-800 truncate px-1">
+    <div style={{ marginTop: '1cqw', textAlign: 'center' }}>
+      <p style={{
+        fontSize: '3cqw',
+        fontWeight: 500,
+        color: '#6B21A8',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        paddingLeft: '1cqw',
+        paddingRight: '1cqw',
+      }}>
         {sticker.owned ? sticker.name : '???'}
       </p>
-      <div className="flex items-center justify-center gap-1 mb-1">
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '1cqw',
+        marginBottom: '1cqw'
+      }}>
         <RarityStars rarity={sticker.rarity} />
         <TypeIcon type={sticker.type} />
       </div>
-      {/* ランク進捗（所持している場合のみ） */}
       {sticker.owned && sticker.totalAcquired > 0 && (
         <RankProgressBar totalAcquired={sticker.totalAcquired} />
       )}
@@ -185,39 +279,7 @@ const StickerLabel: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => 
   )
 }
 
-// シールのタグ表示
-const StickerTags: React.FC<{ stickerName: string }> = ({ stickerName }) => {
-  const tags = getTagsForSticker(stickerName)
-
-  if (tags.length === 0) return null
-
-  // 最大2つのタグを表示
-  const displayTags = tags.slice(0, 2)
-  const tagInfos = displayTags.map(tag => allThemeTags.find(t => t.id === tag)).filter(Boolean)
-
-  return (
-    <div className="flex flex-wrap justify-center gap-0.5 mt-1">
-      {tagInfos.map((tagInfo) => tagInfo && (
-        <span
-          key={tagInfo.id}
-          className="text-[9px] px-1 py-0.5 rounded-full font-medium"
-          style={{
-            backgroundColor: tagInfo.color,
-            color: tagInfo.textColor,
-          }}
-        >
-          {tagInfo.emoji}
-        </span>
-      ))}
-      {tags.length > 2 && (
-        <span className="text-[9px] text-purple-400">+{tags.length - 2}</span>
-      )}
-    </div>
-  )
-}
-
-
-// コレクション統計 - iOS風カード
+// コレクション統計 - Container Query対応
 interface CollectionStatsProps {
   total: number
   owned: number
@@ -228,27 +290,51 @@ const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
 
   return (
     <div
-      className="bg-gradient-to-r from-purple-500/90 to-pink-500/90 backdrop-blur-md rounded-2xl p-4 mb-4 text-white shadow-[0_4px_16px_rgba(139,92,246,0.3)] border border-white/20"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      style={{
+        background: 'linear-gradient(to right, rgba(139, 92, 246, 0.9), rgba(236, 72, 153, 0.9))',
+        backdropFilter: 'blur(12px)',
+        borderRadius: '4cqw',
+        padding: '4cqw',
+        marginBottom: '4cqw',
+        color: 'white',
+        boxShadow: '0 1cqw 4cqw rgba(139, 92, 246, 0.3)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
     >
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold text-lg">コレクション</h3>
-        <span className="text-2xl font-bold">{percentage}%</span>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '2cqw'
+      }}>
+        <h3 style={{ fontWeight: 'bold', fontSize: '4.5cqw' }}>コレクション</h3>
+        <span style={{ fontSize: '6cqw', fontWeight: 'bold' }}>{percentage}%</span>
       </div>
-      <div className="h-3 bg-white/30 rounded-full overflow-hidden">
+      <div style={{
+        height: '3cqw',
+        background: 'rgba(255, 255, 255, 0.3)',
+        borderRadius: '9999px',
+        overflow: 'hidden'
+      }}>
         <div
-          className="h-full bg-white rounded-full transition-all duration-500"
-          style={{ width: `${percentage}%` }}
+          style={{
+            height: '100%',
+            background: 'white',
+            borderRadius: '9999px',
+            transition: 'all 0.5s',
+            width: `${percentage}%`,
+          }}
         />
       </div>
-      <p className="text-sm mt-2 text-white/80">
+      <p style={{ fontSize: '3.5cqw', marginTop: '2cqw', color: 'rgba(255, 255, 255, 0.8)' }}>
         {owned} / {total} シール
       </p>
     </div>
   )
 }
 
-// メインのCollectionView
+// メインのCollectionView - Container Query対応
 interface CollectionViewProps {
   stickers: CollectionSticker[]
   onStickerClick?: (sticker: CollectionSticker) => void
@@ -258,15 +344,12 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
   stickers,
   onStickerClick
 }) => {
-  // 新しいフィルターシステムを使用
   const [filter, setFilter] = useState<StickerSearchFilter>(defaultSearchFilter)
 
-  // フィルター適用（新しいfilterStickers関数を使用）
   const filteredStickers = useMemo(() => {
     return filterStickers(stickers, filter)
   }, [stickers, filter])
 
-  // 統計
   const stats = useMemo(() => ({
     total: stickers.length,
     owned: stickers.filter(s => s.owned).length
@@ -278,14 +361,22 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
 
   return (
     <div
-      className="flex flex-col h-full"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      style={{
+        // Container Query 設定 - このコンテナ内で cqw/cqh が有効
+        containerType: 'size',
+        containerName: 'collection-view',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        overflowX: 'hidden',
+      }}
     >
       {/* ヘッダー統計 */}
       <CollectionStats total={stats.total} owned={stats.owned} />
 
-      {/* 新しい検索フィルターパネル */}
-      <div className="mb-4">
+      {/* 検索フィルターパネル */}
+      <div style={{ marginBottom: '4cqw' }}>
         <SearchFilterPanel
           filter={filter}
           onFilterChange={setFilter}
@@ -293,26 +384,58 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
         />
       </div>
 
-      {/* シールグリッド */}
-      <div className="flex-1 overflow-y-auto pb-4">
-        <div className="grid grid-cols-3 gap-3">
+      {/* シールグリッド - Container Query ベースのレスポンシブ */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        paddingBottom: '4cqw',
+        overflowX: 'hidden'
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '3cqw',
+        }}>
           {filteredStickers.map((sticker) => (
             <div key={sticker.id}>
-              <StickerCard sticker={sticker} onClick={handleStickerClick} />
+              <FloatingTooltip
+                content={
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>{sticker.name}</div>
+                    <div>レア度: {'★'.repeat(sticker.rarity)}</div>
+                    {sticker.owned && (
+                      <div>所持数: {sticker.quantity}枚</div>
+                    )}
+                  </div>
+                }
+                placement="top"
+                disabled={!sticker.owned}
+              >
+                <StickerCard sticker={sticker} onClick={handleStickerClick} />
+              </FloatingTooltip>
               <StickerLabel sticker={sticker} />
-              {/* タグ表示（所持シールのみ） */}
-              {sticker.owned && (
-                <StickerTags stickerName={sticker.name} />
-              )}
             </div>
           ))}
         </div>
 
-        {/* 結果なし - iOS風 */}
+        {/* 結果なし */}
         {filteredStickers.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-purple-400 bg-white/50 backdrop-blur-sm rounded-2xl mx-4">
-            <span className="text-4xl mb-2">🔍</span>
-            <p className="text-sm">みつかりませんでした</p>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingTop: '12cqw',
+            paddingBottom: '12cqw',
+            color: '#A78BFA',
+            background: 'rgba(255, 255, 255, 0.5)',
+            backdropFilter: 'blur(4px)',
+            borderRadius: '4cqw',
+            marginLeft: '4cqw',
+            marginRight: '4cqw',
+          }}>
+            <span style={{ fontSize: '8cqw', marginBottom: '2cqw' }}>🔍</span>
+            <p style={{ fontSize: '3.5cqw' }}>みつかりませんでした</p>
           </div>
         )}
       </div>

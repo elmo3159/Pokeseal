@@ -1,5 +1,5 @@
 // シールマスターデータ
-// 10キャラクター × 15バリエーション = 150枚
+// 11キャラクター × 15バリエーション = 165枚
 
 export interface StickerMaster {
   id: string
@@ -15,11 +15,11 @@ export interface StickerMaster {
 }
 
 // キャラクター設定
-// もっちも, ウールン, スタラ: レート最高（レアリティ5）
-// ドロル, チャックン: レアリティ4
-// コケボ, サニたん: レアリティ3
-// キノぼう, ポリ: レアリティ2
-// ポフン: レアリティ1
+// ★★★★★ (5) もっちも, ウールン, トイラン: 最高レート（レジェンド）
+// ★★★★ (4) スタラ, チャックン: スーパーレア
+// ★★★ (3) ドロル, サニたん: レア
+// ★★ (2) コケボ, キノぼう: アンコモン
+// ★ (1) ポフン, ポリ: コモン
 
 interface CharacterConfig {
   name: string
@@ -33,7 +33,8 @@ interface CharacterConfig {
 }
 
 const characterConfigs: CharacterConfig[] = [
-  // レアリティ5（最高レート）- もっちも, ウールン, スタラ
+  // ★★★★★ レアリティ5（レジェンド）- もっちも, ウールン, トイラン
+  // 排出率: 約1.4% (各キャラ約0.47%)
   {
     name: 'もっちも',
     folder: 'もっちも',
@@ -55,25 +56,26 @@ const characterConfigs: CharacterConfig[] = [
     filePrefix: 'ウールン',
   },
   {
-    name: 'スタラ',
-    folder: 'スタラ',
+    name: 'トイラン',
+    folder: 'トイラン',
     rarity: 5,
     type: 'sparkle',
     series: 'レジェンドコレクション',
     baseRate: 500,
     gachaWeight: 1,
-    filePrefix: 'スタラ',
+    filePrefix: 'トイラン',
   },
-  // レアリティ4 - ドロル, チャックン
+  // ★★★★ レアリティ4（スーパーレア）- スタラ, チャックン
+  // 排出率: 約4.7% (各キャラ約2.35%)
   {
-    name: 'ドロル',
-    folder: 'ドロル',
+    name: 'スタラ',
+    folder: 'スタラ',
     rarity: 4,
     type: 'puffy',
     series: 'スーパーレアコレクション',
     baseRate: 200,
     gachaWeight: 5,
-    filePrefix: 'ドロル',
+    filePrefix: 'スタラ',
   },
   {
     name: 'チャックン',
@@ -85,16 +87,17 @@ const characterConfigs: CharacterConfig[] = [
     gachaWeight: 5,
     filePrefix: 'チャックン',
   },
-  // レアリティ3 - コケボ, サニたん
+  // ★★★ レアリティ3（レア）- ドロル, サニたん
+  // 排出率: 約14.1% (各キャラ約7.05%)
   {
-    name: 'コケボ',
-    folder: 'コケボ',
+    name: 'ドロル',
+    folder: 'ドロル',
     rarity: 3,
     type: 'normal',
     series: 'レアコレクション',
     baseRate: 100,
     gachaWeight: 15,
-    filePrefix: 'コケボ',
+    filePrefix: 'ドロル',
   },
   {
     name: 'サニたん',
@@ -106,7 +109,18 @@ const characterConfigs: CharacterConfig[] = [
     gachaWeight: 15,
     filePrefix: 'サニたん',
   },
-  // レアリティ2 - キノぼう, ポリ
+  // ★★ レアリティ2（アンコモン）- コケボ, キノぼう
+  // 排出率: 約28.2% (各キャラ約14.1%)
+  {
+    name: 'コケボ',
+    folder: 'コケボ',
+    rarity: 2,
+    type: 'normal',
+    series: 'アンコモンコレクション',
+    baseRate: 50,
+    gachaWeight: 30,
+    filePrefix: 'コケボ',
+  },
   {
     name: 'キノぼう',
     folder: 'キノぼう',
@@ -117,17 +131,8 @@ const characterConfigs: CharacterConfig[] = [
     gachaWeight: 30,
     filePrefix: 'キノぼう',
   },
-  {
-    name: 'ポリ',
-    folder: 'ポリ',
-    rarity: 2,
-    type: 'normal',
-    series: 'アンコモンコレクション',
-    baseRate: 50,
-    gachaWeight: 30,
-    filePrefix: 'ポリ',
-  },
-  // レアリティ1 - ポフン
+  // ★ レアリティ1（コモン）- ポフン, ポリ
+  // 排出率: 約51.6% (各キャラ約25.8%)
   {
     name: 'ポフン',
     folder: 'ポフン',
@@ -135,8 +140,18 @@ const characterConfigs: CharacterConfig[] = [
     type: 'normal',
     series: 'コモンコレクション',
     baseRate: 20,
-    gachaWeight: 50,
+    gachaWeight: 55,
     filePrefix: 'sticker', // ポフンはファイル名が「sticker_X.png」
+  },
+  {
+    name: 'ポリ',
+    folder: 'ポリ',
+    rarity: 1,
+    type: 'normal',
+    series: 'コモンコレクション',
+    baseRate: 20,
+    gachaWeight: 55,
+    filePrefix: 'ポリ',
   },
 ]
 
@@ -171,7 +186,7 @@ function generateAllStickers(): StickerMaster[] {
   return stickers
 }
 
-// 全シールマスターデータ（150枚）
+// 全シールマスターデータ（165枚）
 export const ALL_STICKERS: StickerMaster[] = generateAllStickers()
 
 // キャラクター別シール取得

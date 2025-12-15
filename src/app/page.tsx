@@ -13,15 +13,40 @@ import {
   CharmData,
   DraggableSticker,
   FloatingEditSticker,
+  FloatingEditDeco,
   PageEditModal,
-  CHARM_LIST
+  CHARM_LIST,
+  PeelEffect,
+  PlaceEffect,
+  trackPeel,
+  getStickinessMessage,
+  DecoDrawer,
+  LayerControlPanel,
+  LayerItem,
 } from '@/features/sticker-book'
+import {
+  DecoItemData,
+  PlacedDecoItem,
+  DEFAULT_DECO_ITEMS,
+  getOwnedDecoItems,
+} from '@/domain/decoItems'
 import { CoverDesign } from '@/domain/theme'
 import { CollectionView, CollectionSticker, StickerDetailModal } from '@/features/collection'
-import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker } from '@/features/gacha'
+import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker, GachaConfirmDialog, GachaRate } from '@/features/gacha'
 import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage, TradeSessionFull, TradeUser, TradeBookPageFull } from '@/features/trade'
 import { TimelineView, Post, ReactionType, CreatePostModal, CommentModal, StickerBookPage, Comment } from '@/features/timeline'
-import { ProfileView, UserProfile, UserStats, Achievement } from '@/features/profile'
+import { ProfileView, ProfileEditModal, LevelUpModal, StatsModal, AchievementsModal, FollowListModal, OtherUserProfileModal, UserProfile, UserStats, Achievement, FollowUser, OtherUserProfile, StickerBookPreview } from '@/features/profile'
+import {
+  calculateLevel,
+  getCurrentLevelExp,
+  getExpToNextLevel,
+  getLevelTitle,
+  addExp,
+  getLevelUpRewards,
+  ExpAction,
+  ExpGainResult,
+  LevelUpReward,
+} from '@/domain/levelSystem'
 import { TutorialOverlay, defaultTutorialSteps } from '@/features/tutorial'
 import { SettingsView, SettingsData } from '@/features/settings'
 import { AuthView } from '@/features/auth'
@@ -29,47 +54,133 @@ import { ReportModal, BlockModal } from '@/features/safety'
 import { CreateReportInput, CreateBlockInput, ReportTargetType } from '@/domain/safety'
 import { ThemeSelectModal } from '@/features/theme'
 import { defaultCoverDesigns } from '@/domain/theme'
+import {
+  MysteryPostView,
+  PostStickerModal,
+  ReceivedStickerModal,
+} from '@/features/mystery-post'
+import {
+  MysteryPostState,
+  ReceivedSticker,
+  PostedSticker,
+  PresetMessage,
+  canPostToday,
+  generateAnonymousName,
+  getNextDeliveryTime,
+} from '@/domain/mysteryPost'
+import {
+  TradeScoutView,
+  ScoutListEditModal,
+  MatchDetailModal,
+} from '@/features/trade-scout'
+import {
+  TradeScoutState,
+  ScoutSticker,
+  ScoutMatch,
+  initialTradeScoutState,
+} from '@/domain/tradeScout'
+import {
+  ShopView,
+  SubscriptionModal,
+  StarPurchaseModal,
+  AdRewardModal,
+  DailyBonusModal,
+  InsufficientFundsModal,
+} from '@/features/shop'
+import {
+  UserMonetization,
+  StarPack,
+  SubscriptionTier,
+  STAR_PACKS,
+  DEFAULT_USER_MONETIZATION,
+  needsDailyReset,
+  collectDailyTickets,
+  collectDailyStars,
+  watchAdForTicket,
+  purchaseStars,
+  getRemainingAdWatches,
+} from '@/domain/monetization'
+import {
+  SavedUserData,
+  SavedCollectionItem,
+  AdminMode,
+  createInitialUserData,
+  createTestModeData,
+  loadAdminMode,
+  saveAdminMode,
+  addStickersToCollection,
+  canPlaceSticker,
+  resetAllData,
+  TestUser,
+  TEST_USERS,
+  getCurrentTestUser,
+  switchTestUser,
+  saveCurrentUserData,
+  loadCurrentUserData,
+  createInitialUserDataForTestUser,
+} from '@/utils/persistence'
+import {
+  loadCollectionFromSupabase,
+  loadAllStickersFromSupabase,
+  getDataSource,
+} from '@/utils/supabaseSync'
+import { useSupabaseTrade } from '@/hooks'
+import { AdminView } from '@/features/admin'
+import { stickerBookService, type StickerBookPage as SupabaseStickerBookPage } from '@/services/stickerBook'
 
-// キャラクター定義
-const characters = [
-  { id: 'mocchimo', name: 'もっちも', folder: 'もっちも', prefix: 'もっちも_' },
-  { id: 'woolun', name: 'ウールン', folder: 'ウールン', prefix: 'ウールン_' },
-  { id: 'kinobou', name: 'キノぼう', folder: 'キノぼう', prefix: 'キノぼう_' },
-  { id: 'kokebo', name: 'コケボ', folder: 'コケボ', prefix: 'コケボ_' },
-  { id: 'sanitan', name: 'サニたん', folder: 'サニたん', prefix: 'サニたん_' },
-  { id: 'sutara', name: 'スタラ', folder: 'スタラ', prefix: 'スタラ_' },
-  { id: 'chakkun', name: 'チャックン', folder: 'チャックン', prefix: 'チャックン_' },
-  { id: 'dororu', name: 'ドロル', folder: 'ドロル', prefix: 'ドロル_' },
-  { id: 'pofun', name: 'ポフン', folder: 'ポフン', prefix: 'sticker_' },
-  { id: 'pori', name: 'ポリ', folder: 'ポリ', prefix: 'ポリ_' },
+// キャラクター定義（レアリティ・タイプ・ガチャ重み付き）
+// ★★★★★ (5) もっちも, ウールン, トイラン: レジェンド（排出率: 約1.4%）
+// ★★★★ (4) スタラ, チャックン: スーパーレア（排出率: 約4.7%）
+// ★★★ (3) ドロル, サニたん: レア（排出率: 約14.1%）
+// ★★ (2) コケボ, キノぼう: アンコモン（排出率: 約28.2%）
+// ★ (1) ポフン, ポリ: コモン（排出率: 約51.6%）
+interface CharacterData {
+  id: string
+  name: string
+  folder: string
+  prefix: string
+  rarity: 1 | 2 | 3 | 4 | 5
+  type: 'normal' | 'puffy' | 'sparkle'
+  gachaWeight: number
+  baseRate: number
+}
+
+const characters: CharacterData[] = [
+  // ★★★★★ レジェンド（排出率: 約1.4%）
+  { id: 'mocchimo', name: 'もっちも', folder: 'もっちも', prefix: 'もっちも_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
+  { id: 'woolun', name: 'ウールン', folder: 'ウールン', prefix: 'ウールン_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
+  { id: 'toiran', name: 'トイラン', folder: 'トイラン', prefix: 'トイラン_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
+  // ★★★★ スーパーレア（排出率: 約4.7%）
+  { id: 'sutara', name: 'スタラ', folder: 'スタラ', prefix: 'スタラ_', rarity: 4, type: 'puffy', gachaWeight: 5, baseRate: 200 },
+  { id: 'chakkun', name: 'チャックン', folder: 'チャックン', prefix: 'チャックン_', rarity: 4, type: 'puffy', gachaWeight: 5, baseRate: 200 },
+  // ★★★ レア（排出率: 約14.1%）
+  { id: 'dororu', name: 'ドロル', folder: 'ドロル', prefix: 'ドロル_', rarity: 3, type: 'normal', gachaWeight: 15, baseRate: 100 },
+  { id: 'sanitan', name: 'サニたん', folder: 'サニたん', prefix: 'サニたん_', rarity: 3, type: 'normal', gachaWeight: 15, baseRate: 100 },
+  // ★★ アンコモン（排出率: 約28.2%）
+  { id: 'kokebo', name: 'コケボ', folder: 'コケボ', prefix: 'コケボ_', rarity: 2, type: 'normal', gachaWeight: 30, baseRate: 50 },
+  { id: 'kinobou', name: 'キノぼう', folder: 'キノぼう', prefix: 'キノぼう_', rarity: 2, type: 'normal', gachaWeight: 30, baseRate: 50 },
+  // ★ コモン（排出率: 約51.6%）
+  { id: 'pofun', name: 'ポフン', folder: 'ポフン', prefix: 'sticker_', rarity: 1, type: 'normal', gachaWeight: 55, baseRate: 20 },
+  { id: 'pori', name: 'ポリ', folder: 'ポリ', prefix: 'ポリ_', rarity: 1, type: 'normal', gachaWeight: 55, baseRate: 20 },
 ]
 
-// シールのタイプとレアリティをランダムに設定する関数
-const getStickerType = (index: number): 'normal' | 'puffy' | 'sparkle' => {
-  if (index <= 5) return 'normal'
-  if (index <= 10) return 'puffy'
-  return 'sparkle'
-}
-
-const getStickerRarity = (index: number): number => {
-  if (index <= 3) return 1
-  if (index <= 6) return 2
-  if (index <= 9) return 3
-  if (index <= 12) return 4
-  return 5
-}
-
-// 全150枚のシールデータを生成（日本語パスをエンコード）
-const demoStickers: Sticker[] = characters.flatMap((char, charIndex) =>
+// 全165枚のシールデータを生成
+// キャラクターごとにレアリティ・タイプ・ガチャ重みが設定されている
+const demoStickers: Sticker[] = characters.flatMap((char) =>
   Array.from({ length: 15 }, (_, i) => ({
     id: `${char.id}-${i + 1}`,
     name: `${char.name} ${i + 1}`,
-    imageUrl: `/stickers/${encodeURIComponent(char.folder)}/${encodeURIComponent(char.prefix + (i + 1))}.png`,
-    rarity: getStickerRarity(i + 1),
-    type: getStickerType(i + 1),
+    imageUrl: `/stickers/${char.folder}/${char.prefix}${i + 1}.png`,
+    rarity: char.rarity,  // キャラクターのレアリティを使用
+    type: char.type,      // キャラクターのタイプを使用
     series: char.name,
+    gachaWeight: char.gachaWeight,  // ガチャ排出重み
+    baseRate: char.baseRate,        // 交換レート基準値
   }))
 )
+
+// デバッグ: demoStickersの最初の数件を確認
+console.log('[DemoStickers Debug] First 3 stickers:', demoStickers.slice(0, 3).map(s => ({ id: s.id, imageUrl: s.imageUrl })))
 
 // Demo placed stickers (いくつかのシールを配置済み)
 const demoPlacedStickers: PlacedSticker[] = [
@@ -129,6 +240,8 @@ const demoCollectionStickers: CollectionSticker[] = demoStickers.map((s, i) => {
   // 最初の5キャラは多め、後半は少なめに所持
   const owned = charIndex < 5 ? stickerIndex < 10 : stickerIndex < 5
   const quantity = owned ? Math.floor(Math.random() * 5) + 1 : 0
+  // キャラクター名を取得（フィルタリング用）
+  const characterName = characters[charIndex]?.name || ''
 
   return {
     id: s.id,
@@ -136,7 +249,8 @@ const demoCollectionStickers: CollectionSticker[] = demoStickers.map((s, i) => {
     imageUrl: s.imageUrl,
     rarity: s.rarity as 1 | 2 | 3 | 4 | 5,
     type: s.type,
-    series: s.series || 'Dream Collection',
+    series: s.series || 'ドリームコレクション',
+    character: characterName, // キャラクター名を追加
     owned,
     quantity,
     rank: quantity > 3 ? 3 : quantity > 1 ? 2 : 1,
@@ -145,87 +259,163 @@ const demoCollectionStickers: CollectionSticker[] = demoStickers.map((s, i) => {
 })
 
 // Demo gacha banners
+// 終了日を「あと○日」形式で表示するヘルパー関数
+const formatEndDate = (date: Date): string => {
+  const now = new Date()
+  const diffTime = date.getTime() - now.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  if (diffDays <= 0) return 'まもなく終了'
+  if (diffDays === 1) return 'あと1日'
+  return `あと${diffDays}日`
+}
+
 const demoBanners: GachaBanner[] = [
   {
     id: 'banner-1',
-    name: 'Dream Collection',
-    description: 'Sparkly stickers await!',
+    name: 'ドリームコレクション',
+    description: 'キラキラシールをゲットしよう！',
     type: 'normal',
     costSingle: 1,
     costMulti: 10,
     currency: 'ticket',
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    endDate: formatEndDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
+    // 通常ガチャの排出レート（gachaWeightベース: 5=1, 4=3, 3=10, 2=20, 1=37）
+    rates: [
+      { stars: 5, rate: '1.4%' },
+      { stars: 4, rate: '4.2%' },
+      { stars: 3, rate: '14.1%' },
+      { stars: 2, rate: '28.2%' },
+      { stars: 1, rate: '52.1%' },
+    ],
   },
   {
     id: 'banner-2',
-    name: 'Premium Gacha',
-    description: 'High rarity guaranteed!',
+    name: 'プレミアムガチャ',
+    description: 'レアシールが出やすい！',
     type: 'premium',
     costSingle: 100,
     costMulti: 900,
     currency: 'gem',
+    // プレミアムガチャの排出レート（高レア確率UP）
+    rates: [
+      { stars: 5, rate: '5.0%' },
+      { stars: 4, rate: '15.0%' },
+      { stars: 3, rate: '30.0%' },
+      { stars: 2, rate: '30.0%' },
+      { stars: 1, rate: '20.0%' },
+    ],
   },
 ]
 
-// Demo user currency
-const demoUserCurrency: UserCurrency = {
-  tickets: 5,
-  stars: 100,
-  gems: 500,
-}
+// Demo user monetization (default state)
+const demoUserMonetization: UserMonetization = DEFAULT_USER_MONETIZATION
 
 // Demo friends
 const demoFriends: Friend[] = [
-  { id: 'friend-1', name: 'Alice', isOnline: true, avatarUrl: undefined },
-  { id: 'friend-2', name: 'Bob', isOnline: false, lastActive: '2 hours ago', avatarUrl: undefined },
-  { id: 'friend-3', name: 'Charlie', isOnline: true, avatarUrl: undefined },
+  { id: 'friend-1', name: 'ゆうき', isOnline: true, avatarUrl: undefined },
+  { id: 'friend-2', name: 'はるか', isOnline: false, lastActive: '2じかんまえ', avatarUrl: undefined },
+  { id: 'friend-3', name: 'そうた', isOnline: true, avatarUrl: undefined },
 ]
 
 // Demo trade history
 const demoTradeHistory: TradeHistory[] = [
   {
     id: 'trade-1',
-    partnerName: 'Alice',
-    givenStickers: [{ name: 'Star', rarity: 3 }],
-    receivedStickers: [{ name: 'Heart', rarity: 3 }],
+    partnerName: 'ゆうき',
+    givenStickers: [{ name: 'サニたん', rarity: 3 }],
+    receivedStickers: [{ name: 'ドロル', rarity: 3 }],
     tradedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
   },
 ]
 
 // Demo posts for timeline
-const demoPosts: Post[] = [
+const createDemoPosts = (placedStickers: PlacedSticker[]): Post[] => [
   {
     id: 'post-1',
     userId: 'user-1',
-    userName: 'Alice',
+    userName: 'ゆうき',
     userAvatarUrl: undefined,
-    pageImageUrl: '/images/demo-page.png',
-    caption: 'My favorite page!',
-    hashtags: ['kawaii', 'sparkle'],
+    // pageImageUrl は使わず、pageData を使用
+    pageData: {
+      placedStickers: [
+        {
+          id: 'demo-placed-1',
+          stickerId: demoStickers[5].id,
+          sticker: demoStickers[5],
+          pageId: 'demo-page',
+          x: 0.3,
+          y: 0.35,
+          rotation: -8,
+          scale: 1,
+          zIndex: 1,
+          placedAt: new Date().toISOString(),
+        },
+        {
+          id: 'demo-placed-2',
+          stickerId: demoStickers[20].id,
+          sticker: demoStickers[20],
+          pageId: 'demo-page',
+          x: 0.7,
+          y: 0.5,
+          rotation: 12,
+          scale: 1.1,
+          zIndex: 2,
+          placedAt: new Date().toISOString(),
+        },
+        {
+          id: 'demo-placed-3',
+          stickerId: demoStickers[45].id,
+          sticker: demoStickers[45],
+          pageId: 'demo-page',
+          x: 0.5,
+          y: 0.7,
+          rotation: 0,
+          scale: 0.9,
+          zIndex: 3,
+          placedAt: new Date().toISOString(),
+        },
+      ],
+    },
+    caption: 'お気に入りのページができました！✨',
+    hashtags: ['かわいい', 'シール帳'],
     reactions: [
       { type: 'heart', count: 5, isReacted: false },
-      { type: 'sparkle', count: 3, isReacted: true },
-      { type: 'fire', count: 1, isReacted: false },
-      { type: 'cute', count: 2, isReacted: false },
     ],
     commentCount: 2,
     createdAt: new Date().toISOString(),
     isFollowing: false,
+    visibility: 'public',
   },
 ]
 
-// Demo user profile
-const demoUserProfile: UserProfile = {
-  id: 'user-me',
-  name: 'Sticker Fan',
-  avatarUrl: undefined,
-  title: 'Beginner Collector',
-  level: 5,
-  exp: 350,
-  expToNextLevel: 500,
-  bio: 'I love stickers!',
-  createdAt: new Date().toISOString(),
+// Demo user profile - 初期累積経験値 (レベル5相当)
+const INITIAL_TOTAL_EXP = 750
+
+// 経験値からプロフィールを計算する関数
+function createUserProfile(
+  totalExp: number,
+  name: string = 'シールだいすき',
+  bio: string = 'シールあつめがすき！'
+): UserProfile {
+  const level = calculateLevel(totalExp)
+  const currentExp = getCurrentLevelExp(totalExp)
+  const expNeeded = getExpToNextLevel(totalExp)
+
+  return {
+    id: 'user-me',
+    name,
+    avatarUrl: undefined,
+    title: getLevelTitle(level),
+    level,
+    exp: currentExp,
+    expToNextLevel: expNeeded,
+    bio,
+    createdAt: new Date().toISOString(),
+  }
 }
+
+// 初期プロフィール
+const demoUserProfile: UserProfile = createUserProfile(INITIAL_TOTAL_EXP)
 
 // Demo user stats
 const demoUserStats: UserStats = {
@@ -234,16 +424,241 @@ const demoUserStats: UserStats = {
   completedSeries: 2,
   totalTrades: 12,
   friendsCount: 8,
+  followersCount: 156,
+  followingCount: 89,
   postsCount: 5,
   reactionsReceived: 24,
 }
 
 // Demo achievements
 const demoAchievements: Achievement[] = [
-  { id: 'ach-1', name: 'First Steps', description: 'Place your first sticker', icon: '⭐', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'ach-2', name: 'Collector', description: 'Collect 10 stickers', icon: '📦', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'ach-3', name: 'Trader', description: 'Complete 5 trades', icon: '🤝', isUnlocked: false },
+  // コレクション系
+  { id: 'collection-1', name: 'はじめの一歩', description: 'はじめてシールをはろう', icon: '⭐', isUnlocked: true, unlockedAt: new Date().toISOString() },
+  { id: 'collection-2', name: 'コレクター見習い', description: 'シールを10枚あつめよう', icon: '📦', isUnlocked: true, unlockedAt: new Date().toISOString() },
+  { id: 'collection-3', name: 'コレクターマスター', description: 'シールを50枚あつめよう', icon: '🎨', isUnlocked: false },
+  { id: 'collection-4', name: 'レジェンドゲット', description: '★5シールを手に入れよう', icon: '👑', isUnlocked: false },
+  // 交換系
+  { id: 'trade-1', name: 'はじめてのこうかん', description: 'シールをこうかんしよう', icon: '🤝', isUnlocked: true, unlockedAt: new Date().toISOString() },
+  { id: 'trade-2', name: 'トレーダー', description: '5回こうかんしよう', icon: '🔄', isUnlocked: false },
+  { id: 'trade-3', name: 'こうかん名人', description: '20回こうかんしよう', icon: '💫', isUnlocked: false },
+  // ソーシャル系
+  { id: 'social-1', name: 'はじめてのフレンド', description: 'フレンドを1人つくろう', icon: '👫', isUnlocked: true, unlockedAt: new Date().toISOString() },
+  { id: 'social-2', name: 'にんきもの', description: 'リアクションを10こもらおう', icon: '💖', isUnlocked: false },
+  { id: 'social-3', name: 'みんなのなかま', description: 'フレンドを10人つくろう', icon: '🌟', isUnlocked: false },
 ]
+
+// Demo followers
+const demoFollowers: FollowUser[] = [
+  { id: 'user-1', name: 'さくら', level: 12, title: 'シールマスター', isFollowing: true },
+  { id: 'user-2', name: 'ゆうと', level: 8, title: 'コレクター見習い', isFollowing: false },
+  { id: 'user-3', name: 'あおい', level: 15, title: 'レジェンドハンター', isFollowing: true },
+  { id: 'user-4', name: 'りく', level: 5, isFollowing: false },
+  { id: 'user-5', name: 'ひなた', level: 10, title: 'トレードマニア', isFollowing: true },
+]
+
+// Demo following
+const demoFollowing: FollowUser[] = [
+  { id: 'user-1', name: 'さくら', level: 12, title: 'シールマスター', isFollowing: true },
+  { id: 'user-3', name: 'あおい', level: 15, title: 'レジェンドハンター', isFollowing: true },
+  { id: 'user-5', name: 'ひなた', level: 10, title: 'トレードマニア', isFollowing: true },
+  { id: 'user-6', name: 'みなと', level: 20, title: 'キング・オブ・シール', isFollowing: true },
+]
+
+// 他ユーザーの詳細プロフィールデータ（ID->詳細のマップ）
+const demoOtherUserProfiles: Record<string, OtherUserProfile> = {
+  'user-1': {
+    id: 'user-1',
+    name: 'さくら',
+    level: 12,
+    title: 'シールマスター',
+    bio: 'シール集め大好き！もっちもが推しです💕 毎日ガチャ引いてます！',
+    isFollowing: true,
+    stats: {
+      totalStickers: 156,
+      uniqueStickers: 89,
+      completedSeries: 3,
+      followersCount: 234,
+      followingCount: 45,
+    },
+  },
+  'user-2': {
+    id: 'user-2',
+    name: 'ゆうと',
+    level: 8,
+    title: 'コレクター見習い',
+    bio: 'シール集め始めました！よろしくお願いします。',
+    isFollowing: false,
+    stats: {
+      totalStickers: 42,
+      uniqueStickers: 28,
+      completedSeries: 0,
+      followersCount: 15,
+      followingCount: 32,
+    },
+  },
+  'user-3': {
+    id: 'user-3',
+    name: 'あおい',
+    level: 15,
+    title: 'レジェンドハンター',
+    bio: '★5シール集めが生きがい！交換いつでも歓迎です。',
+    isFollowing: true,
+    stats: {
+      totalStickers: 312,
+      uniqueStickers: 142,
+      completedSeries: 5,
+      followersCount: 567,
+      followingCount: 89,
+    },
+  },
+  'user-4': {
+    id: 'user-4',
+    name: 'りく',
+    level: 5,
+    bio: '初心者です。仲良くしてください！',
+    isFollowing: false,
+    stats: {
+      totalStickers: 23,
+      uniqueStickers: 18,
+      completedSeries: 0,
+      followersCount: 8,
+      followingCount: 12,
+    },
+  },
+  'user-5': {
+    id: 'user-5',
+    name: 'ひなた',
+    level: 10,
+    title: 'トレードマニア',
+    bio: '交換で集めるのが楽しい！いつでもマッチングしてね。',
+    isFollowing: true,
+    stats: {
+      totalStickers: 98,
+      uniqueStickers: 67,
+      completedSeries: 2,
+      followersCount: 123,
+      followingCount: 78,
+    },
+  },
+  'user-6': {
+    id: 'user-6',
+    name: 'みなと',
+    level: 20,
+    title: 'キング・オブ・シール',
+    bio: '全シールコンプリート目指してます！困ってる人は声かけてね。',
+    isFollowing: true,
+    stats: {
+      totalStickers: 523,
+      uniqueStickers: 158,
+      completedSeries: 8,
+      followersCount: 1234,
+      followingCount: 156,
+    },
+  },
+}
+
+// 他ユーザーのシール帳プレビューデータ
+const getDemoStickerBookPreviews = (userId: string): StickerBookPreview[] => {
+  // ユーザーごとに異なるプレビューを返す（デモ用）
+  const basePreviews: StickerBookPreview[] = [
+    { pageId: `${userId}-page-1`, pageNumber: 1, stickerCount: 5 },
+    { pageId: `${userId}-page-2`, pageNumber: 2, stickerCount: 3 },
+    { pageId: `${userId}-page-3`, pageNumber: 3, stickerCount: 7 },
+    { pageId: `${userId}-page-4`, pageNumber: 4, stickerCount: 2 },
+  ]
+  return basePreviews
+}
+
+// 他ユーザーのシール帳ページデータ（BookView用）
+const getDemoOtherUserBookPages = (userId: string): BookPage[] => {
+  return [
+    { id: `${userId}-cover`, type: 'cover', side: 'right' },
+    { id: `${userId}-page-1`, type: 'page', side: 'left' },
+    { id: `${userId}-page-2`, type: 'page', side: 'right' },
+    { id: `${userId}-page-3`, type: 'page', side: 'left' },
+    { id: `${userId}-page-4`, type: 'page', side: 'right' },
+    { id: `${userId}-back`, type: 'back-cover', side: 'left' },
+  ]
+}
+
+// 他ユーザーのシールデータ（BookView用）
+// 実際のdemoStickersを使用して、ユーザーごとに異なるシール配置を生成
+const getDemoOtherUserStickers = (userId: string): PlacedSticker[] => {
+  // ユーザーIDからハッシュ値を生成して異なるシールを選択
+  const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+
+  // demoStickersから異なるシールを選択（実際のシールデータを使用）
+  const stickerIndices = [
+    hash % demoStickers.length,
+    (hash * 2 + 5) % demoStickers.length,
+    (hash * 3 + 10) % demoStickers.length,
+    (hash * 4 + 15) % demoStickers.length,
+    (hash * 5 + 20) % demoStickers.length,
+  ]
+
+  return [
+    {
+      id: `${userId}-sticker-1`,
+      stickerId: demoStickers[stickerIndices[0]].id,
+      sticker: demoStickers[stickerIndices[0]],
+      pageId: `${userId}-page-1`,
+      x: 0.3,
+      y: 0.35,
+      rotation: 5,
+      scale: 0.5,
+      zIndex: 1,
+      placedAt: new Date().toISOString(),
+    },
+    {
+      id: `${userId}-sticker-2`,
+      stickerId: demoStickers[stickerIndices[1]].id,
+      sticker: demoStickers[stickerIndices[1]],
+      pageId: `${userId}-page-1`,
+      x: 0.7,
+      y: 0.55,
+      rotation: -10,
+      scale: 0.55,
+      zIndex: 2,
+      placedAt: new Date().toISOString(),
+    },
+    {
+      id: `${userId}-sticker-3`,
+      stickerId: demoStickers[stickerIndices[2]].id,
+      sticker: demoStickers[stickerIndices[2]],
+      pageId: `${userId}-page-2`,
+      x: 0.4,
+      y: 0.4,
+      rotation: 0,
+      scale: 0.6,
+      zIndex: 1,
+      placedAt: new Date().toISOString(),
+    },
+    {
+      id: `${userId}-sticker-4`,
+      stickerId: demoStickers[stickerIndices[3]].id,
+      sticker: demoStickers[stickerIndices[3]],
+      pageId: `${userId}-page-2`,
+      x: 0.65,
+      y: 0.6,
+      rotation: 8,
+      scale: 0.45,
+      zIndex: 2,
+      placedAt: new Date().toISOString(),
+    },
+    {
+      id: `${userId}-sticker-5`,
+      stickerId: demoStickers[stickerIndices[4]].id,
+      sticker: demoStickers[stickerIndices[4]],
+      pageId: `${userId}-page-3`,
+      x: 0.5,
+      y: 0.45,
+      rotation: -5,
+      scale: 0.58,
+      zIndex: 1,
+      placedAt: new Date().toISOString(),
+    },
+  ]
+}
 
 // Demo settings
 const demoSettings: SettingsData = {
@@ -545,12 +960,40 @@ export default function Home() {
   const [editingSticker, setEditingSticker] = useState<PlacedSticker | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
+  // ペリペリエフェクト用state
+  const [showPeelEffect, setShowPeelEffect] = useState(false)
+  const [peelEffectPosition, setPeelEffectPosition] = useState({ x: 0, y: 0 })
+  const [peelEffectImageUrl, setPeelEffectImageUrl] = useState<string>()
+  const [stickinessMessage, setStickinessMessage] = useState<string | null>(null)
+  // シール貼り付けエフェクト用state
+  const [showPlaceEffect, setShowPlaceEffect] = useState(false)
+  const [placeEffectPosition, setPlaceEffectPosition] = useState({ x: 0, y: 0 })
+
+  // デコ・ドロワー用state
+  const [isDecoDrawerOpen, setIsDecoDrawerOpen] = useState(false)
+  const [selectedDecoItem, setSelectedDecoItem] = useState<DecoItemData | null>(null)
+  const [placedDecoItems, setPlacedDecoItems] = useState<PlacedDecoItem[]>([])
+  const [editingDecoItem, setEditingDecoItem] = useState<PlacedDecoItem | null>(null)
+  // 所持デコアイテム（デフォルトアイテムを含む）
+  const ownedDecoItems = useMemo(() => getOwnedDecoItems([]), [])
+
+  // レイヤー制御パネル用state
+  const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false)
+  const [selectedLayerItemId, setSelectedLayerItemId] = useState<string | null>(null)
+
   // Modal states
   const [isPageEditModalOpen, setIsPageEditModalOpen] = useState(false)
   const [isStickerDetailModalOpen, setIsStickerDetailModalOpen] = useState(false)
   const [selectedCollectionSticker, setSelectedCollectionSticker] = useState<CollectionSticker | null>(null)
   const [isGachaResultModalOpen, setIsGachaResultModalOpen] = useState(false)
   const [gachaResults, setGachaResults] = useState<GachaResultSticker[]>([])
+  const [lastGachaPull, setLastGachaPull] = useState<{ bannerId: string; count: number } | null>(null)
+  const [continueConfirmDialog, setContinueConfirmDialog] = useState<{
+    isOpen: boolean
+    pullType: 'single' | 'multi' | null
+    cost: number
+    currency: 'ticket' | 'star' | 'gem'
+  }>({ isOpen: false, pullType: null, cost: 0, currency: 'ticket' })
   const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false)
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false)
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -560,14 +1003,95 @@ export default function Home() {
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; userId: string; name: string } | null>(null)
   const [blockTarget, setBlockTarget] = useState<{ id: string; name: string } | null>(null)
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile>(demoUserProfile)
+  const [totalExp, setTotalExp] = useState(INITIAL_TOTAL_EXP)
+  const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState(false)
+  const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; rewards: LevelUpReward[] } | null>(null)
   const [isThemeSelectOpen, setIsThemeSelectOpen] = useState(false)
   const [isTutorialOpen, setIsTutorialOpen] = useState(false)
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
+  const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState(false)
+  const [isFollowListModalOpen, setIsFollowListModalOpen] = useState(false)
+  const [followListInitialTab, setFollowListInitialTab] = useState<'followers' | 'following'>('followers')
+  const [isOtherUserProfileOpen, setIsOtherUserProfileOpen] = useState(false)
+  const [selectedOtherUser, setSelectedOtherUser] = useState<OtherUserProfile | null>(null)
+  const [selectedUserStickerBook, setSelectedUserStickerBook] = useState<StickerBookPreview[]>([])
+  const [selectedUserBookPages, setSelectedUserBookPages] = useState<BookPage[]>([])
+  const [selectedUserBookStickers, setSelectedUserBookStickers] = useState<PlacedSticker[]>([])
+  const [selectedUserCoverDesignId, setSelectedUserCoverDesignId] = useState<string>('cover-mochimo')
 
   // Trade state
   const [matchingStatus, setMatchingStatus] = useState<MatchingStatus>('idle')
   const [matchedUser, setMatchedUser] = useState<MatchedUser | null>(null)
   const [isTradeSessionOpen, setIsTradeSessionOpen] = useState(false)
   const [tradePartner, setTradePartner] = useState<TradePartner | null>(null)
+
+  // ミステリーポスト state
+  const [mysteryPostState, setMysteryPostState] = useState<MysteryPostState>({
+    todayPosted: null,
+    pendingStickers: [],
+    receivedStickers: [
+      // デモ用：未開封シール
+      {
+        id: 'received-1',
+        stickerId: demoStickers[25].id,
+        stickerName: demoStickers[25].name,
+        stickerImageUrl: demoStickers[25].imageUrl || '',
+        rarity: demoStickers[25].rarity,
+        message: 'キミのもとへ旅立つよ♪',
+        fromUserName: 'ふしぎなたびびと',
+        receivedAt: new Date().toISOString(),
+        isOpened: false,
+      },
+    ],
+    nextDeliveryTime: getNextDeliveryTime(),
+  })
+  const [isPostStickerModalOpen, setIsPostStickerModalOpen] = useState(false)
+  const [isReceivedStickerModalOpen, setIsReceivedStickerModalOpen] = useState(false)
+  const [selectedReceivedSticker, setSelectedReceivedSticker] = useState<ReceivedSticker | null>(null)
+  // トレード画面のサブタブ（交換/ミステリーポスト/スカウト切替）
+  const [tradeSubTab, setTradeSubTab] = useState<'trade' | 'mystery' | 'scout'>('trade')
+
+  // トレード・スカウトの状態
+  const [tradeScoutState, setTradeScoutState] = useState<TradeScoutState>({
+    ...initialTradeScoutState,
+    // デモ用マッチング
+    matches: [
+      {
+        id: 'match-1',
+        user: {
+          id: 'user-scout-1',
+          name: 'シールコレクター',
+          avatarUrl: '',
+          level: 12,
+        },
+        myOffersTheyWant: [
+          {
+            stickerId: demoStickers[5].id,
+            stickerName: demoStickers[5].name,
+            stickerImageUrl: demoStickers[5].imageUrl || '',
+            rarity: demoStickers[5].rarity,
+          },
+        ],
+        theirOffersIWant: [
+          {
+            stickerId: demoStickers[20].id,
+            stickerName: demoStickers[20].name,
+            stickerImageUrl: demoStickers[20].imageUrl || '',
+            rarity: demoStickers[20].rarity,
+          },
+        ],
+        matchScore: 4,
+        matchedAt: new Date().toISOString(),
+        isRead: false,
+      },
+    ],
+  })
+  const [isScoutWantListModalOpen, setIsScoutWantListModalOpen] = useState(false)
+  const [isScoutOfferListModalOpen, setIsScoutOfferListModalOpen] = useState(false)
+  const [isMatchDetailModalOpen, setIsMatchDetailModalOpen] = useState(false)
+  const [selectedScoutMatch, setSelectedScoutMatch] = useState<ScoutMatch | null>(null)
 
   // 自分のシール帳をTrade用に変換（ホームで編集したシール帳をそのまま交換画面で使用）
   const myTradePages: TradeBookPageFull[] = useMemo(() => {
@@ -578,23 +1102,405 @@ export default function Home() {
     }))
   }, [pages, placedStickers])
 
-  // Currency state
-  const [userCurrency, setUserCurrency] = useState<UserCurrency>(demoUserCurrency)
+  // Monetization state (includes currency)
+  const [userMonetization, setUserMonetization] = useState<UserMonetization>(demoUserMonetization)
 
-  // Posts state
-  const [posts, setPosts] = useState<Post[]>(demoPosts)
+  // Derive userCurrency from userMonetization for compatibility with GachaView
+  const userCurrency: UserCurrency = useMemo(() => ({
+    tickets: userMonetization.tickets,
+    gems: userMonetization.gems,
+    stars: userMonetization.stars,
+  }), [userMonetization.tickets, userMonetization.gems, userMonetization.stars])
+
+  // Shop modal states
+  const [isShopOpen, setIsShopOpen] = useState(false)
+  const [isAdRewardModalOpen, setIsAdRewardModalOpen] = useState(false)
+  const [isDailyBonusModalOpen, setIsDailyBonusModalOpen] = useState(false)
+  const [insufficientFundsModal, setInsufficientFundsModal] = useState<{
+    isOpen: boolean
+    fundType: 'tickets' | 'stars'
+    required: number
+    current: number
+  }>({ isOpen: false, fundType: 'tickets', required: 0, current: 0 })
+  const [dailyBonusReceived, setDailyBonusReceived] = useState<{ tickets: number; stars: number } | null>(null)
+
+  // Posts state - 初期化はuseMemoで（placedStickersに依存しないがデモ用）
+  const [posts, setPosts] = useState<Post[]>(() => createDemoPosts([]))
 
   // Settings state
   const [settings, setSettings] = useState<SettingsData>(demoSettings)
 
+  // ======================
+  // 永続化システム（LocalStorage）
+  // ======================
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
+  const [currentDataSource, setCurrentDataSource] = useState<'supabase' | 'localStorage'>('localStorage')
+  const [adminMode, setAdminMode] = useState<AdminMode>('production')
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false)
+  const [collection, setCollection] = useState<SavedCollectionItem[]>([])
+  const [currentTestUser, setCurrentTestUser] = useState<TestUser>(TEST_USERS[0])
+
+  // Supabase交換システム（Supabase接続時のみ有効）
+  const dataSource = getDataSource()
+  const [supabaseTradeState, supabaseTradeActions] = useSupabaseTrade({
+    currentUser: currentTestUser,
+    onTradeComplete: (trade) => {
+      console.log('[Trade] Completed via Supabase:', trade)
+      // コレクションをリロード
+      loadCollectionFromSupabase(currentTestUser.id).then(newCollection => {
+        setCollection(newCollection)
+      })
+    },
+    onError: (error) => {
+      console.error('[Trade] Error:', error)
+    }
+  })
+
+  // Supabase交換状態の変化を監視してUIを更新
+  useEffect(() => {
+    const trade = supabaseTradeState.currentTrade
+    if (!trade) return
+
+    console.log('[Trade] Supabase trade state changed:', trade.status)
+
+    // 誰かが自分の交換に参加した場合（matching → negotiating）
+    if (trade.status === 'negotiating' && matchingStatus === 'searching') {
+      // 相手ユーザーを特定
+      const isTradeCreator = trade.user1_id === currentTestUser.supabaseId
+      const partnerId = isTradeCreator ? trade.user2_id : trade.user1_id
+      const partnerTestUser = TEST_USERS.find(u => u.supabaseId === partnerId)
+
+      if (partnerTestUser) {
+        console.log('[Trade] Partner joined! Setting up trade session with:', partnerTestUser.name)
+        console.log('[Trade] I am trade creator:', isTradeCreator)
+
+        if (isTradeCreator) {
+          // 交換作成者の場合：既に参加済みなので、直接交換セッションを開く
+          setTradePartner({
+            id: trade.id,
+            name: partnerTestUser.name,
+            avatarUrl: undefined,
+            level: 1,
+          })
+          setMatchingStatus('idle')
+          setMatchedUser(null)
+          setIsTradeSessionOpen(true)
+        } else {
+          // 参加者の場合：マッチ確認UIを表示（その後joinTradeを呼ぶ）
+          setMatchingStatus('found')
+          setMatchedUser({
+            id: trade.id,
+            name: partnerTestUser.name,
+            avatarUrl: undefined,
+            level: 1,
+          })
+        }
+      }
+    }
+  }, [supabaseTradeState.currentTrade, matchingStatus, currentTestUser.supabaseId])
+
+  // 全シールIDのリスト（マスターデータ）
+  const allStickerIds = useMemo(() => demoStickers.map(s => s.id), [])
+
+  // コレクションをCollectionSticker形式に変換（UI用）
+  // 配置済みシール数を引いた「残り枚数」を表示
+  const collectionStickers: CollectionSticker[] = useMemo(() => {
+    const collectionMap = new Map(collection.map(c => [c.stickerId, c]))
+    // 配置済みシール数をカウント
+    const placedCountMap = new Map<string, number>()
+    placedStickers.forEach(p => {
+      placedCountMap.set(p.stickerId, (placedCountMap.get(p.stickerId) || 0) + 1)
+    })
+
+    return demoStickers.map(s => {
+      const saved = collectionMap.get(s.id)
+      const totalQuantity = saved?.quantity || 0
+      const placedCount = placedCountMap.get(s.id) || 0
+      const remainingQuantity = Math.max(0, totalQuantity - placedCount)
+      return {
+        id: s.id,
+        name: s.name,
+        imageUrl: s.imageUrl,
+        rarity: s.rarity as 1 | 2 | 3 | 4 | 5,
+        type: s.type,
+        series: s.series || 'ドリームコレクション',
+        character: characters.find(c => s.id.startsWith(c.id))?.name || '',
+        owned: remainingQuantity > 0,  // 残り枚数が1以上あれば所持
+        quantity: remainingQuantity,  // 配置済みを引いた残り枚数
+        rank: totalQuantity > 3 ? 3 : totalQuantity > 1 ? 2 : 1,  // ランクは累計で判定
+        totalAcquired: saved?.totalAcquired || 0,
+        firstAcquiredAt: saved?.firstAcquiredAt || undefined,
+      }
+    })
+  }, [collection, placedStickers])
+
+  // ダブりシール一覧を計算（quantityが2以上のシール）
+  const duplicateStickers = useMemo(() => {
+    return collectionStickers
+      .filter(s => s.owned && s.quantity >= 2)
+      .map(s => ({
+        id: s.id,
+        name: s.name,
+        imageUrl: s.imageUrl || '',
+        rarity: s.rarity,
+        count: s.quantity - 1, // 手元に1枚残す
+      }))
+  }, [collectionStickers])
+
+  // シール帳に配置可能なシール一覧（所持していて、まだ貼れる枚数が残っているもの）
+  const placeableStickers = useMemo(() => {
+    return demoStickers.filter(sticker => {
+      const collectionItem = collection.find(c => c.stickerId === sticker.id)
+      if (!collectionItem || collectionItem.quantity === 0) return false
+      // 既に配置されている数をカウント
+      const placedCount = placedStickers.filter(p => p.stickerId === sticker.id).length
+      // まだ貼れる枚数が残っているか
+      return collectionItem.quantity > placedCount
+    })
+  }, [collection, placedStickers])
+
+  // SavedUserDataを構築
+  const buildSavedUserData = useCallback((): SavedUserData => ({
+    version: 1,
+    collection,
+    monetization: userMonetization,
+    placedStickers,
+    placedDecoItems,
+    pages,
+    coverDesignId,
+    profile: {
+      name: userProfile.name,
+      bio: userProfile.bio || '',
+      totalExp,
+    },
+    settings: {
+      soundEnabled: true, // SettingsDataにはsoundEnabledがないためデフォルト値
+      notificationsEnabled: settings.notifications.tradeRequests || settings.notifications.friendRequests,
+      language: settings.display.language,
+    },
+    stats: {
+      totalGachaPulls: 0,
+      totalTrades: 0,
+      postsCount: posts.length,
+    },
+    lastSavedAt: new Date().toISOString(),
+  }), [collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, userProfile, totalExp, settings, posts])
+
+  // データを保存（自動保存）- 現在のテストユーザーに保存
+  const saveData = useCallback(() => {
+    if (!isDataLoaded) return // 初期化前は保存しない
+    const data = buildSavedUserData()
+    saveCurrentUserData(data)
+    console.log('[Persistence] Data saved for user:', currentTestUser.id)
+  }, [isDataLoaded, buildSavedUserData, currentTestUser])
+
+  // 初回読み込み（Supabase対応）
+  useEffect(() => {
+    const loadData = async () => {
+      const mode = loadAdminMode()
+      setAdminMode(mode)
+
+      // 現在のテストユーザーを取得
+      const testUser = getCurrentTestUser()
+      setCurrentTestUser(testUser)
+
+      // データソースを判定
+      const dataSource = getDataSource()
+      setCurrentDataSource(dataSource)
+      console.log('[Data] Data source:', dataSource)
+
+      let userData = loadCurrentUserData()
+
+      // Supabaseモードの場合、コレクションをSupabaseから読み込み
+      if (dataSource === 'supabase' && mode !== 'test') {
+        console.log('[Supabase] Loading collection from Supabase for user:', testUser.id)
+        try {
+          const supabaseCollection = await loadCollectionFromSupabase(testUser.id)
+          if (supabaseCollection.length > 0) {
+            console.log('[Supabase] Loaded', supabaseCollection.length, 'stickers from Supabase')
+            // Supabaseのコレクションをマージ
+            if (!userData) {
+              userData = createInitialUserDataForTestUser(testUser.id)
+            }
+            userData.collection = supabaseCollection
+          } else {
+            console.log('[Supabase] No stickers found in Supabase, using localStorage data')
+          }
+
+          // シール帳データもSupabaseから読み込み
+          console.log('[Supabase] Loading sticker book from Supabase for user:', testUser.supabaseId)
+          const stickerBook = await stickerBookService.getUserStickerBook(testUser.supabaseId)
+          if (stickerBook && stickerBook.pages.length > 0) {
+            console.log('[Supabase] Loaded sticker book with', stickerBook.pages.length, 'pages')
+
+            // Supabaseのページデータをローカル形式に変換
+            const supabasePages: BookPage[] = stickerBook.pages.map(page => ({
+              id: page.id,
+              type: page.pageType as 'cover' | 'page' | 'back-cover' | 'inner-cover',
+              side: page.side as 'left' | 'right' | undefined,
+            }))
+
+            // Supabaseのシール配置データを収集
+            const supabasePlacedStickers: PlacedSticker[] = stickerBook.pages.flatMap(page => page.stickers)
+
+            console.log('[Supabase] Loaded', supabasePlacedStickers.length, 'placed stickers')
+
+            // userDataを更新
+            if (!userData) {
+              userData = createInitialUserDataForTestUser(testUser.id)
+            }
+            userData.pages = supabasePages
+            userData.placedStickers = supabasePlacedStickers
+          } else {
+            console.log('[Supabase] No sticker book found, using localStorage data')
+          }
+        } catch (error) {
+          console.error('[Supabase] Failed to load from Supabase, falling back to localStorage:', error)
+        }
+      }
+
+      // データがない場合は初期データを作成
+      if (!userData) {
+        console.log('[Persistence] No saved data for user:', testUser.id, ', creating initial data')
+        userData = createInitialUserDataForTestUser(testUser.id)
+        saveCurrentUserData(userData)
+      }
+
+      // テストモードの場合は全シール所持状態にする
+      if (mode === 'test') {
+        console.log('[Persistence] Test mode: using test data')
+        userData = createTestModeData(allStickerIds)
+      }
+
+      // ステートを復元
+      setCollection(userData.collection)
+      setUserMonetization(userData.monetization)
+      setPlacedStickers(userData.placedStickers)
+      setPlacedDecoItems(userData.placedDecoItems)
+      setPages(userData.pages)
+      setCoverDesignId(userData.coverDesignId)
+      setTotalExp(userData.profile.totalExp)
+      setUserProfile(prev => ({
+        ...prev,
+        name: userData!.profile.name,
+        bio: userData!.profile.bio,
+        level: calculateLevel(userData!.profile.totalExp),
+        exp: getCurrentLevelExp(userData!.profile.totalExp),
+        expToNextLevel: getExpToNextLevel(userData!.profile.totalExp),
+        title: getLevelTitle(calculateLevel(userData!.profile.totalExp)),
+      }))
+
+      setIsDataLoaded(true)
+      console.log('[Data] Data loaded for user:', testUser.id, ', collection:', userData.collection.length, 'stickers', '(source:', dataSource, ')')
+    }
+
+    loadData()
+  }, [allStickerIds])
+
+  // データ変更時に自動保存（デバウンス）
+  useEffect(() => {
+    if (!isDataLoaded) return
+    const timer = setTimeout(() => {
+      saveData()
+    }, 1000) // 1秒後に保存
+    return () => clearTimeout(timer)
+  }, [isDataLoaded, collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, totalExp, saveData])
+
+  // 管理者モード切替
+  const handleChangeAdminMode = useCallback((mode: AdminMode) => {
+    saveAdminMode(mode)
+    setAdminMode(mode)
+    // ページを再読み込みしてデータを適用
+    window.location.reload()
+  }, [])
+
+  // テストユーザー切り替え
+  const handleSwitchUser = useCallback((userId: string) => {
+    // 現在のデータを保存してからユーザーを切り替え
+    const data = buildSavedUserData()
+    saveCurrentUserData(data)
+
+    // ユーザーを切り替え
+    switchTestUser(userId)
+
+    // ページを再読み込みして新しいユーザーのデータを適用
+    window.location.reload()
+  }, [buildSavedUserData])
+
+  // 通貨付与（管理者用）
+  const handleGrantCurrency = useCallback((type: 'tickets' | 'gems' | 'stars', amount: number) => {
+    setUserMonetization(prev => ({
+      ...prev,
+      [type]: prev[type] + amount,
+    }))
+  }, [])
+
+  // シール付与（管理者用）
+  const handleGrantSticker = useCallback((stickerId: string, quantity: number) => {
+    const newStickerIds = Array(quantity).fill(stickerId)
+    const { collection: newCollection } = addStickersToCollection(collection, newStickerIds)
+    setCollection(newCollection)
+  }, [collection])
+
+  // 全シール付与（管理者用）
+  const handleGrantAllStickers = useCallback(() => {
+    const { collection: newCollection } = addStickersToCollection(collection, allStickerIds)
+    setCollection(newCollection)
+  }, [collection, allStickerIds])
+
+  // コレクションリセット（管理者用）
+  const handleResetCollection = useCallback(() => {
+    setCollection([])
+    setPlacedStickers([])
+  }, [])
+
+  // 全データリセット（管理者用）
+  const handleResetAllData = useCallback(() => {
+    resetAllData()
+    window.location.reload()
+  }, [])
+
   // Handle page turn
+  // 経験値獲得ハンドラー
+  const gainExp = useCallback((action: ExpAction) => {
+    const result = addExp(totalExp, action)
+    setTotalExp(result.newTotalExp)
+
+    // プロフィールを更新
+    setUserProfile(prev => ({
+      ...prev,
+      level: result.newLevel,
+      exp: getCurrentLevelExp(result.newTotalExp),
+      expToNextLevel: getExpToNextLevel(result.newTotalExp),
+      title: result.newTitle,
+    }))
+
+    // レベルアップした場合はモーダル表示
+    if (result.leveledUp) {
+      const rewards = getLevelUpRewards(result.newLevel)
+      setLevelUpInfo({ level: result.newLevel, rewards })
+      setIsLevelUpModalOpen(true)
+    }
+
+    return result
+  }, [totalExp])
+
   const handlePageTurn = useCallback((pageIndex: number) => {
     setCurrentPage(pageIndex)
   }, [])
 
-  // Handle sticker placement
+  // Handle sticker placement（ペタッエフェクト付き）
   const handlePlaceSticker = useCallback((pageId: string, x: number, y: number, rotation: number) => {
     if (!selectedSticker) return
+
+    // 数量チェック：所持数を超えて配置できない
+    const { canPlace, remainingCount } = canPlaceSticker(collection, selectedSticker.id, placedStickers)
+    if (!canPlace) {
+      console.warn(`Cannot place sticker: no remaining quantity for ${selectedSticker.id}`)
+      setSelectedSticker(null)
+      setIsDragging(false)
+      return
+    }
 
     const newPlacedSticker: PlacedSticker = {
       id: `placed-${Date.now()}`,
@@ -609,21 +1515,113 @@ export default function Home() {
       placedAt: new Date().toISOString(),
     }
 
+    // ペタッエフェクトを発動
+    // シールの位置を画面座標に変換
+    if (bookContainerRef.current) {
+      const containerRect = bookContainerRef.current.getBoundingClientRect()
+      const actualBookWidth = isSpreadView ? BOOK_WIDTH * 2 : BOOK_WIDTH
+      const horizontalOffset = (containerRect.width - actualBookWidth) / 2
+
+      // 見開き時の位置計算
+      let stickerScreenX: number
+      const page = pages.find(p => p.id === pageId)
+      if (isSpreadView && page?.side === 'right') {
+        stickerScreenX = containerRect.left + horizontalOffset + BOOK_WIDTH + (x * BOOK_WIDTH)
+      } else {
+        stickerScreenX = containerRect.left + horizontalOffset + (x * BOOK_WIDTH)
+      }
+      const stickerScreenY = containerRect.top + 8 + (y * BOOK_HEIGHT)
+
+      setPlaceEffectPosition({ x: stickerScreenX, y: stickerScreenY })
+      setShowPlaceEffect(true)
+    }
+
     setPlacedStickers(prev => [...prev, newPlacedSticker])
     setSelectedSticker(null)
     setIsDragging(false)
-  }, [selectedSticker, placedStickers])
+
+    // シールを貼ったら経験値獲得 (+5 EXP)
+    gainExp('place_sticker')
+
+    // Supabaseモードの場合、配置をSupabaseに同期
+    if (currentDataSource === 'supabase') {
+      (async () => {
+        try {
+          // user_sticker_idを取得
+          const userStickerId = await stickerBookService.getUserStickerId(
+            currentTestUser.supabaseId,
+            selectedSticker.id
+          )
+          if (!userStickerId) {
+            console.error('[Supabase] User sticker not found for:', selectedSticker.id)
+            return
+          }
+
+          // Supabaseに配置を追加
+          const placementId = await stickerBookService.addPlacement({
+            pageId,
+            userStickerId,
+            x,
+            y,
+            rotation,
+            scale: 1,
+            zIndex: placedStickers.length + 1,
+          })
+
+          if (placementId) {
+            // ローカルのplacedStickerのIDをSupabaseのIDに更新
+            setPlacedStickers(prev => prev.map(s =>
+              s.id === newPlacedSticker.id ? { ...s, id: placementId } : s
+            ))
+            console.log('[Supabase] Placement synced:', placementId)
+          }
+        } catch (error) {
+          console.error('[Supabase] Failed to sync placement:', error)
+        }
+      })()
+    }
+  }, [selectedSticker, placedStickers, gainExp, isSpreadView, pages, collection, currentDataSource, currentTestUser])
 
   // 編集中シールのページサイド（見開き時に左右どちらか）
   const [editingStickerPageSide, setEditingStickerPageSide] = useState<'left' | 'right'>('left')
 
-  // Handle sticker edit
+  // Handle sticker edit（ペリペリエフェクト付き）
   const handleEditSticker = useCallback((sticker: PlacedSticker) => {
     // シールがあるページのsideを判定
     const page = pages.find(p => p.id === sticker.pageId)
     setEditingStickerPageSide(page?.side || 'left')
+
+    // ペリペリエフェクトを発動
+    // シールの位置を画面座標に変換（おおよその位置）
+    if (bookContainerRef.current) {
+      const containerRect = bookContainerRef.current.getBoundingClientRect()
+      const actualBookWidth = isSpreadView ? BOOK_WIDTH * 2 : BOOK_WIDTH
+      const horizontalOffset = (containerRect.width - actualBookWidth) / 2
+
+      let stickerScreenX: number
+      if (isSpreadView && page?.side === 'right') {
+        stickerScreenX = containerRect.left + horizontalOffset + BOOK_WIDTH + (sticker.x * BOOK_WIDTH)
+      } else {
+        stickerScreenX = containerRect.left + horizontalOffset + (sticker.x * BOOK_WIDTH)
+      }
+      const stickerScreenY = containerRect.top + 8 + (sticker.y * BOOK_HEIGHT)
+
+      setPeelEffectPosition({ x: stickerScreenX, y: stickerScreenY })
+      setPeelEffectImageUrl(sticker.sticker.imageUrl)
+      setShowPeelEffect(true)
+    }
+
+    // 剥がし回数を記録して、粘着力メッセージを表示
+    const peelCount = trackPeel(sticker.id)
+    const message = getStickinessMessage(peelCount)
+    if (message) {
+      setStickinessMessage(message)
+      // 3秒後にメッセージを消す
+      setTimeout(() => setStickinessMessage(null), 3000)
+    }
+
     setEditingSticker(sticker)
-  }, [pages])
+  }, [pages, isSpreadView])
 
   // Handle sticker update (位置のリアルタイム更新用 - 編集モードは継続)
   const handleEditingDrag = useCallback((x: number, y: number) => {
@@ -669,23 +1667,31 @@ export default function Home() {
     setEditingSticker(updated)
   }, [editingSticker])
 
-  // 編集中シールの重なり順情報を計算
+  // 編集中シールの重なり順情報を計算（デコアイテムも含めた統一レイヤー）
   const getLayerInfo = useCallback(() => {
     if (!editingSticker) return { layerPosition: 1, totalLayers: 1, isAtFront: true, isAtBack: true }
 
-    // 同じページにあるシールだけをフィルタ
+    // 同じページにあるシールとデコアイテムの両方を取得
     const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
-    const totalLayers = samePageStickers.length
+    const samePageDecoItems = placedDecoItems.filter(d => d.pageId === editingSticker.pageId)
+
+    // 全アイテムをzIndex付きリストに変換
+    const allItems = [
+      ...samePageStickers.map(s => ({ id: s.id, zIndex: s.zIndex ?? 1 })),
+      ...samePageDecoItems.map(d => ({ id: d.id, zIndex: d.zIndex ?? 1 })),
+    ]
+
+    const totalLayers = allItems.length
 
     if (totalLayers <= 1) {
       return { layerPosition: 1, totalLayers: 1, isAtFront: true, isAtBack: true }
     }
 
     // zIndexでソートして順位を取得
-    const sortedByZIndex = [...samePageStickers].sort((a, b) => (a.zIndex ?? 1) - (b.zIndex ?? 1))
-    const position = sortedByZIndex.findIndex(s => s.id === editingSticker.id) + 1
-    const maxZIndex = Math.max(...samePageStickers.map(s => s.zIndex ?? 1))
-    const minZIndex = Math.min(...samePageStickers.map(s => s.zIndex ?? 1))
+    const sortedByZIndex = [...allItems].sort((a, b) => a.zIndex - b.zIndex)
+    const position = sortedByZIndex.findIndex(item => item.id === editingSticker.id) + 1
+    const maxZIndex = Math.max(...allItems.map(item => item.zIndex))
+    const minZIndex = Math.min(...allItems.map(item => item.zIndex))
 
     return {
       layerPosition: position,
@@ -693,116 +1699,687 @@ export default function Home() {
       isAtFront: (editingSticker.zIndex ?? 1) >= maxZIndex,
       isAtBack: (editingSticker.zIndex ?? 1) <= minZIndex,
     }
-  }, [editingSticker, placedStickers])
+  }, [editingSticker, placedStickers, placedDecoItems])
 
-  // Handle bring to front (前面へ)
+  // Handle bring to front (前面へ) - シールとデコアイテム両方を考慮
   const handleBringToFront = useCallback(() => {
     if (!editingSticker) return
 
-    // 同じページのシールの最大zIndexを取得
+    // 同じページのシールとデコアイテムの両方を取得
     const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
-    const maxZIndex = Math.max(...samePageStickers.map(s => s.zIndex ?? 1))
+    const samePageDecoItems = placedDecoItems.filter(d => d.pageId === editingSticker.pageId)
+
+    // 全アイテムのzIndexを集める
+    const allZIndexes = [
+      ...samePageStickers.map(s => s.zIndex ?? 1),
+      ...samePageDecoItems.map(d => d.zIndex ?? 1),
+    ]
+    const maxZIndex = Math.max(...allZIndexes)
 
     // 既に最前面なら何もしない
     if ((editingSticker.zIndex ?? 1) >= maxZIndex) return
 
-    const newZIndex = maxZIndex + 1
+    // 1つだけ上に移動（最前面にジャンプではなく）
+    const allItems = [
+      ...samePageStickers.map(s => ({ id: s.id, zIndex: s.zIndex ?? 1 })),
+      ...samePageDecoItems.map(d => ({ id: d.id, zIndex: d.zIndex ?? 1 })),
+    ].sort((a, b) => a.zIndex - b.zIndex)
+
+    const currentIndex = allItems.findIndex(item => item.id === editingSticker.id)
+    if (currentIndex >= allItems.length - 1) return // 既に最前面
+
+    // 1つ上のアイテムのzIndex + 1を設定
+    const newZIndex = allItems[currentIndex + 1].zIndex + 1
     const updated = { ...editingSticker, zIndex: newZIndex }
     setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
     setEditingSticker(updated)
-  }, [editingSticker, placedStickers])
+  }, [editingSticker, placedStickers, placedDecoItems])
 
-  // Handle send to back (後面へ)
+  // Handle send to back (後面へ) - シールとデコアイテム両方を考慮
   const handleSendToBack = useCallback(() => {
     if (!editingSticker) return
 
-    // 同じページのシールの最小zIndexを取得
+    // 同じページのシールとデコアイテムの両方を取得
     const samePageStickers = placedStickers.filter(s => s.pageId === editingSticker.pageId)
-    const minZIndex = Math.min(...samePageStickers.map(s => s.zIndex ?? 1))
+    const samePageDecoItems = placedDecoItems.filter(d => d.pageId === editingSticker.pageId)
+
+    // 全アイテムのzIndexを集める
+    const allZIndexes = [
+      ...samePageStickers.map(s => s.zIndex ?? 1),
+      ...samePageDecoItems.map(d => d.zIndex ?? 1),
+    ]
+    const minZIndex = Math.min(...allZIndexes)
 
     // 既に最後面なら何もしない
     if ((editingSticker.zIndex ?? 1) <= minZIndex) return
 
-    const newZIndex = Math.max(0, minZIndex - 1)
+    // 1つだけ下に移動（最後面にジャンプではなく）
+    const allItems = [
+      ...samePageStickers.map(s => ({ id: s.id, zIndex: s.zIndex ?? 1 })),
+      ...samePageDecoItems.map(d => ({ id: d.id, zIndex: d.zIndex ?? 1 })),
+    ].sort((a, b) => a.zIndex - b.zIndex)
+
+    const currentIndex = allItems.findIndex(item => item.id === editingSticker.id)
+    if (currentIndex <= 0) return // 既に最後面
+
+    // 1つ下のアイテムのzIndex - 1を設定
+    const newZIndex = Math.max(0, allItems[currentIndex - 1].zIndex - 1)
     const updated = { ...editingSticker, zIndex: newZIndex }
     setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
     setEditingSticker(updated)
-  }, [editingSticker, placedStickers])
+  }, [editingSticker, placedStickers, placedDecoItems])
 
   // Handle sticker update (完全な更新 - 編集モード終了)
   const handleUpdateSticker = useCallback((updated: PlacedSticker) => {
     setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
     setEditingSticker(null)
-  }, [])
+
+    // Supabaseモードの場合、配置をSupabaseに同期
+    if (currentDataSource === 'supabase') {
+      stickerBookService.updatePlacement(updated.id, {
+        x: updated.x,
+        y: updated.y,
+        rotation: updated.rotation,
+        scale: updated.scale,
+        zIndex: updated.zIndex,
+        pageId: updated.pageId,
+      })
+        .then(success => {
+          if (success) {
+            console.log('[Supabase] Placement updated:', updated.id)
+          }
+        })
+        .catch(error => {
+          console.error('[Supabase] Failed to update placement:', error)
+        })
+    }
+  }, [currentDataSource])
 
   // Handle sticker delete
   const handleDeleteSticker = useCallback((stickerId: string) => {
     setPlacedStickers(prev => prev.filter(s => s.id !== stickerId))
     setEditingSticker(null)
+
+    // Supabaseモードの場合、配置をSupabaseから削除
+    if (currentDataSource === 'supabase') {
+      stickerBookService.removePlacement(stickerId)
+        .then(success => {
+          if (success) {
+            console.log('[Supabase] Placement deleted:', stickerId)
+          }
+        })
+        .catch(error => {
+          console.error('[Supabase] Failed to delete placement:', error)
+        })
+    }
+  }, [currentDataSource])
+
+  // ======================
+  // デコアイテム関連ハンドラー
+  // ======================
+
+  // デコアイテム配置ハンドラー
+  const handlePlaceDecoItem = useCallback((pageId: string, x: number, y: number, rotation: number) => {
+    if (!selectedDecoItem) return
+
+    // 現在のページにあるシールとデコアイテムの最大zIndexを取得
+    const pageStickers = placedStickers.filter(s => s.pageId === pageId)
+    const pageDecoItems = placedDecoItems.filter(d => d.pageId === pageId)
+    const maxZIndex = Math.max(
+      ...pageStickers.map(s => s.zIndex ?? 1),
+      ...pageDecoItems.map(d => d.zIndex ?? 1),
+      0
+    )
+
+    // 初期サイズ：baseWidth/baseHeightを使用（レースは横長、スタンプは正方形）
+    const initialWidth = selectedDecoItem.baseWidth
+    const initialHeight = selectedDecoItem.baseHeight
+
+    const newDecoItem: PlacedDecoItem = {
+      id: `deco-${Date.now()}`,
+      decoItemId: selectedDecoItem.id,
+      decoItem: selectedDecoItem,
+      pageId,
+      x,
+      y,
+      rotation: selectedDecoItem.rotatable ? rotation : 0,
+      scale: 1,
+      width: initialWidth,
+      height: initialHeight,
+      zIndex: maxZIndex + 1,
+      placedAt: new Date().toISOString(),
+    }
+
+    setPlacedDecoItems(prev => [...prev, newDecoItem])
+    setSelectedDecoItem(null)
+
+    // 配置後すぐに編集モードに入る
+    const page = pages.find(p => p.id === pageId)
+    setEditingDecoItemPageSide(page?.side || 'left')
+    setEditingDecoItem(newDecoItem)
+
+    // エフェクト発動（ペタッ音）
+    if (bookContainerRef.current) {
+      const containerRect = bookContainerRef.current.getBoundingClientRect()
+      const actualBookWidth = isSpreadView ? BOOK_WIDTH * 2 : BOOK_WIDTH
+      const horizontalOffset = (containerRect.width - actualBookWidth) / 2
+      const page = pages.find(p => p.id === pageId)
+
+      let screenX: number
+      if (isSpreadView && page?.side === 'right') {
+        screenX = containerRect.left + horizontalOffset + BOOK_WIDTH + (x * BOOK_WIDTH)
+      } else {
+        screenX = containerRect.left + horizontalOffset + (x * BOOK_WIDTH)
+      }
+      const screenY = containerRect.top + 8 + (y * BOOK_HEIGHT)
+
+      setPlaceEffectPosition({ x: screenX, y: screenY })
+      setShowPlaceEffect(true)
+    }
+  }, [selectedDecoItem, placedStickers, placedDecoItems, isSpreadView, pages])
+
+  // デコアイテム削除ハンドラー
+  const handleDeleteDecoItem = useCallback((decoItemId: string) => {
+    setPlacedDecoItems(prev => prev.filter(d => d.id !== decoItemId))
+    setEditingDecoItem(null)
   }, [])
 
-  // Handle matching
-  const handleStartMatching = useCallback(() => {
-    setMatchingStatus('searching')
-    // Simulate finding a match after 2-3 seconds
-    setTimeout(() => {
-      setMatchingStatus('found')
-      setMatchedUser({
-        id: 'matched-user-1',
-        name: 'RandomPlayer',
-        avatarUrl: undefined,
-        level: 8,
-      })
-    }, 2000 + Math.random() * 1000)
-  }, [])
+  // 編集中デコアイテムのページサイド（見開き時に左右どちらか）
+  const [editingDecoItemPageSide, setEditingDecoItemPageSide] = useState<'left' | 'right'>('left')
 
-  const handleCancelMatching = useCallback(() => {
+  // デコアイテム編集開始ハンドラー（長押しで呼ばれる）
+  const handleEditDecoItem = useCallback((decoItem: PlacedDecoItem) => {
+    // デコアイテムがあるページのsideを判定
+    const page = pages.find(p => p.id === decoItem.pageId)
+    setEditingDecoItemPageSide(page?.side || 'left')
+    setEditingDecoItem(decoItem)
+  }, [pages])
+
+  // デコアイテム位置更新ハンドラー（ドラッグ中）
+  const handleEditingDecoDrag = useCallback((x: number, y: number) => {
+    if (!editingDecoItem) return
+    setPlacedDecoItems(prev => prev.map(d =>
+      d.id === editingDecoItem.id ? { ...d, x, y } : d
+    ))
+    setEditingDecoItem(prev => prev ? { ...prev, x, y } : null)
+  }, [editingDecoItem])
+
+  // デコアイテムサイズ更新ハンドラー（リサイズ中）
+  const handleEditingDecoResize = useCallback((width: number, height: number) => {
+    if (!editingDecoItem) return
+    setPlacedDecoItems(prev => prev.map(d =>
+      d.id === editingDecoItem.id ? { ...d, width, height } : d
+    ))
+    setEditingDecoItem(prev => prev ? { ...prev, width, height } : null)
+  }, [editingDecoItem])
+
+  // デコアイテムページ移動ハンドラー（見開き時に左右を跨いだ場合）
+  const handleEditingDecoPageSideChange = useCallback((newSide: 'left' | 'right') => {
+    if (!editingDecoItem) return
+    setEditingDecoItemPageSide(newSide)
+
+    // ページを跨いだ場合、pageIdを更新
+    const currentPageData = pages[currentPage]
+    let newPageId: string
+
+    if (currentPageData?.side === 'left') {
+      newPageId = newSide === 'right'
+        ? (pages[currentPage + 1]?.id || currentPageData.id)
+        : currentPageData.id
+    } else {
+      newPageId = newSide === 'left'
+        ? (pages[currentPage - 1]?.id || currentPageData?.id || '')
+        : (currentPageData?.id || '')
+    }
+
+    setPlacedDecoItems(prev => prev.map(d =>
+      d.id === editingDecoItem.id ? { ...d, pageId: newPageId } : d
+    ))
+    setEditingDecoItem(prev => prev ? { ...prev, pageId: newPageId } : null)
+  }, [editingDecoItem, currentPage, pages])
+
+  // デコアイテム回転更新ハンドラー（回転ハンドル操作中）
+  const handleEditingDecoRotate = useCallback((rotation: number) => {
+    if (!editingDecoItem) return
+    setPlacedDecoItems(prev => prev.map(d =>
+      d.id === editingDecoItem.id ? { ...d, rotation } : d
+    ))
+    setEditingDecoItem(prev => prev ? { ...prev, rotation } : null)
+  }, [editingDecoItem])
+
+  // ======================
+  // 統合レイヤー制御ハンドラー
+  // ======================
+
+  // 現在のページのレイヤーアイテム一覧を計算
+  const currentPageLayerItems = useMemo((): LayerItem[] => {
+    // 現在表示中のページIDを取得
+    const currentPageData = pages[currentPage]
+    if (!currentPageData) return []
+
+    // 見開き表示の場合は両方のページを含める
+    const pageIds = isSpreadView
+      ? [currentPageData.id, pages[currentPage + 1]?.id].filter(Boolean)
+      : [currentPageData.id]
+
+    // シールをレイヤーアイテムに変換
+    const stickerItems: LayerItem[] = placedStickers
+      .filter(s => pageIds.includes(s.pageId))
+      .map(s => ({
+        id: s.id,
+        type: 'sticker' as const,
+        name: s.sticker.name,
+        imageUrl: s.sticker.imageUrl,
+        zIndex: s.zIndex ?? 1,
+      }))
+
+    // デコアイテムをレイヤーアイテムに変換
+    const decoItems: LayerItem[] = placedDecoItems
+      .filter(d => pageIds.includes(d.pageId))
+      .map(d => ({
+        id: d.id,
+        type: 'deco' as const,
+        name: d.decoItem.name,
+        imageUrl: d.decoItem.imageUrl,
+        zIndex: d.zIndex ?? 1,
+      }))
+
+    return [...stickerItems, ...decoItems]
+  }, [pages, currentPage, isSpreadView, placedStickers, placedDecoItems])
+
+  // レイヤー順変更ハンドラー（隣のアイテムとzIndexを入れ替える方式）
+  const handleChangeLayerZIndex = useCallback((itemId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+    // 全アイテムの現在のzIndex一覧
+    const allItems = currentPageLayerItems
+    const currentItem = allItems.find(i => i.id === itemId)
+    if (!currentItem) return
+
+    const sortedItems = [...allItems].sort((a, b) => a.zIndex - b.zIndex)
+    const currentIndex = sortedItems.findIndex(i => i.id === itemId)
+
+    // アイテムのzIndexを更新するヘルパー関数
+    const updateItemZIndex = (id: string, newZIndex: number) => {
+      const isSticker = placedStickers.some(s => s.id === id)
+      if (isSticker) {
+        setPlacedStickers(prev => prev.map(s =>
+          s.id === id ? { ...s, zIndex: newZIndex } : s
+        ))
+        if (editingSticker?.id === id) {
+          setEditingSticker(prev => prev ? { ...prev, zIndex: newZIndex } : null)
+        }
+      } else {
+        setPlacedDecoItems(prev => prev.map(d =>
+          d.id === id ? { ...d, zIndex: newZIndex } : d
+        ))
+        if (editingDecoItem?.id === id) {
+          setEditingDecoItem(prev => prev ? { ...prev, zIndex: newZIndex } : null)
+        }
+      }
+    }
+
+    switch (direction) {
+      case 'top': {
+        // 最前面へ: 全アイテムのzIndexを順に振り直し、対象を最大に
+        const maxZIndex = Math.max(...allItems.map(i => i.zIndex))
+        if (currentItem.zIndex >= maxZIndex) return // 既に最前面
+        updateItemZIndex(itemId, maxZIndex + 1)
+        break
+      }
+      case 'bottom': {
+        // 最後面へ: 対象を最小に
+        const minZIndex = Math.min(...allItems.map(i => i.zIndex))
+        if (currentItem.zIndex <= minZIndex) return // 既に最後面
+        updateItemZIndex(itemId, Math.max(0, minZIndex - 1))
+        break
+      }
+      case 'up': {
+        // 1つ前面へ: 隣のアイテムとzIndexを入れ替え
+        if (currentIndex >= sortedItems.length - 1) return // 既に最前面
+        const targetItem = sortedItems[currentIndex + 1]
+        const currentZ = currentItem.zIndex
+        const targetZ = targetItem.zIndex
+        // zIndexが同じ場合は、currentを+1にして確実に前に出す
+        if (currentZ === targetZ) {
+          updateItemZIndex(itemId, targetZ + 1)
+        } else {
+          // zIndexを入れ替え
+          updateItemZIndex(itemId, targetZ)
+          updateItemZIndex(targetItem.id, currentZ)
+        }
+        break
+      }
+      case 'down': {
+        // 1つ後面へ: 隣のアイテムとzIndexを入れ替え
+        if (currentIndex <= 0) return // 既に最後面
+        const targetItem = sortedItems[currentIndex - 1]
+        const currentZ = currentItem.zIndex
+        const targetZ = targetItem.zIndex
+        // zIndexが同じ場合は、currentを-1にして確実に後ろに出す
+        if (currentZ === targetZ) {
+          updateItemZIndex(itemId, Math.max(0, targetZ - 1))
+        } else {
+          // zIndexを入れ替え
+          updateItemZIndex(itemId, targetZ)
+          updateItemZIndex(targetItem.id, currentZ)
+        }
+        break
+      }
+    }
+  }, [placedStickers, placedDecoItems, currentPageLayerItems, editingSticker, editingDecoItem])
+
+  // レイヤーパネルを開く時にzIndexを正規化（連番に振り直し）
+  const handleOpenLayerPanel = useCallback(() => {
+    // 現在のページのアイテムをzIndex順でソート
+    const allItems = currentPageLayerItems
+    if (allItems.length === 0) {
+      setIsLayerPanelOpen(true)
+      return
+    }
+
+    const sortedItems = [...allItems].sort((a, b) => a.zIndex - b.zIndex)
+
+    // 連番に振り直し（0, 1, 2, 3, ...）
+    sortedItems.forEach((item, index) => {
+      const newZIndex = index + 1 // 1から開始
+      if (item.zIndex !== newZIndex) {
+        const isSticker = placedStickers.some(s => s.id === item.id)
+        if (isSticker) {
+          setPlacedStickers(prev => prev.map(s =>
+            s.id === item.id ? { ...s, zIndex: newZIndex } : s
+          ))
+        } else {
+          setPlacedDecoItems(prev => prev.map(d =>
+            d.id === item.id ? { ...d, zIndex: newZIndex } : d
+          ))
+        }
+      }
+    })
+
+    setIsLayerPanelOpen(true)
+  }, [currentPageLayerItems, placedStickers])
+
+  // Handle matching - Supabase連携対応
+  const handleStartMatching = useCallback(async () => {
+    if (dataSource === 'supabase') {
+      // Supabase: 実際のマッチング
+      setMatchingStatus('searching')
+      console.log('[Trade] Starting Supabase matching for user:', currentTestUser.name)
+
+      // 1. まず待機中の交換を最新取得
+      await supabaseTradeActions.refreshWaitingTrades()
+
+      // 少し待ってから状態を確認（非同期更新のため）
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // 2. 待機中の交換があるかチェック（直接DBから取得）
+      const { tradeService } = await import('@/services/trades')
+      const waitingTrades = await tradeService.findWaitingTrades(currentTestUser.supabaseId)
+      console.log('[Trade] Found waiting trades:', waitingTrades.length)
+
+      if (waitingTrades.length > 0) {
+        // 相手の交換が見つかった！
+        const waitingTrade = waitingTrades[0]
+        const partnerTestUser = TEST_USERS.find(u => u.supabaseId === waitingTrade.user1_id)
+        console.log('[Trade] Found partner:', partnerTestUser?.name, 'Trade ID:', waitingTrade.id, 'Created:', waitingTrade.created_at)
+
+        if (partnerTestUser) {
+          setMatchingStatus('found')
+          setMatchedUser({
+            id: waitingTrade.id, // 交換IDを使用
+            name: partnerTestUser.name,
+            avatarUrl: undefined,
+            level: 1,
+          })
+          return
+        }
+      }
+
+      // 3. 見つからなかった場合、自分の交換を作成して待機
+      console.log('[Trade] No waiting trades found, creating new trade...')
+      await supabaseTradeActions.startMatching()
+      // searching状態のまま待機（Realtimeで相手を待つ）
+
+    } else {
+      // ローカル: シミュレーション（Supabase未接続時のフォールバック）
+      console.log('[Trade] Using local simulation (no Supabase)')
+      setMatchingStatus('searching')
+      setTimeout(() => {
+        setMatchingStatus('found')
+        setMatchedUser({
+          id: 'matched-user-1',
+          name: 'RandomPlayer',
+          avatarUrl: undefined,
+          level: 8,
+        })
+      }, 2000 + Math.random() * 1000)
+    }
+  }, [dataSource, supabaseTradeActions, currentTestUser])
+
+  const handleCancelMatching = useCallback(async () => {
+    if (dataSource === 'supabase') {
+      await supabaseTradeActions.cancelMatching()
+    }
     setMatchingStatus('idle')
     setMatchedUser(null)
+  }, [dataSource, supabaseTradeActions])
+
+  const handleAcceptMatch = useCallback(async () => {
+    if (!matchedUser) return
+
+    if (dataSource === 'supabase') {
+      // Supabase: 実際に交換に参加
+      console.log('[Trade] Accepting match, joining trade:', matchedUser.id)
+      try {
+        await supabaseTradeActions.joinTrade(matchedUser.id)
+
+        // 相手ユーザー情報を設定
+        setTradePartner({
+          id: matchedUser.id,
+          name: matchedUser.name,
+          avatarUrl: matchedUser.avatarUrl,
+          level: matchedUser.level ?? 1,
+        })
+        setMatchingStatus('idle')
+        setIsTradeSessionOpen(true)
+      } catch (e) {
+        console.error('[Trade] Failed to join trade:', e)
+        // エラーの場合は検索画面に戻す
+        setMatchingStatus('searching')
+        setMatchedUser(null)
+      }
+    } else {
+      // ローカル: シミュレーション
+      setTradePartner({
+        id: matchedUser.id,
+        name: matchedUser.name,
+        avatarUrl: matchedUser.avatarUrl,
+        level: matchedUser.level ?? 1,
+      })
+      setMatchingStatus('idle')
+      setIsTradeSessionOpen(true)
+    }
+  }, [matchedUser, dataSource, supabaseTradeActions])
+
+  // ミステリーポスト ハンドラー
+  const handlePostSticker = useCallback((stickerId: string, message: PresetMessage) => {
+    const sticker = collectionStickers.find(s => s.id === stickerId)
+    if (!sticker) return
+
+    const newPosted: PostedSticker = {
+      id: `posted-${Date.now()}`,
+      stickerId: sticker.id,
+      stickerName: sticker.name,
+      stickerImageUrl: sticker.imageUrl || '',
+      rarity: sticker.rarity,
+      message,
+      postedAt: new Date().toISOString(),
+      status: 'pending',
+    }
+
+    setMysteryPostState(prev => ({
+      ...prev,
+      todayPosted: newPosted,
+      pendingStickers: [...prev.pendingStickers, newPosted],
+      nextDeliveryTime: getNextDeliveryTime(),
+    }))
+
+    // 投函したら経験値獲得
+    gainExp('place_sticker')
+  }, [gainExp])
+
+  const handleOpenReceivedSticker = useCallback((sticker: ReceivedSticker) => {
+    setSelectedReceivedSticker(sticker)
+    setIsReceivedStickerModalOpen(true)
   }, [])
 
-  const handleAcceptMatch = useCallback(() => {
-    if (!matchedUser) return
-    setMatchingStatus('idle')
+  const handleStickerOpened = useCallback((stickerId: string) => {
+    setMysteryPostState(prev => ({
+      ...prev,
+      receivedStickers: prev.receivedStickers.map(s =>
+        s.id === stickerId ? { ...s, isOpened: true } : s
+      ),
+    }))
+    // 開封したら経験値獲得
+    gainExp('place_sticker')
+  }, [gainExp])
+
+  const handleCancelPost = useCallback((postId: string) => {
+    setMysteryPostState(prev => ({
+      ...prev,
+      pendingStickers: prev.pendingStickers.filter(s => s.id !== postId),
+      todayPosted: prev.todayPosted?.id === postId ? null : prev.todayPosted,
+    }))
+  }, [])
+
+  // Trade Scout handlers
+  const handleToggleScoutActive = useCallback((active: boolean) => {
+    setTradeScoutState(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        isActive: active,
+        updatedAt: new Date().toISOString(),
+      },
+    }))
+  }, [])
+
+  const handleSaveWantList = useCallback((stickers: ScoutSticker[]) => {
+    setTradeScoutState(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        wantList: stickers,
+        updatedAt: new Date().toISOString(),
+      },
+    }))
+  }, [])
+
+  const handleSaveOfferList = useCallback((stickers: ScoutSticker[]) => {
+    setTradeScoutState(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        offerList: stickers,
+        updatedAt: new Date().toISOString(),
+      },
+    }))
+  }, [])
+
+  const handleViewScoutMatch = useCallback((match: ScoutMatch) => {
+    setSelectedScoutMatch(match)
+    setIsMatchDetailModalOpen(true)
+    // 既読にする
+    setTradeScoutState(prev => ({
+      ...prev,
+      matches: prev.matches.map(m =>
+        m.id === match.id ? { ...m, isRead: true } : m
+      ),
+    }))
+  }, [])
+
+  const handleStartTradeFromScout = useCallback((match: ScoutMatch) => {
+    // マッチしたユーザーとトレードを開始
     setTradePartner({
-      id: matchedUser.id,
-      name: matchedUser.name,
-      avatarUrl: matchedUser.avatarUrl,
-      level: matchedUser.level ?? 1,
+      id: match.user.id,
+      name: match.user.name,
+      avatarUrl: match.user.avatarUrl,
+      level: match.user.level,
     })
     setIsTradeSessionOpen(true)
-  }, [matchedUser])
+    setIsMatchDetailModalOpen(false)
+  }, [])
 
   // Handle gacha
+  // 重み付きランダム抽選関数
+  const weightedRandomPull = useCallback(() => {
+    // gachaWeight を使用して重み付きランダム抽選
+    // gachaWeight が低いほどレア（★5 = 1, ★1 = 55）
+    const totalWeight = demoStickers.reduce((sum, s) => sum + (s.gachaWeight || 1), 0)
+    let random = Math.random() * totalWeight
+
+    for (const sticker of demoStickers) {
+      random -= (sticker.gachaWeight || 1)
+      if (random <= 0) {
+        return sticker
+      }
+    }
+    // フォールバック
+    return demoStickers[demoStickers.length - 1]
+  }, [])
+
   const handlePullGacha = useCallback((bannerId: string, count: number) => {
+    // 現在の所持状況を取得（isNew判定用）
+    const collectionMap = new Map(collection.map(c => [c.stickerId, c]))
+
     const results: GachaResultSticker[] = []
+    const pulledStickerIds: string[] = []
+
     for (let i = 0; i < count; i++) {
-      const randomSticker = demoStickers[Math.floor(Math.random() * demoStickers.length)]
+      // 重み付きランダム抽選を使用
+      const randomSticker = weightedRandomPull()
+      pulledStickerIds.push(randomSticker.id)
+
+      // isNew: まだ1枚も持っていないシールの場合はtrue
+      // ただし、今回のガチャで既に引いた場合は最初の1枚のみnew
+      const existingInCollection = collectionMap.get(randomSticker.id)
+      const alreadyPulledInThisGacha = pulledStickerIds.filter(id => id === randomSticker.id).length > 1
+      const isNew = !existingInCollection && !alreadyPulledInThisGacha
+
       results.push({
         id: randomSticker.id,
         name: randomSticker.name,
         imageUrl: randomSticker.imageUrl,
         rarity: randomSticker.rarity as 1 | 2 | 3 | 4 | 5,
         type: randomSticker.type,
-        isNew: Math.random() > 0.5,
+        isNew,
       })
     }
+
     setGachaResults(results)
+    setLastGachaPull({ bannerId, count }) // 前回のガチャ設定を保存
     setIsGachaResultModalOpen(true)
+
+    // コレクションにシールを追加
+    const { collection: newCollection, newStickers } = addStickersToCollection(collection, pulledStickerIds)
+    setCollection(newCollection)
+    console.log('[Gacha] Added stickers to collection:', pulledStickerIds.length, 'total, new:', newStickers.length)
 
     // Deduct currency
     const banner = demoBanners.find(b => b.id === bannerId)
     if (banner) {
       const cost = count === 1 ? banner.costSingle : banner.costMulti
       if (banner.currency === 'ticket') {
-        setUserCurrency(prev => ({ ...prev, tickets: Math.max(0, prev.tickets - cost) }))
-      } else if (banner.currency === 'gem') {
-        setUserCurrency(prev => ({ ...prev, gems: Math.max(0, prev.gems - cost) }))
+        setUserMonetization(prev => ({ ...prev, tickets: Math.max(0, prev.tickets - cost) }))
       } else if (banner.currency === 'star') {
-        setUserCurrency(prev => ({ ...prev, stars: Math.max(0, prev.stars - cost) }))
+        setUserMonetization(prev => ({ ...prev, stars: Math.max(0, prev.stars - cost) }))
+      } else if (banner.currency === 'gem') {
+        setUserMonetization(prev => ({ ...prev, gems: Math.max(0, prev.gems - cost) }))
       }
     }
-  }, [])
+
+    // 経験値獲得（1回引く: +10 EXP, 10連: +100 EXP）
+    gainExp(count === 1 ? 'gacha_single' : 'gacha_ten')
+  }, [gainExp, collection])
 
   // Handle reactions
   const handleReaction = useCallback((postId: string, reactionType: ReactionType) => {
@@ -837,6 +2414,102 @@ export default function Home() {
     setBlockTarget(null)
   }, [])
 
+  // ==================== Shop Handlers ====================
+  // Open shop
+  const handleOpenShop = useCallback(() => {
+    setIsShopOpen(true)
+  }, [])
+
+  // Close shop
+  const handleCloseShop = useCallback(() => {
+    setIsShopOpen(false)
+  }, [])
+
+  // Handle insufficient funds - show modal with options
+  const handleInsufficientFunds = useCallback((fundType: 'tickets' | 'stars', required: number, current: number) => {
+    setInsufficientFundsModal({
+      isOpen: true,
+      fundType,
+      required,
+      current,
+    })
+  }, [])
+
+  // Close insufficient funds modal
+  const handleCloseInsufficientFunds = useCallback(() => {
+    setInsufficientFundsModal(prev => ({ ...prev, isOpen: false }))
+  }, [])
+
+  // Watch ad for ticket
+  const handleWatchAd = useCallback(() => {
+    setUserMonetization(prev => {
+      const result = watchAdForTicket(prev)
+      return result ?? prev
+    })
+    setIsAdRewardModalOpen(false)
+    handleCloseInsufficientFunds()
+  }, [handleCloseInsufficientFunds])
+
+  // Open ad reward modal
+  const handleOpenAdReward = useCallback(() => {
+    setIsAdRewardModalOpen(true)
+    handleCloseInsufficientFunds()
+  }, [handleCloseInsufficientFunds])
+
+  // Purchase stars
+  const handlePurchaseStars = useCallback((packId: string) => {
+    setUserMonetization(prev => {
+      const result = purchaseStars(prev, packId)
+      return result ?? prev
+    })
+    handleCloseInsufficientFunds()
+  }, [handleCloseInsufficientFunds])
+
+  // Subscribe
+  const handleSubscribe = useCallback((tier: SubscriptionTier) => {
+    setUserMonetization(prev => ({
+      ...prev,
+      subscription: tier,
+    }))
+    handleCloseInsufficientFunds()
+    setIsShopOpen(false)
+  }, [handleCloseInsufficientFunds])
+
+  // Open shop from insufficient funds modal
+  const handleGoToShop = useCallback(() => {
+    handleCloseInsufficientFunds()
+    setIsShopOpen(true)
+  }, [handleCloseInsufficientFunds])
+
+  // Check and collect daily bonus on mount
+  useEffect(() => {
+    if (needsDailyReset(userMonetization.lastDailyReset)) {
+      // Calculate bonus amounts
+      const plan = userMonetization.subscription === 'none'
+        ? { dailyBonusTickets: 0, skipAds: false, dailyStars: 0 }
+        : { dailyBonusTickets: 2, skipAds: userMonetization.subscription !== 'light', dailyStars: userMonetization.subscription === 'light' ? 5 : userMonetization.subscription === 'plus' ? 15 : 30 }
+
+      const baseTickets = 3 // DAILY_FREE_TICKETS
+      const adSkipTickets = plan.skipAds ? 10 : 0 // MAX_AD_WATCHES_PER_DAY
+      const totalTickets = baseTickets + plan.dailyBonusTickets + adSkipTickets
+      const totalStars = plan.dailyStars
+
+      // Apply daily reset and collect bonuses
+      setUserMonetization(prev => {
+        let state: UserMonetization = { ...prev, lastDailyReset: new Date().toISOString().split('T')[0], dailyTicketsCollected: false, dailyStarsCollected: false, completedMissions: [] as string[], adsWatchedToday: 0 }
+        state = collectDailyTickets(state)
+        state = collectDailyStars(state)
+        return state
+      })
+
+      setDailyBonusReceived({
+        tickets: totalTickets,
+        stars: totalStars,
+      })
+      setIsDailyBonusModalOpen(true)
+    }
+  }, []) // Run only once on mount
+
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
@@ -845,8 +2518,10 @@ export default function Home() {
         const isBackCover = pages[currentPage]?.type === 'back-cover'
         // シール操作中かどうか（貼り付け中または編集中）
         const isStickerOperating = (selectedSticker && isDragging) || editingSticker
-        // UIを隠すべきかどうか（モーダル表示中またはシール操作中）
-        const shouldHideUI = isPageEditModalOpen || isStickerOperating
+        // デコ編集中かどうか
+        const isDecoEditing = !!editingDecoItem
+        // UIを隠すべきかどうか（モーダル表示中またはシール操作中またはデコ編集中またはレイヤーパネル表示中）
+        const shouldHideUI = isPageEditModalOpen || isStickerOperating || isDecoEditing || isLayerPanelOpen
 
         return (
           <div className="flex flex-col h-full relative">
@@ -866,16 +2541,73 @@ export default function Home() {
                   // シール帳の左右に5pxのパディング
                   paddingLeft: '5px',
                   paddingRight: '5px',
+                  // デコ選択中はカーソルを変更
+                  cursor: selectedDecoItem ? 'copy' : 'default',
+                }}
+                onClick={(e) => {
+                  // デコアイテムが選択されている場合、クリック位置に配置
+                  if (!selectedDecoItem) return
+
+                  const containerRect = bookContainerRef.current?.getBoundingClientRect()
+                  if (!containerRect) return
+
+                  // 本の実際の領域を計算
+                  const actualBookWidth = isSpreadView ? BOOK_WIDTH * 2 : BOOK_WIDTH
+                  const horizontalOffset = (containerRect.width - actualBookWidth) / 2
+                  const topOffset = 16 // pt-4 = 16px
+
+                  // クリック位置を本内の相対座標に変換
+                  const clickX = e.clientX - containerRect.left - horizontalOffset
+                  const clickY = e.clientY - containerRect.top - topOffset
+
+                  // 本の範囲外なら無視
+                  if (clickX < 0 || clickX > actualBookWidth || clickY < 0 || clickY > BOOK_HEIGHT) {
+                    return
+                  }
+
+                  // 相対座標に変換 (0-1)
+                  let relativeX: number
+                  let pageId: string
+                  const currentPageData = pages[currentPage]
+
+                  if (isSpreadView && currentPageData?.type === 'page') {
+                    // 見開きモードでクリック位置からページを判定
+                    if (clickX >= BOOK_WIDTH) {
+                      // 右ページ
+                      relativeX = (clickX - BOOK_WIDTH) / BOOK_WIDTH
+                      const rightPageIndex = currentPageData.side === 'left' ? currentPage + 1 : currentPage
+                      pageId = pages[rightPageIndex]?.id || ''
+                    } else {
+                      // 左ページ
+                      relativeX = clickX / BOOK_WIDTH
+                      const leftPageIndex = currentPageData.side === 'left' ? currentPage : currentPage - 1
+                      pageId = pages[leftPageIndex]?.id || ''
+                    }
+                  } else {
+                    // 単ページモード
+                    relativeX = clickX / actualBookWidth
+                    pageId = currentPageData?.id || ''
+                  }
+
+                  const relativeY = clickY / BOOK_HEIGHT
+
+                  // デコを配置
+                  handlePlaceDecoItem(pageId, relativeX, relativeY, 0)
+                  // ドロワーを閉じる
+                  setIsDecoDrawerOpen(false)
                 }}
               >
                 <BookView
                   ref={bookRef}
                   pages={pages}
                   placedStickers={placedStickers}
+                  placedDecoItems={placedDecoItems}
                   onPageChange={handlePageTurn}
                   onStickerLongPress={handleEditSticker}
+                  onDecoItemLongPress={handleEditDecoItem}
                   coverDesignId={coverDesignId}
                   editingStickerId={editingSticker?.id}
+                  editingDecoItemId={editingDecoItem?.id}
                   renderNavigation={false}
                 />
               </div>
@@ -935,9 +2667,10 @@ export default function Home() {
                   scrollContainerRef={scrollContainerRef}
                 />
               )}
-              {/* 編集中のシールをフローティング表示（自動スクロール対応） */}
+              {/* 編集中のシールをフローティング表示（ドラッグ対応） */}
               {editingSticker && (
                 <FloatingEditSticker
+                  key={`floating-edit-${editingSticker.id}`}
                   sticker={editingSticker}
                   bookContainerRef={bookContainerRef}
                   scrollContainerRef={scrollContainerRef}
@@ -949,6 +2682,7 @@ export default function Home() {
                   onPageSideChange={handleEditingPageSideChange}
                 />
               )}
+              {/* シール編集コントロール */}
               {editingSticker && (() => {
                 const layerInfo = getLayerInfo()
                 return (
@@ -966,23 +2700,257 @@ export default function Home() {
                   />
                 )
               })()}
+              {/* 編集中のデコアイテムをフローティング表示（リサイズハンドル付き） */}
+              {editingDecoItem && (
+                <FloatingEditDeco
+                  key={`floating-edit-deco-${editingDecoItem.id}`}
+                  decoItem={editingDecoItem}
+                  bookContainerRef={bookContainerRef}
+                  scrollContainerRef={scrollContainerRef}
+                  pageWidth={BOOK_WIDTH}
+                  pageHeight={BOOK_HEIGHT}
+                  isSpreadView={isSpreadView}
+                  pageSide={editingDecoItemPageSide}
+                  onDrag={handleEditingDecoDrag}
+                  onResize={handleEditingDecoResize}
+                  onRotate={handleEditingDecoRotate}
+                  onPageSideChange={handleEditingDecoPageSideChange}
+                />
+              )}
+              {/* デコアイテム編集コントロール */}
+              {editingDecoItem && (() => {
+                // デコアイテムのレイヤー情報を計算
+                const samePageStickers = placedStickers.filter(s => s.pageId === editingDecoItem.pageId)
+                const samePageDecoItems = placedDecoItems.filter(d => d.pageId === editingDecoItem.pageId)
+                const allItems = [
+                  ...samePageStickers.map(s => ({ id: s.id, zIndex: s.zIndex ?? 1 })),
+                  ...samePageDecoItems.map(d => ({ id: d.id, zIndex: d.zIndex ?? 1 })),
+                ].sort((a, b) => a.zIndex - b.zIndex)
+                const totalLayers = allItems.length
+                const currentIndex = allItems.findIndex(item => item.id === editingDecoItem.id)
+                const decoIsAtFront = currentIndex >= allItems.length - 1
+                const decoIsAtBack = currentIndex <= 0
+
+                const handleDecoBringToFront = () => {
+                  if (decoIsAtFront || currentIndex >= allItems.length - 1) return
+                  const newZIndex = allItems[currentIndex + 1].zIndex + 1
+                  setPlacedDecoItems(prev => prev.map(d =>
+                    d.id === editingDecoItem.id ? { ...d, zIndex: newZIndex } : d
+                  ))
+                  setEditingDecoItem(prev => prev ? { ...prev, zIndex: newZIndex } : null)
+                }
+
+                const handleDecoSendToBack = () => {
+                  if (decoIsAtBack || currentIndex <= 0) return
+                  const newZIndex = Math.max(0, allItems[currentIndex - 1].zIndex - 1)
+                  setPlacedDecoItems(prev => prev.map(d =>
+                    d.id === editingDecoItem.id ? { ...d, zIndex: newZIndex } : d
+                  ))
+                  setEditingDecoItem(prev => prev ? { ...prev, zIndex: newZIndex } : null)
+                }
+
+                return (
+                  <div
+                    className="fixed bottom-0 left-0 right-0 z-[200] flex justify-center px-4 pb-4"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <div
+                      className="rounded-2xl p-4 w-full"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(24px)',
+                        boxShadow: '0 8px 32px rgba(236, 72, 153, 0.2)',
+                        maxWidth: '360px',
+                      }}
+                    >
+                      {/* ヘッダー */}
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-2">
+                          {/* デコプレビュー */}
+                          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-pink-50 border border-pink-200">
+                            {editingDecoItem.decoItem.imageUrl ? (
+                              <img
+                                src={editingDecoItem.decoItem.imageUrl}
+                                alt={editingDecoItem.decoItem.name}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <span className="text-xl">🎀</span>
+                            )}
+                          </div>
+                          <h3
+                            className="font-bold text-sm"
+                            style={{
+                              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                              color: '#EC4899',
+                            }}
+                          >
+                            ✏️ デコへんしゅう
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => setEditingDecoItem(null)}
+                          className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95 text-sm"
+                          style={{
+                            background: 'rgba(236, 72, 153, 0.15)',
+                            color: '#EC4899',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* 回転 */}
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 justify-center">
+                          <span className="text-xs text-pink-500">🔄</span>
+                          <button
+                            onClick={() => handleEditingDecoRotate((editingDecoItem.rotation ?? 0) - 15)}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95"
+                            style={{
+                              background: 'linear-gradient(135deg, #FBCFE8 0%, #F9A8D4 100%)',
+                              color: '#BE185D',
+                            }}
+                          >
+                            ↺
+                          </button>
+                          <input
+                            type="range"
+                            min="-180"
+                            max="180"
+                            value={editingDecoItem.rotation ?? 0}
+                            onChange={(e) => handleEditingDecoRotate(Number(e.target.value))}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                            style={{
+                              background: 'linear-gradient(to right, #FBCFE8 0%, #EC4899 50%, #FBCFE8 100%)',
+                            }}
+                          />
+                          <button
+                            onClick={() => handleEditingDecoRotate((editingDecoItem.rotation ?? 0) + 15)}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-base transition-all active:scale-95"
+                            style={{
+                              background: 'linear-gradient(135deg, #FBCFE8 0%, #F9A8D4 100%)',
+                              color: '#BE185D',
+                            }}
+                          >
+                            ↻
+                          </button>
+                          <span className="text-xs text-pink-500 w-10 text-center">{Math.round(editingDecoItem.rotation ?? 0)}°</span>
+                        </div>
+                      </div>
+
+                      {/* 重なり順と削除 */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleDecoSendToBack}
+                          disabled={decoIsAtBack || totalLayers <= 1}
+                          className="flex-1 py-2 rounded-full flex items-center justify-center text-xs font-medium transition-all active:scale-95 disabled:opacity-40"
+                          style={{
+                            background: decoIsAtBack ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #FBCFE8 0%, #F9A8D4 100%)',
+                            color: decoIsAtBack ? '#9CA3AF' : '#BE185D',
+                            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                          }}
+                        >
+                          ⬇️ した
+                        </button>
+                        <button
+                          onClick={handleDecoBringToFront}
+                          disabled={decoIsAtFront || totalLayers <= 1}
+                          className="flex-1 py-2 rounded-full flex items-center justify-center text-xs font-medium transition-all active:scale-95 disabled:opacity-40"
+                          style={{
+                            background: decoIsAtFront ? 'rgba(200, 200, 200, 0.5)' : 'linear-gradient(135deg, #FBCFE8 0%, #F9A8D4 100%)',
+                            color: decoIsAtFront ? '#9CA3AF' : '#BE185D',
+                            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                          }}
+                        >
+                          ⬆️ うえ
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDecoItem(editingDecoItem.id)}
+                          className="py-2 px-3 rounded-full font-medium transition-all active:scale-95 text-xs"
+                          style={{
+                            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            color: '#EF4444',
+                          }}
+                        >
+                          🗑️ はがす
+                        </button>
+                      </div>
+
+                      {/* 決定ボタン */}
+                      <button
+                        onClick={() => setEditingDecoItem(null)}
+                        className="w-full mt-3 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98]"
+                        style={{
+                          fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                          background: 'linear-gradient(135deg, #EC4899 0%, #F472B6 100%)',
+                          color: 'white',
+                          boxShadow: '0 4px 12px rgba(236, 72, 153, 0.3)',
+                        }}
+                      >
+                        ✨ ここにはる
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             {/* StickerTray - シール操作中は非表示 */}
             {!shouldHideUI && (
               <div className="flex-shrink-0">
                 <StickerTray
-                  stickers={demoStickers}
+                  stickers={placeableStickers}
                   onStickerSelect={(sticker) => {
+                    // 表紙・裏表紙の場合は自動でページをめくる
+                    const currentPageType = pages[currentPage]?.type
+                    if (currentPageType === 'cover') {
+                      bookRef.current?.flipNext()
+                    } else if (currentPageType === 'back-cover') {
+                      bookRef.current?.flipPrev()
+                    }
                     setSelectedSticker(sticker)
                     setIsDragging(true)
+                    // デコ選択を解除
+                    setSelectedDecoItem(null)
                   }}
                 />
               </div>
             )}
+            {/* デコ・ドロワー - シール操作中は非表示 */}
+            {!shouldHideUI && (
+              <DecoDrawer
+                availableItems={ownedDecoItems}
+                selectedItem={selectedDecoItem}
+                onSelectItem={(item) => {
+                  // 表紙・裏表紙の場合は自動でページをめくる
+                  if (item) {
+                    const currentPageType = pages[currentPage]?.type
+                    if (currentPageType === 'cover') {
+                      bookRef.current?.flipNext()
+                    } else if (currentPageType === 'back-cover') {
+                      bookRef.current?.flipPrev()
+                    }
+                  }
+                  setSelectedDecoItem(item)
+                  // シール選択を解除
+                  if (item) {
+                    setSelectedSticker(null)
+                    setIsDragging(false)
+                  }
+                }}
+                isOpen={isDecoDrawerOpen}
+                onToggle={() => setIsDecoDrawerOpen(prev => !prev)}
+              />
+            )}
             {/* Page toolbar - 画像ボタン (StickerTrayの上に固定配置) - シール操作中・モーダル表示中は非表示 */}
             {!shouldHideUI && (
-            <div className="fixed bottom-[230px] left-0 right-0 z-[200] flex justify-center items-center gap-2 py-0 pointer-events-none">
-              <div className="flex items-center gap-2 px-4 py-0 bg-white/80 backdrop-blur-md rounded-full shadow-lg pointer-events-auto">
+            <div className="fixed bottom-[215px] left-0 right-0 z-[200] flex justify-center items-center gap-1 py-0 pointer-events-none">
+              <div
+                className="flex items-center gap-0.5 px-3 py-0 bg-white/80 backdrop-blur-md rounded-full shadow-lg pointer-events-auto"
+                style={{ position: 'relative', left: '1px', top: '-1px' }}
+              >
               {/* 左ページボタン */}
               <button
                 onClick={() => bookRef.current?.flipPrev()}
@@ -998,7 +2966,7 @@ export default function Home() {
                 />
               </button>
               {/* ページ番号表示 */}
-              <div className="relative w-28 h-14 flex items-center justify-center">
+              <div className="relative w-24 h-12 flex items-center justify-center">
                 <img
                   src="/images/Home_Button/Page_Number.png"
                   alt=""
@@ -1080,6 +3048,30 @@ export default function Home() {
                   draggable={false}
                 />
               </button>
+              {/* レイヤーボタン（シールやデコの重なり順を調整） */}
+              <button
+                onClick={handleOpenLayerPanel}
+                className="relative w-11 h-11 active:scale-95 transition-transform flex items-center justify-center
+                  bg-gradient-to-br from-purple-500 to-purple-600 rounded-full shadow-md"
+                aria-label="レイヤー"
+                disabled={currentPageLayerItems.length === 0}
+                style={{
+                  opacity: currentPageLayerItems.length === 0 ? 0.5 : 1,
+                }}
+              >
+                <span className="text-white text-lg">📚</span>
+              </button>
+              {/* デコボタン（デコ素材選択ドロワーを開く） */}
+              <button
+                onClick={() => setIsDecoDrawerOpen(prev => !prev)}
+                className={`relative w-11 h-11 active:scale-95 transition-transform flex items-center justify-center
+                  rounded-full shadow-md ${isDecoDrawerOpen
+                    ? 'bg-gradient-to-br from-pink-500 to-rose-500 ring-2 ring-pink-300'
+                    : 'bg-gradient-to-br from-pink-400 to-pink-500'}`}
+                aria-label="デコ"
+              >
+                <span className="text-white text-lg">✨</span>
+              </button>
               </div>
             </div>
             )}
@@ -1089,7 +3081,7 @@ export default function Home() {
       case 'collection':
         return (
           <CollectionView
-            stickers={demoCollectionStickers}
+            stickers={collectionStickers}
             onStickerClick={(sticker) => {
               setSelectedCollectionSticker(sticker)
               setIsStickerDetailModalOpen(true)
@@ -1104,29 +3096,106 @@ export default function Home() {
             userCurrency={userCurrency}
             onPullSingle={(bannerId) => handlePullGacha(bannerId, 1)}
             onPullMulti={(bannerId) => handlePullGacha(bannerId, 10)}
+            onOpenShop={handleOpenShop}
+            onInsufficientFunds={handleInsufficientFunds}
           />
         )
 
       case 'trade':
         return (
-          <TradeView
-            friends={demoFriends}
-            history={demoTradeHistory}
-            onStartMatching={handleStartMatching}
-            onTradeWithFriend={(friendId) => {
-              const friend = demoFriends.find(f => f.id === friendId)
-              if (friend) {
-                setTradePartner({
-                  id: friend.id,
-                  name: friend.name,
-                  avatarUrl: friend.avatarUrl,
-                  level: 1,
-                })
-                setIsTradeSessionOpen(true)
-              }
-            }}
-            onViewHistory={(historyId) => console.log('View history:', historyId)}
-          />
+          <div className="h-full flex flex-col">
+            {/* サブタブセレクター */}
+            <div
+              className="flex shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
+              }}
+            >
+              <button
+                onClick={() => setTradeSubTab('trade')}
+                className={`flex-1 py-3 font-bold text-sm transition-all ${
+                  tradeSubTab === 'trade'
+                    ? 'text-white border-b-2 border-white'
+                    : 'text-white/60'
+                }`}
+                style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+              >
+                🤝 こうかん
+              </button>
+              <button
+                onClick={() => setTradeSubTab('mystery')}
+                className={`flex-1 py-3 font-bold text-sm transition-all relative ${
+                  tradeSubTab === 'mystery'
+                    ? 'text-white border-b-2 border-white'
+                    : 'text-white/60'
+                }`}
+                style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+              >
+                📮 ポスト
+                {/* 未開封バッジ */}
+                {mysteryPostState.receivedStickers.filter(s => !s.isOpened).length > 0 && (
+                  <span className="absolute -top-1 right-2 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: '#EF4444' }}>
+                    {mysteryPostState.receivedStickers.filter(s => !s.isOpened).length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setTradeSubTab('scout')}
+                className={`flex-1 py-3 font-bold text-sm transition-all relative ${tradeSubTab === 'scout' ? 'text-white border-b-2 border-white' : 'text-white/60'}`}
+                style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+              >
+                🔍 スカウト
+                {/* マッチングバッジ */}
+                {tradeScoutState.matches.filter(m => !m.isRead).length > 0 && (
+                  <span className="absolute -top-1 right-2 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: '#10B981' }}>
+                    {tradeScoutState.matches.filter(m => !m.isRead).length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="flex-1 overflow-hidden">
+              {tradeSubTab === 'trade' && (
+                <TradeView
+                  friends={demoFriends}
+                  history={demoTradeHistory}
+                  onStartMatching={handleStartMatching}
+                  onTradeWithFriend={(friendId) => {
+                    const friend = demoFriends.find(f => f.id === friendId)
+                    if (friend) {
+                      setTradePartner({
+                        id: friend.id,
+                        name: friend.name,
+                        avatarUrl: friend.avatarUrl,
+                        level: 1,
+                      })
+                      setIsTradeSessionOpen(true)
+                    }
+                  }}
+                  onViewHistory={(historyId) => console.log('View history:', historyId)}
+                />
+              )}
+              {tradeSubTab === 'mystery' && (
+                <MysteryPostView
+                  state={mysteryPostState}
+                  onOpenPostModal={() => setIsPostStickerModalOpen(true)}
+                  onOpenReceived={handleOpenReceivedSticker}
+                  onCancelPost={handleCancelPost}
+                />
+              )}
+              {tradeSubTab === 'scout' && (
+                <TradeScoutView
+                  state={tradeScoutState}
+                  onOpenWantListEdit={() => setIsScoutWantListModalOpen(true)}
+                  onOpenOfferListEdit={() => setIsScoutOfferListModalOpen(true)}
+                  onToggleActive={handleToggleScoutActive}
+                  onViewMatch={handleViewScoutMatch}
+                  onStartTrade={handleStartTradeFromScout}
+                />
+              )}
+            </div>
+          </div>
         )
 
       case 'timeline':
@@ -1141,7 +3210,39 @@ export default function Home() {
                 setIsCommentModalOpen(true)
               }
             }}
-            onUserClick={(userId) => console.log('User click:', userId)}
+            onUserClick={(userId) => {
+              // 投稿から対応するユーザー情報を取得
+              const post = posts.find(p => p.userId === userId)
+
+              // demoOtherUserProfilesにあればそれを使用、なければ投稿データから作成
+              let userProfile = demoOtherUserProfiles[userId]
+              if (!userProfile && post) {
+                // 投稿データからプロフィールを動的に作成
+                userProfile = {
+                  id: userId,
+                  name: post.userName,
+                  avatarUrl: post.userAvatarUrl,
+                  level: 10, // デフォルト値
+                  bio: 'シール集め楽しんでます！',
+                  isFollowing: post.isFollowing,
+                  stats: {
+                    totalStickers: 50,
+                    uniqueStickers: 35,
+                    completedSeries: 1,
+                    followersCount: 42,
+                    followingCount: 28,
+                  },
+                }
+              }
+
+              if (userProfile) {
+                setSelectedOtherUser(userProfile)
+                setSelectedUserStickerBook(getDemoStickerBookPreviews(userId))
+                setSelectedUserBookPages(getDemoOtherUserBookPages(userId))
+                setSelectedUserBookStickers(getDemoOtherUserStickers(userId))
+                setIsOtherUserProfileOpen(true)
+              }
+            }}
             onFollow={(userId) => console.log('Follow:', userId)}
             onCreatePost={() => setIsCreatePostModalOpen(true)}
             onReport={(postId, userId, userName) => {
@@ -1154,14 +3255,23 @@ export default function Home() {
       case 'profile':
         return (
           <ProfileView
-            profile={demoUserProfile}
+            profile={userProfile}
             stats={demoUserStats}
             achievements={demoAchievements}
-            onEditProfile={() => console.log('Edit profile')}
+            onEditProfile={() => setIsProfileEditOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onViewStickerBook={() => setActiveTab('home')}
-            onViewAchievements={() => console.log('View achievements')}
+            onViewAchievements={() => setIsAchievementsModalOpen(true)}
             onViewFriends={() => console.log('View friends')}
+            onViewStats={() => setIsStatsModalOpen(true)}
+            onViewFollowers={() => {
+              setFollowListInitialTab('followers')
+              setIsFollowListModalOpen(true)
+            }}
+            onViewFollowing={() => {
+              setFollowListInitialTab('following')
+              setIsFollowListModalOpen(true)
+            }}
           />
         )
 
@@ -1170,8 +3280,20 @@ export default function Home() {
     }
   }
 
+  // 編集中は下部タブバーを非表示にする
+  const shouldHideTabBar = isGachaResultModalOpen || editingSticker || editingDecoItem
+  // プロフィールタブは独自ヘッダーがあるのでTopBarを非表示
+  const shouldHideTopBar = activeTab === 'profile'
+
   return (
-    <AppLayout activeTab={activeTab} onTabChange={setActiveTab}>
+    <AppLayout
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      showTabBar={!shouldHideTabBar}
+      showTopBar={!shouldHideTopBar}
+      currency={userCurrency}
+      onOpenShop={handleOpenShop}
+    >
       {renderTabContent()}
 
       {/* Modals */}
@@ -1220,11 +3342,67 @@ export default function Home() {
             setGachaResults([])
           }}
           onContinue={() => {
-            setIsGachaResultModalOpen(false)
-            setGachaResults([])
+            // 確認ダイアログを開く
+            if (lastGachaPull) {
+              const banner = demoBanners.find(b => b.id === lastGachaPull.bannerId)
+              if (banner) {
+                const cost = lastGachaPull.count === 1 ? banner.costSingle : banner.costMulti
+                setContinueConfirmDialog({
+                  isOpen: true,
+                  pullType: lastGachaPull.count === 1 ? 'single' : 'multi',
+                  cost,
+                  currency: banner.currency,
+                })
+              }
+            }
           }}
         />
       )}
+
+      {/* もう一回ガチャの確認ダイアログ */}
+      <GachaConfirmDialog
+        isOpen={continueConfirmDialog.isOpen}
+        pullType={continueConfirmDialog.pullType}
+        cost={continueConfirmDialog.cost}
+        currency={continueConfirmDialog.currency}
+        currentAmount={
+          continueConfirmDialog.currency === 'ticket'
+            ? userMonetization.tickets
+            : userMonetization.stars
+        }
+        onConfirm={() => {
+          // 残高確認
+          const { cost, currency } = continueConfirmDialog
+          const currentAmount = currency === 'ticket'
+            ? userMonetization.tickets
+            : currency === 'star'
+              ? userMonetization.stars
+              : 0
+
+          if (currentAmount < cost) {
+            // 残高不足 → InsufficientFundsModalを開く
+            setContinueConfirmDialog(prev => ({ ...prev, isOpen: false }))
+            const fundType = currency === 'ticket' ? 'tickets' : 'stars'
+            handleInsufficientFunds(fundType as 'tickets' | 'stars', cost, currentAmount)
+            return
+          }
+
+          // 確認ダイアログを閉じる
+          setContinueConfirmDialog(prev => ({ ...prev, isOpen: false }))
+          // ガチャ結果モーダルを閉じる
+          setIsGachaResultModalOpen(false)
+          setGachaResults([])
+          // 少し遅延を入れてから再度ガチャを引く
+          if (lastGachaPull) {
+            setTimeout(() => {
+              handlePullGacha(lastGachaPull.bannerId, lastGachaPull.count)
+            }, 100)
+          }
+        }}
+        onCancel={() => {
+          setContinueConfirmDialog(prev => ({ ...prev, isOpen: false }))
+        }}
+      />
 
       {matchingStatus !== 'idle' && (
         <MatchingModal
@@ -1240,33 +3418,83 @@ export default function Home() {
       {isTradeSessionOpen && tradePartner && (
         <TradeSessionFull
           myUser={{
-            id: 'my-user',
-            name: 'プレイヤー',
+            id: currentTestUser.supabaseId, // Supabase UUIDを使用
+            name: currentTestUser.name,
             avatarUrl: undefined,
             level: 5,
             bio: 'シール交換はじめました！',
-            totalStickers: 42,
-            totalTrades: 3,
+            totalStickers: collection.length,
+            totalTrades: 0,
           }}
-          partnerUser={demoPartnerUserData}
+          partnerUser={{
+            id: tradePartner.id, // これはtrade.idなのでそのまま
+            name: tradePartner.name,
+            avatarUrl: tradePartner.avatarUrl,
+            level: tradePartner.level,
+            bio: '',
+            totalStickers: 0,
+            totalTrades: 0,
+          }}
           myPages={myTradePages}
           myCoverDesignId={coverDesignId}
-          partnerPages={demoPartnerTradePages}
+          partnerPages={
+            supabaseTradeState.partnerStickerPages.length > 0
+              ? supabaseTradeState.partnerStickerPages.map(page => ({
+                  id: page.id,
+                  type: page.pageType as 'cover' | 'page' | 'back-cover' | 'inner-cover',
+                  pageNumber: page.pageNumber,
+                  stickers: page.stickers,
+                }))
+              : demoPartnerTradePages
+          }
           partnerCoverDesignId="cover-mochimo"
           onTradeComplete={(myOffers, partnerOffers) => {
             console.log('Trade complete:', myOffers, partnerOffers)
             setIsTradeSessionOpen(false)
             setTradePartner(null)
             setMatchedUser(null)
+            // Supabaseの交換もキャンセル
+            supabaseTradeActions.cancelTrade()
           }}
           onCancel={() => {
             setIsTradeSessionOpen(false)
             setTradePartner(null)
             setMatchedUser(null)
+            // Supabaseの交換もキャンセル
+            supabaseTradeActions.cancelTrade()
           }}
           onFollowPartner={(partnerId) => {
             console.log('Follow partner:', partnerId)
           }}
+          // Supabase連携用props
+          supabaseMessages={supabaseTradeState.messages.map(m => ({
+            id: m.id,
+            stamp_id: m.stamp_id,
+            user_id: m.user_id,
+            created_at: m.created_at,
+            message_type: (m as any).message_type,
+            content: (m as any).content,
+          }))}
+          onSendStamp={supabaseTradeActions.sendStamp}
+          onSendText={supabaseTradeActions.sendText}
+          partnerReady={supabaseTradeState.partnerIsReady}
+          onSetReady={supabaseTradeActions.setReady}
+          // シール選択の同期用props
+          supabaseMyItems={supabaseTradeState.myItems.map(item => ({
+            id: item.id,
+            user_id: item.user_id,
+            user_sticker_id: item.user_sticker_id,
+            sticker_id: item.sticker?.id,
+          }))}
+          supabasePartnerItems={supabaseTradeState.partnerItems.map(item => ({
+            id: item.id,
+            user_id: item.user_id,
+            user_sticker_id: item.user_sticker_id,
+            sticker_id: item.sticker?.id,
+          }))}
+          onSelectMySticker={supabaseTradeActions.addItem}
+          onDeselectMySticker={supabaseTradeActions.removeItem}
+          tradeCompleted={supabaseTradeState.isCompleted}
         />
       )}
 
@@ -1276,12 +3504,35 @@ export default function Home() {
           pages={pages.filter(p => p.type === 'page').map((p, index) => ({
             id: p.id,
             pageNumber: index + 1,
-            thumbnailUrl: '/images/demo-page.png',
+            // 各ページに貼られたシールを渡す
+            placedStickers: placedStickers.filter(s => s.pageId === p.id),
           }))}
           onClose={() => setIsCreatePostModalOpen(false)}
           onSubmit={(data) => {
-            console.log('Post created:', data)
+            // 新しい投稿を作成
+            const newPost: Post = {
+              id: `post-${Date.now()}`,
+              userId: 'user-me',
+              userName: 'プレイヤー',
+              userAvatarUrl: undefined,
+              // pageData を使用してシール帳ページを表示
+              pageData: data.pageData,
+              caption: data.caption,
+              hashtags: data.hashtags,
+              reactions: [
+                { type: 'heart', count: 0, isReacted: false },
+              ],
+              commentCount: 0,
+              createdAt: new Date().toISOString(),
+              isFollowing: true, // 自分の投稿
+              visibility: data.visibility,
+            }
+            // 投稿を追加（先頭に）
+            setPosts(prev => [newPost, ...prev])
             setIsCreatePostModalOpen(false)
+
+            // 投稿したら経験値獲得 (+20 EXP)
+            gainExp('post_create')
           }}
         />
       )}
@@ -1301,7 +3552,7 @@ export default function Home() {
       )}
 
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-white z-50">
+        <div className="fixed inset-0 bg-white z-[100]">
           <div className="flex items-center justify-between p-4 border-b">
             <button
               onClick={() => setIsSettingsOpen(false)}
@@ -1312,7 +3563,7 @@ export default function Home() {
             <h1 className="font-bold text-purple-700">設定</h1>
             <div className="w-12" />
           </div>
-          <div className="h-[calc(100%-60px)] overflow-auto">
+          <div className="h-[calc(100%-60px)] overflow-auto pb-8">
             <SettingsView
               settings={settings}
               onSettingsChange={(newSettings) => setSettings(newSettings)}
@@ -1327,6 +3578,22 @@ export default function Home() {
               userName="プレイヤー"
               userEmail="player@example.com"
             />
+
+            {/* 管理者パネルへのアクセスボタン（開発用） */}
+            <div className="px-4 py-6 border-t border-gray-200 mt-4 mb-20">
+              <button
+                onClick={() => {
+                  setIsSettingsOpen(false)
+                  setIsAdminPanelOpen(true)
+                }}
+                className="w-full py-3 bg-gray-700 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+              >
+                🔧 管理者パネル
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-2">
+                開発・テスト用
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -1403,6 +3670,305 @@ export default function Home() {
           steps={defaultTutorialSteps}
           onComplete={() => setIsTutorialOpen(false)}
           onSkip={() => setIsTutorialOpen(false)}
+        />
+      )}
+
+      {/* プロフィール編集モーダル */}
+      <ProfileEditModal
+        isOpen={isProfileEditOpen}
+        onClose={() => setIsProfileEditOpen(false)}
+        profile={userProfile}
+        onSave={(updates) => {
+          setUserProfile(prev => ({
+            ...prev,
+            name: updates.name,
+            bio: updates.bio,
+            avatarUrl: updates.avatarUrl || prev.avatarUrl,
+          }))
+          setIsProfileEditOpen(false)
+        }}
+      />
+
+      {/* 統計詳細モーダル */}
+      <StatsModal
+        isOpen={isStatsModalOpen}
+        onClose={() => setIsStatsModalOpen(false)}
+        stats={demoUserStats}
+      />
+
+      {/* 実績一覧モーダル */}
+      <AchievementsModal
+        isOpen={isAchievementsModalOpen}
+        onClose={() => setIsAchievementsModalOpen(false)}
+        achievements={demoAchievements}
+      />
+
+      {/* レベルアップモーダル */}
+      <LevelUpModal
+        isOpen={isLevelUpModalOpen}
+        onClose={() => {
+          setIsLevelUpModalOpen(false)
+          setLevelUpInfo(null)
+        }}
+        newLevel={levelUpInfo?.level ?? 1}
+        rewards={levelUpInfo?.rewards ?? []}
+      />
+
+      {/* フォロー・フォロワー一覧モーダル */}
+      <FollowListModal
+        isOpen={isFollowListModalOpen}
+        onClose={() => setIsFollowListModalOpen(false)}
+        initialTab={followListInitialTab}
+        followers={demoFollowers}
+        following={demoFollowing}
+        onUserClick={(userId) => {
+          // 他ユーザーのプロフィールを開く
+          const userProfile = demoOtherUserProfiles[userId]
+          if (userProfile) {
+            setSelectedOtherUser(userProfile)
+            setSelectedUserStickerBook(getDemoStickerBookPreviews(userId))
+            setSelectedUserBookPages(getDemoOtherUserBookPages(userId))
+            setSelectedUserBookStickers(getDemoOtherUserStickers(userId))
+            setIsFollowListModalOpen(false)
+            setIsOtherUserProfileOpen(true)
+          }
+        }}
+        onFollowToggle={(userId, isFollowing) => {
+          console.log('Follow toggle:', userId, isFollowing)
+          // TODO: フォロー状態の更新
+        }}
+      />
+
+      {/* 他ユーザープロフィールモーダル */}
+      <OtherUserProfileModal
+        isOpen={isOtherUserProfileOpen}
+        onClose={() => {
+          setIsOtherUserProfileOpen(false)
+          setSelectedOtherUser(null)
+        }}
+        user={selectedOtherUser}
+        stickerBookPages={selectedUserStickerBook}
+        bookPages={selectedUserBookPages}
+        bookStickers={selectedUserBookStickers}
+        coverDesignId={selectedUserCoverDesignId}
+        onFollowToggle={(userId, isFollowing) => {
+          console.log('Follow toggle from profile:', userId, isFollowing)
+          // フォロー状態を更新
+          if (selectedOtherUser) {
+            setSelectedOtherUser({
+              ...selectedOtherUser,
+              isFollowing,
+            })
+          }
+        }}
+        onViewStickerBook={(userId, pageId) => {
+          console.log('View sticker book:', userId, pageId)
+          // TODO: シール帳閲覧画面へ遷移
+        }}
+        onReport={(userId) => {
+          console.log('Report user:', userId)
+          // TODO: 通報モーダルを開く
+        }}
+        onBlock={(userId) => {
+          console.log('Block user:', userId)
+          // TODO: ブロック確認モーダルを開く
+        }}
+      />
+
+      {/* ミステリーポスト: 投函モーダル */}
+      <PostStickerModal
+        isOpen={isPostStickerModalOpen}
+        onClose={() => setIsPostStickerModalOpen(false)}
+        duplicateStickers={duplicateStickers}
+        onPost={handlePostSticker}
+      />
+
+      {/* ミステリーポスト: 開封モーダル */}
+      <ReceivedStickerModal
+        isOpen={isReceivedStickerModalOpen}
+        onClose={() => {
+          setIsReceivedStickerModalOpen(false)
+          setSelectedReceivedSticker(null)
+        }}
+        sticker={selectedReceivedSticker}
+        onOpened={handleStickerOpened}
+      />
+
+      {/* トレード・スカウト: ほしいシール編集モーダル */}
+      <ScoutListEditModal
+        isOpen={isScoutWantListModalOpen}
+        onClose={() => setIsScoutWantListModalOpen(false)}
+        listType="want"
+        currentList={tradeScoutState.settings.wantList}
+        availableStickers={collectionStickers.map(s => ({
+          id: s.id,
+          name: s.name,
+          imageUrl: s.imageUrl || '',
+          rarity: s.rarity,
+          owned: s.owned,
+          quantity: s.quantity,
+        }))}
+        onSave={handleSaveWantList}
+      />
+
+      {/* トレード・スカウト: だせるシール編集モーダル */}
+      <ScoutListEditModal
+        isOpen={isScoutOfferListModalOpen}
+        onClose={() => setIsScoutOfferListModalOpen(false)}
+        listType="offer"
+        currentList={tradeScoutState.settings.offerList}
+        availableStickers={collectionStickers.map(s => ({
+          id: s.id,
+          name: s.name,
+          imageUrl: s.imageUrl || '',
+          rarity: s.rarity,
+          owned: s.owned,
+          quantity: s.quantity,
+        }))}
+        onSave={handleSaveOfferList}
+      />
+
+      {/* トレード・スカウト: マッチング詳細モーダル */}
+      <MatchDetailModal
+        isOpen={isMatchDetailModalOpen}
+        onClose={() => {
+          setIsMatchDetailModalOpen(false)
+          setSelectedScoutMatch(null)
+        }}
+        match={selectedScoutMatch}
+        onStartTrade={handleStartTradeFromScout}
+      />
+
+      {/* ペリペリエフェクト（シール剥がし演出） */}
+      <PeelEffect
+        isActive={showPeelEffect}
+        stickerImageUrl={peelEffectImageUrl}
+        position={peelEffectPosition}
+        size={80}
+        onComplete={() => setShowPeelEffect(false)}
+      />
+
+      {/* ペタッエフェクト（シール貼り付け演出） */}
+      <PlaceEffect
+        isActive={showPlaceEffect}
+        position={placeEffectPosition}
+        size={80}
+        onComplete={() => setShowPlaceEffect(false)}
+      />
+
+      {/* 粘着力メッセージ（小ネタトースト） */}
+      {stickinessMessage && (
+        <div
+          className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] animate-bounce"
+          style={{
+            animation: 'fadeInUp 0.3s ease-out, fadeOutUp 0.3s ease-in 2.5s forwards',
+          }}
+        >
+          <div
+            className="px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap"
+            style={{
+              background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+              color: '#92400E',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            }}
+          >
+            {stickinessMessage}
+          </div>
+        </div>
+      )}
+
+      {/* レイヤー制御パネル（シール・デコの重なり順調整） */}
+      <LayerControlPanel
+        items={currentPageLayerItems}
+        selectedItemId={selectedLayerItemId}
+        onSelectItem={(id) => setSelectedLayerItemId(id)}
+        onChangeZIndex={handleChangeLayerZIndex}
+        isOpen={isLayerPanelOpen}
+        onClose={() => {
+          setIsLayerPanelOpen(false)
+          setSelectedLayerItemId(null)
+        }}
+      />
+
+      {/* ==================== Shop Modals ==================== */}
+      {/* ショップ画面モーダル */}
+      {isShopOpen && (
+        <div className="fixed inset-0 z-[100] bg-white">
+          <div className="h-full overflow-y-auto">
+            <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center justify-between">
+              <button
+                onClick={handleCloseShop}
+                className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              <h1 className="text-lg font-bold" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>ショップ</h1>
+              <div className="w-10" />
+            </div>
+            <ShopView
+              userMonetization={userMonetization}
+              onPurchaseStars={handlePurchaseStars}
+              onSubscribe={handleSubscribe}
+              onWatchAd={handleOpenAdReward}
+              onOpenSubscriptionModal={() => {}}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 残高不足モーダル */}
+      <InsufficientFundsModal
+        isOpen={insufficientFundsModal.isOpen}
+        fundType={insufficientFundsModal.fundType}
+        required={insufficientFundsModal.required}
+        current={insufficientFundsModal.current}
+        userMonetization={userMonetization}
+        onWatchAd={handleOpenAdReward}
+        onBuyStars={handleGoToShop}
+        onSubscribe={handleGoToShop}
+        onClose={handleCloseInsufficientFunds}
+      />
+
+      {/* 広告視聴モーダル */}
+      <AdRewardModal
+        isOpen={isAdRewardModalOpen}
+        adsWatchedToday={userMonetization.adsWatchedToday}
+        onWatchAd={handleWatchAd}
+        onClose={() => setIsAdRewardModalOpen(false)}
+      />
+
+      {/* デイリーボーナスモーダル */}
+      {dailyBonusReceived && (
+        <DailyBonusModal
+          isOpen={isDailyBonusModalOpen}
+          userMonetization={userMonetization}
+          ticketsReceived={dailyBonusReceived.tickets}
+          starsReceived={dailyBonusReceived.stars}
+          onClose={() => {
+            setIsDailyBonusModalOpen(false)
+            setDailyBonusReceived(null)
+          }}
+        />
+      )}
+
+      {/* 管理者パネル */}
+      {isAdminPanelOpen && (
+        <AdminView
+          adminMode={adminMode}
+          userData={buildSavedUserData()}
+          allStickers={demoStickers}
+          currentTestUser={currentTestUser}
+          onChangeMode={handleChangeAdminMode}
+          onSwitchUser={handleSwitchUser}
+          onGrantCurrency={handleGrantCurrency}
+          onGrantSticker={handleGrantSticker}
+          onGrantAllStickers={handleGrantAllStickers}
+          onResetCollection={handleResetCollection}
+          onResetAll={handleResetAllData}
+          onClose={() => setIsAdminPanelOpen(false)}
         />
       )}
     </AppLayout>

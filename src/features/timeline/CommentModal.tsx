@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
+import { filterContent, isKidSafe, getFilterReason, FilterResult } from '@/utils/contentFilter'
 
 // コメント情報
 export interface Comment {
@@ -44,15 +45,15 @@ const CommentCard: React.FC<{
   onDelete?: () => void
 }> = ({ comment, onDelete }) => {
   return (
-    <div className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
+    <div style={{ display: 'flex', gap: '12px', paddingTop: '12px', paddingBottom: '12px', borderBottom: '1px solid #F3F4F6' }}>
       {/* アバター */}
-      <div className="flex-shrink-0">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-300 to-pink-300 flex items-center justify-center text-sm">
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(to bottom right, #C4B5FD, #F9A8D4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
           {comment.userAvatarUrl ? (
             <img
               src={comment.userAvatarUrl}
               alt={comment.userName}
-              className="w-full h-full rounded-full object-cover"
+              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
             />
           ) : (
             '👤'
@@ -61,16 +62,16 @@ const CommentCard: React.FC<{
       </div>
 
       {/* コンテンツ */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="font-bold text-purple-700 text-sm truncate">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <span style={{ fontWeight: 'bold', color: '#7C3AED', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {comment.userName}
           </span>
-          <span className="text-xs text-purple-300">
+          <span style={{ fontSize: '12px', color: '#C4B5FD' }}>
             {formatTime(comment.createdAt)}
           </span>
         </div>
-        <p className="text-sm text-purple-600 break-words">
+        <p style={{ fontSize: '14px', color: '#7C3AED', wordBreak: 'break-word' }}>
           {comment.content}
         </p>
       </div>
@@ -79,9 +80,9 @@ const CommentCard: React.FC<{
       {comment.isOwner && onDelete && (
         <button
           onClick={onDelete}
-          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors"
+          style={{ flexShrink: 0, width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'transparent', border: 'none', cursor: 'pointer', color: '#9CA3AF', transition: 'color 0.2s' }}
         >
-          <span className="text-xs">✕</span>
+          <span style={{ fontSize: '12px' }}>✕</span>
         </button>
       )}
     </div>
@@ -96,22 +97,54 @@ const QuickReply: React.FC<{
   return (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 bg-purple-50 text-purple-600 rounded-full text-xs font-medium hover:bg-purple-100 transition-colors whitespace-nowrap"
+      style={{
+        paddingLeft: '12px',
+        paddingRight: '12px',
+        paddingTop: '6px',
+        paddingBottom: '6px',
+        background: '#FAF5FF',
+        color: '#7C3AED',
+        borderRadius: '9999px',
+        fontSize: '12px',
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'background 0.2s',
+      }}
     >
       {text}
     </button>
   )
 }
 
-// 定型文一覧
+// 定型文一覧（安全なメッセージのみ）
 const quickReplies = [
   'かわいい！✨',
   'すごい！👏',
   'いいね！🩷',
   'うらやましい！',
   'まねしたい！',
-  'センスいい！'
+  'センスいい！',
+  'さいこう！🌟',
+  'すてき！💕',
 ]
+
+// フィルター警告コンポーネント
+const FilterWarning: React.FC<{
+  filterResult: FilterResult
+}> = ({ filterResult }) => {
+  if (filterResult.isClean) return null
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '12px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: '8px', marginBottom: '8px' }}>
+      <span style={{ color: '#CA8A04', fontSize: '14px' }}>⚠️</span>
+      <p style={{ color: '#A16207', fontSize: '12px' }}>
+        {getFilterReason(filterResult)}
+      </p>
+    </div>
+  )
+}
 
 export const CommentModal: React.FC<CommentModalProps> = ({
   isOpen,
@@ -122,6 +155,8 @@ export const CommentModal: React.FC<CommentModalProps> = ({
   onDeleteComment
 }) => {
   const [newComment, setNewComment] = useState('')
+  const [filterResult, setFilterResult] = useState<FilterResult | null>(null)
+  const [showFilterError, setShowFilterError] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -139,13 +174,44 @@ export const CommentModal: React.FC<CommentModalProps> = ({
     }
   }, [comments.length])
 
+  // 入力内容が変わったらフィルターチェック
+  useEffect(() => {
+    if (newComment.trim()) {
+      const result = filterContent(newComment)
+      setFilterResult(result)
+    } else {
+      setFilterResult(null)
+    }
+    setShowFilterError(false)
+  }, [newComment])
+
   // コメント送信
   const handleSubmit = () => {
     const trimmed = newComment.trim()
-    if (trimmed) {
-      onAddComment(postId, trimmed)
-      setNewComment('')
+    if (!trimmed) return
+
+    // フィルターチェック
+    const result = filterContent(trimmed)
+    if (!result.isClean) {
+      setShowFilterError(true)
+      return
     }
+
+    // 子ども向け追加チェック
+    if (!isKidSafe(trimmed)) {
+      setShowFilterError(true)
+      setFilterResult({
+        isClean: false,
+        filteredText: trimmed,
+        detectedIssues: ['個人情報の可能性']
+      })
+      return
+    }
+
+    onAddComment(postId, trimmed)
+    setNewComment('')
+    setFilterResult(null)
+    setShowFilterError(false)
   }
 
   // 定型文選択
@@ -157,24 +223,40 @@ export const CommentModal: React.FC<CommentModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 60,
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
+    >
       {/* 背景オーバーレイ（上部タップで閉じる） */}
       <div
-        className="flex-1 bg-black/40 backdrop-blur-sm"
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+        }}
         onClick={onClose}
       />
 
       {/* モーダル本体（下からスライド） */}
-      <div className="bg-white rounded-t-3xl shadow-2xl max-h-[70vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+      <div style={{ background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
         {/* ヘッダー */}
-        <header className="flex items-center justify-center px-4 py-3 border-b border-gray-100 relative">
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', borderBottom: '1px solid #F3F4F6', position: 'relative', background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)' }}>
           {/* ドラッグハンドル */}
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-10 h-1 bg-gray-300 rounded-full" />
+          <div style={{ position: 'absolute', top: '6px', left: '50%', transform: 'translateX(-50%)', width: '40px', height: '4px', background: '#D1D5DB', borderRadius: '9999px' }} />
 
-          <h2 className="text-lg font-bold text-purple-700 mt-2">
-            コメント
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#7C3AED', marginTop: '8px' }}>
+            💬 コメント
             {comments.length > 0 && (
-              <span className="text-purple-400 font-normal ml-1">
+              <span style={{ color: '#A78BFA', fontWeight: 'normal', marginLeft: '4px' }}>
                 ({comments.length})
               </span>
             )}
@@ -182,16 +264,16 @@ export const CommentModal: React.FC<CommentModalProps> = ({
 
           <button
             onClick={onClose}
-            className="absolute right-4 top-3 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+            style={{ position: 'absolute', right: '16px', top: '12px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'transparent', border: 'none', cursor: 'pointer' }}
           >
-            <span className="text-gray-400">✕</span>
+            <span style={{ color: '#9CA3AF' }}>✕</span>
           </button>
         </header>
 
         {/* コメントリスト */}
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto px-4"
+          style={{ flex: 1, overflowY: 'auto', paddingLeft: '16px', paddingRight: '16px' }}
         >
           {comments.length > 0 ? (
             comments.map(comment => (
@@ -202,12 +284,12 @@ export const CommentModal: React.FC<CommentModalProps> = ({
               />
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="text-5xl mb-3">💬</div>
-              <p className="text-purple-400 text-sm">
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '48px', paddingBottom: '48px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>💬</div>
+              <p style={{ color: '#A78BFA', fontSize: '14px' }}>
                 まだコメントがありません
               </p>
-              <p className="text-purple-300 text-xs mt-1">
+              <p style={{ color: '#C4B5FD', fontSize: '12px', marginTop: '4px' }}>
                 さいしょのコメントをしよう！
               </p>
             </div>
@@ -215,8 +297,8 @@ export const CommentModal: React.FC<CommentModalProps> = ({
         </div>
 
         {/* 定型文 */}
-        <div className="px-4 py-2 border-t border-gray-100">
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        <div style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '8px', paddingBottom: '8px', borderTop: '1px solid #F3F4F6' }}>
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
             {quickReplies.map((reply, index) => (
               <QuickReply
                 key={index}
@@ -227,17 +309,22 @@ export const CommentModal: React.FC<CommentModalProps> = ({
           </div>
         </div>
 
+        {/* フィルター警告 */}
+        {showFilterError && filterResult && (
+          <div style={{ paddingLeft: '16px', paddingRight: '16px' }}>
+            <FilterWarning filterResult={filterResult} />
+          </div>
+        )}
+
         {/* 入力欄 */}
-        <div className="p-4 border-t border-gray-100 safe-area-bottom">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 relative">
+        <div style={{ padding: '16px', borderTop: '1px solid #F3F4F6', background: 'white' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
               <textarea
                 ref={inputRef}
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="コメントを入力..."
-                className="w-full px-4 py-3 pr-12 border-2 border-purple-200 rounded-2xl text-sm
-                         focus:border-purple-400 focus:outline-none resize-none"
                 rows={1}
                 maxLength={100}
                 onKeyDown={(e) => {
@@ -247,11 +334,23 @@ export const CommentModal: React.FC<CommentModalProps> = ({
                   }
                 }}
                 style={{
+                  width: '100%',
+                  paddingLeft: '16px',
+                  paddingRight: '48px',
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
+                  border: showFilterError && filterResult && !filterResult.isClean ? '2px solid #FACC15' : '2px solid #E9D5FF',
+                  borderRadius: '16px',
+                  fontSize: '14px',
+                  resize: 'none',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  background: showFilterError && filterResult && !filterResult.isClean ? '#FEFCE8' : 'white',
                   minHeight: '48px',
-                  maxHeight: '120px'
+                  maxHeight: '120px',
                 }}
               />
-              <span className="absolute right-3 bottom-3 text-xs text-purple-300">
+              <span style={{ position: 'absolute', right: '12px', bottom: '12px', fontSize: '12px', color: '#C4B5FD' }}>
                 {newComment.length}/100
               </span>
             </div>
@@ -259,18 +358,29 @@ export const CommentModal: React.FC<CommentModalProps> = ({
             <button
               onClick={handleSubmit}
               disabled={!newComment.trim()}
-              className="
-                w-12 h-12 rounded-full flex items-center justify-center
-                transition-all duration-200
-                disabled:bg-gray-200 disabled:text-gray-400
-                enabled:bg-gradient-to-r enabled:from-purple-500 enabled:to-pink-500
-                enabled:text-white enabled:shadow-lg
-                enabled:active:scale-95
-              "
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                background: !newComment.trim() ? '#E5E7EB' : 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                color: !newComment.trim() ? '#9CA3AF' : 'white',
+                boxShadow: !newComment.trim() ? 'none' : '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                border: 'none',
+                cursor: !newComment.trim() ? 'not-allowed' : 'pointer',
+              }}
             >
-              <span className="text-xl">↑</span>
+              <span style={{ fontSize: '20px' }}>↑</span>
             </button>
           </div>
+
+          {/* 安全なコミュニケーションのヒント */}
+          <p style={{ textAlign: 'center', fontSize: '12px', color: '#C4B5FD', marginTop: '8px' }}>
+            🛡️ やさしいことばでコメントしよう
+          </p>
         </div>
       </div>
     </div>

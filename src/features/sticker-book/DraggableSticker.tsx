@@ -228,9 +228,9 @@ export function DraggableSticker({
         isSpreadView,
       })
 
-      // 範囲内に収める
-      const clampedX = Math.max(0.15, Math.min(0.85, relativeX))
-      const clampedY = Math.max(0.15, Math.min(0.85, relativeY))
+      // 範囲内に収める（端ギリギリまで配置可能）
+      const clampedX = Math.max(0.05, Math.min(0.95, relativeX))
+      const clampedY = Math.max(0.05, Math.min(0.95, relativeY))
 
       onPlace(clampedX, clampedY, rotation)
     } else {
@@ -337,15 +337,32 @@ export function DraggableSticker({
               >
                 {sticker.name}
               </h3>
-              <p
-                className="text-xs mt-1"
+              {/* わかりやすい操作説明 */}
+              <div
+                className="mt-2 p-2 rounded-xl"
                 style={{
-                  color: '#A78BFA',
-                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
                 }}
               >
-                ドラッグしてシール帳に貼ってね！
-              </p>
+                <p
+                  className="text-sm font-bold"
+                  style={{
+                    color: '#92400E',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
+                >
+                  👆 シールをさわって
+                </p>
+                <p
+                  className="text-sm font-bold mt-0.5"
+                  style={{
+                    color: '#92400E',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
+                >
+                  📖 シール帳までひっぱろう！
+                </p>
+              </div>
             </div>
 
             {/* 回転コントロール */}
@@ -357,7 +374,7 @@ export function DraggableSticker({
                   color: '#8B5CF6',
                 }}
               >
-                かいてん: {rotation}°
+                🔄 まわす（{rotation}°）
               </label>
               <div className="flex items-center gap-3 justify-center">
                 <button

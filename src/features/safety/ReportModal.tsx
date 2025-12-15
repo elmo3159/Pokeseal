@@ -79,20 +79,54 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   // 完了画面
   if (showConfirm) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center animate-[scaleIn_0.2s_ease-out]">
-          <div className="text-6xl mb-4">✅</div>
-          <h2 className="text-xl font-bold text-purple-800 mb-2">
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
+        <div style={{
+          position: 'relative',
+          background: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          width: '100%',
+          maxWidth: '384px',
+          overflow: 'hidden',
+          padding: '24px',
+          textAlign: 'center',
+          animation: 'scaleIn 0.2s ease-out',
+        }}>
+          <div style={{ fontSize: '60px', marginBottom: '16px' }}>✅</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: '#6B21A8', marginBottom: '8px' }}>
             ほうこくしました
           </h2>
-          <p className="text-sm text-purple-600 mb-6">
+          <p style={{ fontSize: '14px', color: '#9333EA', marginBottom: '24px' }}>
             おしらせありがとう！<br />
             スタッフがかくにんします。
           </p>
           <button
             onClick={handleClose}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold shadow-lg"
+            style={{
+              width: '100%',
+              paddingTop: '12px',
+              paddingBottom: '12px',
+              borderRadius: '12px',
+              background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+              color: 'white',
+              fontWeight: 'bold',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
           >
             とじる
           </button>
@@ -102,98 +136,150 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
       {/* オーバーレイ */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
 
       {/* モーダル本体 */}
-      <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+      <div style={{
+        position: 'relative',
+        background: 'white',
+        borderRadius: '24px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        width: '100%',
+        maxWidth: '384px',
+        overflow: 'hidden',
+        animation: 'scaleIn 0.2s ease-out',
+      }}>
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-orange-400 to-red-400 p-4">
-          <h2 className="text-white font-bold text-lg text-center">
+        <div style={{ background: 'linear-gradient(to right, #FB923C, #EF4444)', padding: '16px' }}>
+          <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px', textAlign: 'center' }}>
             ⚠️ つうほうする
           </h2>
         </div>
 
         {/* コンテンツ */}
-        <div className="p-4">
+        <div style={{ padding: '16px' }}>
           {/* 対象表示 */}
-          <div className="bg-gray-50 rounded-xl p-3 mb-4">
-            <p className="text-xs text-gray-500 mb-1">つうほうするもの</p>
-            <p className="text-sm font-bold text-purple-700">
+          <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '12px', color: '#6B7280', marginBottom: '4px' }}>つうほうするもの</p>
+            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#6B21A8' }}>
               {targetTypeLabels[targetType]}: {targetName || targetId}
             </p>
           </div>
 
           {/* カテゴリ選択 */}
-          <p className="text-sm font-bold text-purple-700 mb-2">
+          <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#6B21A8', marginBottom: '8px' }}>
             どうしてつうほうしますか？
           </p>
-          <div className="space-y-2 mb-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
             {(Object.entries(reportCategoryLabels) as [ReportCategory, typeof reportCategoryLabels['spam']][]).map(([key, value]) => (
               <button
                 key={key}
                 onClick={() => setSelectedCategory(key)}
-                className={`
-                  w-full p-3 rounded-xl border-2 transition-all text-left flex items-center gap-3
-                  ${selectedCategory === key
-                    ? 'border-purple-500 bg-purple-50'
-                    : 'border-gray-200 bg-white hover:border-purple-300'
-                  }
-                `}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '12px',
+                  border: selectedCategory === key ? '2px solid #8B5CF6' : '2px solid #E5E7EB',
+                  background: selectedCategory === key ? '#F3E8FF' : 'white',
+                  transition: 'all 0.2s',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  cursor: 'pointer',
+                }}
               >
-                <span className="text-2xl">{value.emoji}</span>
-                <div className="flex-1">
-                  <p className="font-bold text-purple-700 text-sm">{value.label}</p>
-                  <p className="text-xs text-gray-500">{value.description}</p>
+                <span style={{ fontSize: '24px' }}>{value.emoji}</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 'bold', color: '#6B21A8', fontSize: '14px' }}>{value.label}</p>
+                  <p style={{ fontSize: '12px', color: '#6B7280' }}>{value.description}</p>
                 </div>
                 {selectedCategory === key && (
-                  <span className="text-purple-500 text-xl">✓</span>
+                  <span style={{ color: '#8B5CF6', fontSize: '20px' }}>✓</span>
                 )}
               </button>
             ))}
           </div>
 
           {/* コメント入力 */}
-          <p className="text-sm font-bold text-purple-700 mb-2">
+          <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#6B21A8', marginBottom: '8px' }}>
             くわしく教えてね（なくてもOK）
           </p>
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value.slice(0, MAX_REPORT_COMMENT_LENGTH))}
             placeholder="なにがあったか書いてね..."
-            className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-purple-400 focus:outline-none resize-none text-sm"
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '12px',
+              border: '2px solid #E5E7EB',
+              resize: 'none',
+              fontSize: '14px',
+              outline: 'none',
+            }}
             rows={3}
           />
-          <p className="text-xs text-gray-400 text-right mt-1">
+          <p style={{ fontSize: '12px', color: '#9CA3AF', textAlign: 'right', marginTop: '4px' }}>
             {comment.length}/{MAX_REPORT_COMMENT_LENGTH}
           </p>
 
           {/* ボタン */}
-          <div className="flex gap-2 mt-4">
+          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
             <button
               onClick={handleClose}
-              className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-bold"
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                borderRadius: '12px',
+                background: '#F3F4F6',
+                color: '#4B5563',
+                fontWeight: 'bold',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               やめる
             </button>
             <button
               onClick={handleSubmit}
               disabled={!selectedCategory || isSubmitting}
-              className={`
-                flex-1 py-3 rounded-xl font-bold shadow-lg
-                ${selectedCategory && !isSubmitting
-                  ? 'bg-gradient-to-r from-orange-400 to-red-400 text-white'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }
-              `}
+              style={{
+                flex: 1,
+                paddingTop: '12px',
+                paddingBottom: '12px',
+                borderRadius: '12px',
+                fontWeight: 'bold',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                background: selectedCategory && !isSubmitting
+                  ? 'linear-gradient(to right, #FB923C, #EF4444)'
+                  : '#E5E7EB',
+                color: selectedCategory && !isSubmitting ? 'white' : '#9CA3AF',
+                cursor: selectedCategory && !isSubmitting ? 'pointer' : 'not-allowed',
+                border: 'none',
+              }}
             >
               {isSubmitting ? 'おくり中...' : 'つうほうする'}
             </button>
           </div>
 
           {/* 注意事項 */}
-          <p className="text-xs text-center text-gray-400 mt-4">
+          <p style={{ fontSize: '12px', textAlign: 'center', color: '#9CA3AF', marginTop: '16px' }}>
             うその通報はしないでね。<br />
             スタッフが確認してたいおうします。
           </p>

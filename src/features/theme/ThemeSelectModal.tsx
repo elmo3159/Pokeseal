@@ -37,72 +37,174 @@ const ThemeCard: React.FC<{
   }
 
   return (
-    <div className={`
-      relative bg-white rounded-2xl shadow-md overflow-hidden
-      transition-all duration-200 hover:shadow-lg
-      ${isEquipped ? 'ring-4 ring-purple-400' : ''}
-      ${!isOwned ? 'opacity-80' : ''}
-    `}>
+    <div style={{
+      position: 'relative',
+      background: 'white',
+      borderRadius: '16px',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      overflow: 'hidden',
+      transition: 'all 0.2s',
+      outline: isEquipped ? '4px solid #A78BFA' : 'none',
+      opacity: !isOwned ? 0.8 : 1,
+    }}>
       {/* 装着中バッジ */}
       {isEquipped && (
-        <div className="absolute top-2 right-2 z-10 bg-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          zIndex: 10,
+          background: '#8B5CF6',
+          color: 'white',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          paddingLeft: '8px',
+          paddingRight: '8px',
+          paddingTop: '4px',
+          paddingBottom: '4px',
+          borderRadius: '9999px',
+        }}>
           つかってる！
         </div>
       )}
 
       {/* 未所持マーク */}
       {!isOwned && (
-        <div className="absolute top-2 left-2 z-10 bg-gray-500 text-white text-xs px-2 py-1 rounded-full">
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          left: '8px',
+          zIndex: 10,
+          background: '#6B7280',
+          color: 'white',
+          fontSize: '12px',
+          paddingLeft: '8px',
+          paddingRight: '8px',
+          paddingTop: '4px',
+          paddingBottom: '4px',
+          borderRadius: '9999px',
+        }}>
           🔒
         </div>
       )}
 
       {/* バインダープレビュー */}
       <div
-        className="h-24 flex items-center justify-center border-b-4"
-        style={binderStyle}
+        style={{
+          ...binderStyle,
+          height: '96px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderBottom: '4px solid',
+        }}
       >
         {/* ミニシール帳プレビュー */}
         <div
-          className="w-16 h-20 rounded shadow-lg border-2 flex items-center justify-center"
           style={{
+            width: '64px',
+            height: '80px',
+            borderRadius: '4px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            border: '2px solid',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             backgroundColor: theme.page.backgroundColor,
-            borderColor: theme.binder.color
+            borderColor: theme.binder.color,
           }}
         >
-          <span className="text-2xl">{theme.previewEmoji}</span>
+          <span style={{ fontSize: '24px' }}>{theme.previewEmoji}</span>
         </div>
       </div>
 
       {/* テーマ情報 */}
-      <div className="p-3">
-        <h3 className="font-bold text-purple-700 text-sm mb-1">
+      <div style={{ padding: '12px' }}>
+        <h3 style={{
+          fontWeight: 'bold',
+          color: '#7C3AED',
+          fontSize: '14px',
+          marginBottom: '4px',
+        }}>
           {theme.name}
         </h3>
-        <p className="text-xs text-gray-500 mb-2 line-clamp-2">
+        <p style={{
+          fontSize: '12px',
+          color: '#6B7280',
+          marginBottom: '8px',
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+        }}>
           {theme.description}
         </p>
 
         {/* 入手方法 */}
-        <div className="mb-2">
+        <div style={{ marginBottom: '8px' }}>
           {theme.obtainMethod === 'starpoints' && theme.starPointCost ? (
-            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+            <span style={{
+              fontSize: '12px',
+              background: '#FEF9C3',
+              color: '#A16207',
+              paddingLeft: '8px',
+              paddingRight: '8px',
+              paddingTop: '2px',
+              paddingBottom: '2px',
+              borderRadius: '9999px',
+            }}>
               ⭐ {theme.starPointCost}ポイント
             </span>
           ) : theme.obtainMethod === 'achievement' ? (
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+            <span style={{
+              fontSize: '12px',
+              background: '#F3E8FF',
+              color: '#7C3AED',
+              paddingLeft: '8px',
+              paddingRight: '8px',
+              paddingTop: '2px',
+              paddingBottom: '2px',
+              borderRadius: '9999px',
+            }}>
               🏆 {theme.unlockCondition}
             </span>
           ) : theme.obtainMethod === 'event' ? (
-            <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">
+            <span style={{
+              fontSize: '12px',
+              background: '#FCE7F3',
+              color: '#BE185D',
+              paddingLeft: '8px',
+              paddingRight: '8px',
+              paddingTop: '2px',
+              paddingBottom: '2px',
+              borderRadius: '9999px',
+            }}>
               🎉 {obtainMethodLabels[theme.obtainMethod]}
             </span>
           ) : theme.obtainMethod === 'gacha' ? (
-            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+            <span style={{
+              fontSize: '12px',
+              background: '#DBEAFE',
+              color: '#1D4ED8',
+              paddingLeft: '8px',
+              paddingRight: '8px',
+              paddingTop: '2px',
+              paddingBottom: '2px',
+              borderRadius: '9999px',
+            }}>
               🎲 {obtainMethodLabels[theme.obtainMethod]}
             </span>
           ) : (
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+            <span style={{
+              fontSize: '12px',
+              background: '#F3F4F6',
+              color: '#4B5563',
+              paddingLeft: '8px',
+              paddingRight: '8px',
+              paddingTop: '2px',
+              paddingBottom: '2px',
+              borderRadius: '9999px',
+            }}>
               ✨ {obtainMethodLabels[theme.obtainMethod]}
             </span>
           )}
@@ -113,13 +215,19 @@ const ThemeCard: React.FC<{
           <button
             onClick={onSelect}
             disabled={isEquipped}
-            className={`
-              w-full py-2 rounded-xl text-sm font-bold transition-all
-              ${isEquipped
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white active:scale-95'
-              }
-            `}
+            style={{
+              width: '100%',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
+              background: isEquipped ? '#F3F4F6' : 'linear-gradient(to right, #8B5CF6, #EC4899)',
+              color: isEquipped ? '#9CA3AF' : 'white',
+              cursor: isEquipped ? 'not-allowed' : 'pointer',
+              border: 'none',
+            }}
           >
             {isEquipped ? 'つかってる' : 'つかう'}
           </button>
@@ -127,18 +235,31 @@ const ThemeCard: React.FC<{
           <button
             onClick={onPurchase}
             disabled={!canPurchase}
-            className={`
-              w-full py-2 rounded-xl text-sm font-bold transition-all
-              ${canPurchase
-                ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }
-            `}
+            style={{
+              width: '100%',
+              paddingTop: '8px',
+              paddingBottom: '8px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s',
+              background: canPurchase ? 'linear-gradient(to right, #FBBF24, #FB923C)' : '#E5E7EB',
+              color: canPurchase ? 'white' : '#9CA3AF',
+              cursor: canPurchase ? 'pointer' : 'not-allowed',
+              border: 'none',
+            }}
           >
             {canPurchase ? '⭐ こうかんする' : 'ポイントがたりない'}
           </button>
         ) : (
-          <div className="w-full py-2 text-center text-xs text-gray-400">
+          <div style={{
+            width: '100%',
+            paddingTop: '8px',
+            paddingBottom: '8px',
+            textAlign: 'center',
+            fontSize: '12px',
+            color: '#9CA3AF',
+          }}>
             {obtainMethodLabels[theme.obtainMethod]}
           </div>
         )}
@@ -155,19 +276,34 @@ const CategoryTabs: React.FC<{
   const categories: (ThemeCategory | 'all')[] = ['all', 'basic', 'cute', 'cool', 'retro', 'seasonal']
 
   return (
-    <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+    <div style={{
+      display: 'flex',
+      gap: '4px',
+      overflowX: 'auto',
+      paddingBottom: '8px',
+    }}>
       {categories.map((cat) => (
         <button
           key={cat}
           onClick={() => onCategoryChange(cat)}
-          className={`
-            flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap
-            transition-all duration-200
-            ${activeCategory === cat
-              ? 'bg-purple-500 text-white'
-              : 'bg-white text-purple-600 hover:bg-purple-50'
-            }
-          `}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            paddingLeft: '12px',
+            paddingRight: '12px',
+            paddingTop: '6px',
+            paddingBottom: '6px',
+            borderRadius: '9999px',
+            fontSize: '12px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            transition: 'all 0.2s',
+            background: activeCategory === cat ? '#8B5CF6' : 'white',
+            color: activeCategory === cat ? 'white' : '#7C3AED',
+            border: 'none',
+            cursor: 'pointer',
+          }}
         >
           <span>{cat === 'all' ? '🎨' : themeCategoryLabels[cat].emoji}</span>
           <span>{cat === 'all' ? 'すべて' : themeCategoryLabels[cat].label}</span>
@@ -219,34 +355,108 @@ export const ThemeSelectModal: React.FC<ThemeSelectModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 50,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+    }}>
       {/* オーバーレイ */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+        }}
+        onClick={onClose}
+      />
 
       {/* モーダル本体 */}
-      <div className="relative bg-gradient-to-b from-purple-50 to-pink-50 w-full max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-3xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
+      <div style={{
+        position: 'relative',
+        background: 'linear-gradient(to bottom, #FAF5FF, #FDF2F8)',
+        width: '100%',
+        maxWidth: '512px',
+        maxHeight: '85vh',
+        borderTopLeftRadius: '24px',
+        borderTopRightRadius: '24px',
+        overflow: 'hidden',
+      }}>
         {/* ヘッダー */}
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-white font-bold text-lg">🎨 シール帳きせかえ</h2>
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '16px',
+          paddingBottom: '16px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+          }}>
+            <h2 style={{ color: 'white', fontWeight: 'bold', fontSize: '18px' }}>🎨 シール帳きせかえ</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               ✕
             </button>
           </div>
 
           {/* スターポイント表示 */}
-          <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1 w-fit">
-            <span className="text-yellow-300">⭐</span>
-            <span className="text-white font-bold text-sm">{userStarPoints.toLocaleString()}</span>
-            <span className="text-white/80 text-xs">ポイント</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '9999px',
+            paddingLeft: '12px',
+            paddingRight: '12px',
+            paddingTop: '4px',
+            paddingBottom: '4px',
+            width: 'fit-content',
+          }}>
+            <span style={{ color: '#FDE047' }}>⭐</span>
+            <span style={{ color: 'white', fontWeight: 'bold', fontSize: '14px' }}>{userStarPoints.toLocaleString()}</span>
+            <span style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '12px' }}>ポイント</span>
           </div>
         </div>
 
         {/* カテゴリタブ */}
-        <div className="px-4 py-3 bg-white/50 border-b border-purple-100">
+        <div style={{
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '12px',
+          paddingBottom: '12px',
+          background: 'rgba(255, 255, 255, 0.5)',
+          borderBottom: '1px solid #F3E8FF',
+        }}>
           <CategoryTabs
             activeCategory={activeCategory}
             onCategoryChange={setActiveCategory}
@@ -254,8 +464,12 @@ export const ThemeSelectModal: React.FC<ThemeSelectModalProps> = ({
         </div>
 
         {/* テーマ一覧 */}
-        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 180px)' }}>
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: '16px', overflowY: 'auto', maxHeight: 'calc(85vh - 180px)' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '12px',
+          }}>
             {sortedThemes.map((theme) => (
               <ThemeCard
                 key={theme.id}
@@ -274,9 +488,9 @@ export const ThemeSelectModal: React.FC<ThemeSelectModalProps> = ({
           </div>
 
           {sortedThemes.length === 0 && (
-            <div className="text-center py-8">
-              <span className="text-4xl mb-2 block">🔍</span>
-              <p className="text-purple-400 text-sm">このカテゴリにはテーマがありません</p>
+            <div style={{ textAlign: 'center', paddingTop: '32px', paddingBottom: '32px' }}>
+              <span style={{ fontSize: '32px', marginBottom: '8px', display: 'block' }}>🔍</span>
+              <p style={{ color: '#A78BFA', fontSize: '14px' }}>このカテゴリにはテーマがありません</p>
             </div>
           )}
         </div>
@@ -284,36 +498,104 @@ export const ThemeSelectModal: React.FC<ThemeSelectModalProps> = ({
 
       {/* 購入確認モーダル */}
       {themeToConfirm && (
-        <div className="absolute inset-0 z-60 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowPurchaseConfirm(null)} />
-          <div className="relative bg-white rounded-3xl shadow-2xl p-6 max-w-xs w-full animate-[scaleIn_0.2s_ease-out]">
-            <div className="text-center">
-              <span className="text-5xl mb-3 block">{themeToConfirm.previewEmoji}</span>
-              <h3 className="text-lg font-bold text-purple-700 mb-2">
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px',
+        }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.3)',
+            }}
+            onClick={() => setShowPurchaseConfirm(null)}
+          />
+          <div style={{
+            position: 'relative',
+            background: 'white',
+            borderRadius: '24px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            padding: '24px',
+            maxWidth: '320px',
+            width: '100%',
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: '60px', marginBottom: '12px', display: 'block' }}>{themeToConfirm.previewEmoji}</span>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: '#7C3AED',
+                marginBottom: '8px',
+              }}>
                 {themeToConfirm.name}
               </h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <p style={{
+                fontSize: '14px',
+                color: '#4B5563',
+                marginBottom: '16px',
+              }}>
                 このテーマをこうかんしますか？
               </p>
-              <div className="bg-yellow-50 rounded-xl p-3 mb-4">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-yellow-500 text-xl">⭐</span>
-                  <span className="text-xl font-bold text-yellow-700">
+              <div style={{
+                background: '#FEF9C3',
+                borderRadius: '12px',
+                padding: '12px',
+                marginBottom: '16px',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}>
+                  <span style={{ color: '#EAB308', fontSize: '24px' }}>⭐</span>
+                  <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#A16207' }}>
                     {themeToConfirm.starPointCost?.toLocaleString()}
                   </span>
-                  <span className="text-sm text-yellow-600">ポイント</span>
+                  <span style={{ fontSize: '14px', color: '#CA8A04' }}>ポイント</span>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => setShowPurchaseConfirm(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-bold"
+                  style={{
+                    flex: 1,
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
+                    borderRadius: '12px',
+                    background: '#F3F4F6',
+                    color: '#4B5563',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
                 >
                   やめる
                 </button>
                 <button
                   onClick={handlePurchaseConfirm}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold"
+                  style={{
+                    flex: 1,
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(to right, #FBBF24, #FB923C)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
                 >
                   こうかん！
                 </button>

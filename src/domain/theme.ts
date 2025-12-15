@@ -466,7 +466,7 @@ export function getCoverDesignById(id: string): CoverDesign | undefined {
   return defaultCoverDesigns.find(c => c.id === id)
 }
 
-// デフォルトの表紙デザインID
+// デフォルトの表紙デザインID（もっちもをデフォルトに）
 export function getDefaultCoverDesignId(): string {
-  return 'cover-default'
+  return 'cover-mochimo'
 }

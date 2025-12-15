@@ -119,6 +119,7 @@ export interface FilterableSticker {
   rarity: number
   type: 'normal' | 'puffy' | 'sparkle'
   owned?: boolean
+  character?: string // キャラクター名（フィルタリング用）
 }
 
 export function filterStickers<T extends FilterableSticker>(
@@ -134,28 +135,18 @@ export function filterStickers<T extends FilterableSticker>(
       }
     }
 
-    // シリーズフィルター
-    if (filter.series && sticker.series !== filter.series) {
-      return false
+    // キャラクターフィルター（seriesフィールドにキャラクター名が入っている場合）
+    // characterフィールドがあればそれを使用、なければnameからキャラクター名を抽出
+    if (filter.series) {
+      const stickerCharacter = sticker.character || sticker.name.split(' ')[0].split('#')[0]
+      if (stickerCharacter !== filter.series) {
+        return false
+      }
     }
 
     // レア度フィルター
     if (filter.rarities.length > 0 && !filter.rarities.includes(sticker.rarity)) {
       return false
-    }
-
-    // タイプフィルター
-    if (filter.types.length > 0 && !filter.types.includes(sticker.type)) {
-      return false
-    }
-
-    // タグフィルター
-    if (filter.tags.length > 0) {
-      const stickerTags = getTagsForSticker(sticker.name)
-      const hasMatchingTag = filter.tags.some(tag => stickerTags.includes(tag))
-      if (!hasMatchingTag) {
-        return false
-      }
     }
 
     // 所持フィルター

@@ -7,3 +7,4 @@ export {
   useRealtimeCleanup
 } from './useRealtime'
 export { useStarPoints } from './useStarPoints'
+export { useSupabaseTrade } from './useSupabaseTrade'

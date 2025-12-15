@@ -282,9 +282,9 @@ export function FloatingEditSticker({
 
       const relativeY = (stickerCenterY - bounds.top) / bounds.height
 
-      // 範囲内に制限
-      const clampedX = Math.max(0.15, Math.min(0.85, relativeX))
-      const clampedY = Math.max(0.15, Math.min(0.85, relativeY))
+      // 範囲内に制限（端ギリギリまで配置可能）
+      const clampedX = Math.max(0.05, Math.min(0.95, relativeX))
+      const clampedY = Math.max(0.05, Math.min(0.95, relativeY))
 
       onDrag(clampedX, clampedY)
     }

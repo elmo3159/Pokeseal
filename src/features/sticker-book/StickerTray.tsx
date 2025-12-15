@@ -11,6 +11,8 @@ export interface Sticker {
   rarity: number // 1-5
   type: 'normal' | 'puffy' | 'sparkle'
   series?: string
+  gachaWeight?: number // ガチャ排出重み（低いほどレア）
+  baseRate?: number    // 交換レート基準値
 }
 
 interface StickerTrayProps {
@@ -24,7 +26,7 @@ type RarityFilter = 'all' | 1 | 2 | 3 | 4 | 5
 type TypeFilter = 'all' | 'normal' | 'puffy' | 'sparkle'
 
 // 高さの定義
-const COLLAPSED_HEIGHT = 140 // コンパクト表示（画像のみ）の高さ
+const COLLAPSED_HEIGHT = 130 // コンパクト表示（画像のみ）の高さ
 const EXPANDED_HEIGHT_VH = 75 // 画面の75%
 const DEFAULT_EXPANDED_HEIGHT = 500 // SSR時のデフォルト値
 
@@ -183,10 +185,14 @@ export function StickerTray({
 
       <div
         ref={containerRef}
-        className="fixed left-4 right-4"
         style={{
+          position: 'fixed',
           zIndex: 250,
-          bottom: '100px',
+          // 画面幅の100%から両サイドの余白を引いた幅
+          left: '15px',
+          right: '15px',
+          // タブバーの上に配置（少し下にずらす）
+          bottom: '85px',
           // シンプルな高さベースのアプローチ - 表示する高さだけを設定
           height: isDragging ? currentHeight : (isExpanded ? expandedHeight : COLLAPSED_HEIGHT),
           overflow: 'hidden',
@@ -220,7 +226,7 @@ export function StickerTray({
               background: 'linear-gradient(90deg, #C4B5FD 0%, #F9A8D4 100%)',
             }}
           />
-          {/* スワイプヒント */}
+          {/* スワイプヒント - 縮小時のみ表示 */}
           <p
             className="text-xs mt-1.5 transition-opacity duration-200"
             style={{
@@ -229,7 +235,7 @@ export function StickerTray({
               opacity: isExpanded ? 0 : 0.8,
             }}
           >
-            ↕️ スワイプで開閉 ↔️ 横スクロール
+            👇 シールをおしてね ↕️ 開閉
           </p>
         </div>
 
@@ -327,7 +333,20 @@ export function StickerTray({
             </div>
           ) : isExpanded ? (
             // 展開時: グリッド表示
-            <div className="grid grid-cols-4 gap-3">
+            <>
+              {/* 展開時の操作ヒント */}
+              <div
+                className="flex items-center justify-center gap-2 pb-3 mb-2 border-b border-purple-200/30"
+                style={{
+                  color: '#8B5CF6',
+                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                }}
+              >
+                <span className="text-lg">👇</span>
+                <span className="text-sm font-medium">はりたいシールをおしてね</span>
+                <span className="text-lg">👇</span>
+              </div>
+              <div className="grid grid-cols-4 gap-3">
               {filteredStickers.map((sticker) => (
                 <div key={sticker.id} className="flex justify-center">
                   <StickerCard
@@ -340,11 +359,12 @@ export function StickerTray({
                   />
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           ) : (
             // 縮小時: 横スクロール（コンパクト表示）
             <div
-              className="flex gap-3 overflow-x-auto scrollbar-hide"
+              className="flex gap-2 overflow-x-auto scrollbar-hide"
               style={{
                 scrollSnapType: 'x mandatory',
               }}
@@ -361,7 +381,7 @@ export function StickerTray({
                     rarity={sticker.rarity}
                     onClick={() => handleStickerClick(sticker)}
                     selected={selectedStickerId === sticker.id}
-                    size="sm"
+                    size="xs"
                     compact={true}
                   />
                 </div>

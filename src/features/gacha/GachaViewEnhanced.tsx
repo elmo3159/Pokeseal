@@ -3,8 +3,22 @@
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+// 確認ダイアログの状態
+interface ConfirmDialogState {
+  isOpen: boolean
+  pullType: 'single' | 'multi' | null
+  cost: number
+  currency: 'ticket' | 'star' | 'gem'
+}
+
 // ガチャの種類
 export type GachaType = 'normal' | 'premium' | 'event' | 'collab'
+
+// 排出レート（レアリティごと）
+export interface GachaRate {
+  stars: number // レアリティ（1-5）
+  rate: string // 表示用レート（例: "1.4%"）
+}
 
 // ガチャバナー情報
 export interface GachaBanner {
@@ -17,6 +31,7 @@ export interface GachaBanner {
   costSingle: number
   costMulti: number
   currency: 'ticket' | 'star' | 'gem'
+  rates?: GachaRate[] // バナーごとの排出レート
 }
 
 // ユーザー所持通貨
@@ -31,6 +46,8 @@ interface GachaViewEnhancedProps {
   userCurrency: UserCurrency
   onPullSingle: (bannerId: string) => void
   onPullMulti: (bannerId: string) => void
+  onOpenShop?: () => void
+  onInsufficientFunds?: (fundType: 'tickets' | 'stars', required: number, current: number) => void
 }
 
 // ============================================
@@ -91,112 +108,139 @@ const RainbowGlow: React.FC = () => (
 )
 
 // ============================================
-// 通貨アイコン（大きめ）
+// 通貨アイコン（大きめ）- SVGベース
 // ============================================
 const CurrencyIcon: React.FC<{ type: 'ticket' | 'star' | 'gem'; size?: 'sm' | 'md' | 'lg' }> = ({
   type,
   size = 'md',
 }) => {
-  const icons = {
-    ticket: '🎟️',
-    star: '⭐',
-    gem: '💎',
-  }
   const sizes = {
-    sm: 'text-base',
-    md: 'text-xl',
-    lg: 'text-2xl',
+    sm: { width: 16, height: 16 },
+    md: { width: 24, height: 24 },
+    lg: { width: 32, height: 32 },
   }
+  const { width, height } = sizes[size]
 
-  return <span className={sizes[size]}>{icons[type]}</span>
-}
-
-// ============================================
-// 通貨表示バー（派手版・モバイル対応）
-// ============================================
-const CurrencyBar: React.FC<{ currency: UserCurrency }> = ({ currency }) => {
+  if (type === 'ticket') {
+    return (
+      <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="6" width="20" height="12" rx="2" fill="#A855F7" stroke="#7C3AED" strokeWidth="1.5"/>
+        <circle cx="2" cy="12" r="2" fill="#FDF2F8"/>
+        <circle cx="22" cy="12" r="2" fill="#FDF2F8"/>
+        <line x1="8" y1="6" x2="8" y2="18" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="2 2"/>
+      </svg>
+    )
+  }
+  if (type === 'star') {
+    return (
+      <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
+      </svg>
+    )
+  }
+  // gem
   return (
-    <motion.div
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      className="flex items-center justify-center gap-1.5 sm:gap-3 flex-wrap"
-    >
-      {[
-        { type: 'ticket' as const, value: currency.tickets, color: 'from-purple-500 via-purple-400 to-pink-500' },
-        { type: 'star' as const, value: currency.stars, color: 'from-yellow-400 via-orange-400 to-red-500' },
-        { type: 'gem' as const, value: currency.gems, color: 'from-cyan-400 via-blue-500 to-purple-600' },
-      ].map((item) => (
-        <motion.div
-          key={item.type}
-          whileHover={{ scale: 1.05 }}
-          className={`
-            flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl
-            bg-gradient-to-r ${item.color}
-            shadow-lg text-white font-bold text-sm sm:text-base
-          `}
-          style={{
-            boxShadow: '0 4px 20px rgba(139, 92, 246, 0.3)',
-          }}
-        >
-          <CurrencyIcon type={item.type} size="sm" />
-          <span className="text-sm sm:text-lg">{item.value.toLocaleString()}</span>
-        </motion.div>
-      ))}
-    </motion.div>
+    <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L4 8L12 22L20 8L12 2Z" fill="#60A5FA" stroke="#3B82F6" strokeWidth="1.5"/>
+      <path d="M4 8H20L12 2L4 8Z" fill="#93C5FD"/>
+      <line x1="12" y1="2" x2="12" y2="22" stroke="#3B82F6" strokeWidth="0.5"/>
+    </svg>
   )
 }
 
 // ============================================
-// 巨大カプセルコンポーネント
+// マシン周りの浮遊キラキラエフェクト
 // ============================================
-const BigCapsule: React.FC<{
-  color: string
-  size: number
-  x: number
-  y: number
+const FloatingSparkle: React.FC<{
   delay: number
-}> = ({ color, size, x, y, delay }) => {
-  return (
-    <motion.div
-      className="absolute"
-      style={{
-        left: `${x}%`,
-        top: `${y}%`,
-        width: size,
-        height: size,
-      }}
-      animate={{
-        y: [0, -10, 0],
-        rotate: [0, 15, -15, 0],
-        scale: [1, 1.05, 1],
-      }}
-      transition={{
-        duration: 2 + Math.random(),
-        delay,
-        repeat: Infinity,
-        ease: 'easeInOut',
-      }}
-    >
-      <div
-        className="w-full h-full rounded-full relative overflow-hidden"
-        style={{
-          background: `linear-gradient(135deg, ${color} 0%, ${color}dd 50%, ${color}aa 100%)`,
-          boxShadow: `0 4px 12px ${color}80, inset 0 -4px 8px rgba(0,0,0,0.3), inset 0 4px 8px rgba(255,255,255,0.5)`,
-        }}
-      >
-        <div
-          className="absolute top-1 left-1 w-1/3 h-1/3 rounded-full"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, transparent 100%)',
-          }}
-        />
-      </div>
-    </motion.div>
-  )
-}
+  duration: number
+  x: number
+  size: number
+  color: string
+}> = ({ delay, duration, x, size, color }) => (
+  <motion.div
+    className="absolute"
+    style={{ left: `${x}%`, bottom: '10%' }}
+    initial={{ y: 0, opacity: 0, scale: 0 }}
+    animate={{
+      y: [0, -200, -300],
+      opacity: [0, 1, 1, 0],
+      scale: [0, 1, 1.2, 0],
+      x: [0, Math.random() * 40 - 20, Math.random() * 60 - 30],
+    }}
+    transition={{
+      duration,
+      delay,
+      repeat: Infinity,
+      ease: 'easeOut',
+    }}
+  >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z"
+        fill={color}
+        style={{ filter: `drop-shadow(0 0 ${size/3}px ${color})` }}
+      />
+    </svg>
+  </motion.div>
+)
+
+// ハートエフェクト
+const FloatingHeart: React.FC<{
+  delay: number
+  x: number
+  size: number
+}> = ({ delay, x, size }) => (
+  <motion.div
+    className="absolute"
+    style={{ left: `${x}%`, bottom: '5%' }}
+    initial={{ y: 0, opacity: 0, scale: 0 }}
+    animate={{
+      y: [0, -150, -250],
+      opacity: [0, 1, 0.8, 0],
+      scale: [0, 1, 0.8, 0],
+      rotate: [0, 15, -15, 0],
+    }}
+    transition={{
+      duration: 4,
+      delay,
+      repeat: Infinity,
+      ease: 'easeOut',
+    }}
+  >
+    <span style={{ fontSize: size, filter: 'drop-shadow(0 0 8px rgba(244, 114, 182, 0.8))' }}>💖</span>
+  </motion.div>
+)
+
+// 星エフェクト
+const FloatingStar: React.FC<{
+  delay: number
+  x: number
+  size: number
+}> = ({ delay, x, size }) => (
+  <motion.div
+    className="absolute"
+    style={{ left: `${x}%`, bottom: '15%' }}
+    initial={{ y: 0, opacity: 0, scale: 0, rotate: 0 }}
+    animate={{
+      y: [0, -180, -280],
+      opacity: [0, 1, 0.6, 0],
+      scale: [0, 1.2, 1, 0],
+      rotate: [0, 180, 360],
+    }}
+    transition={{
+      duration: 5,
+      delay,
+      repeat: Infinity,
+      ease: 'easeOut',
+    }}
+  >
+    <span style={{ fontSize: size, filter: 'drop-shadow(0 0 10px rgba(251, 191, 36, 0.9))' }}>⭐</span>
+  </motion.div>
+)
 
 // ============================================
-// 巨大ガチャマシン（モバイル対応版）
+// 新しいガチャマシン（画像ベース + エフェクト）
 // ============================================
 const GiantGachaMachine: React.FC<{
   banner: GachaBanner
@@ -231,152 +275,140 @@ const GiantGachaMachine: React.FC<{
 
   const config = typeConfig[banner.type]
 
-  // カプセル配置（モバイル用に小さめに）
-  const capsules = [
-    { color: '#FF6B6B', size: 22, x: 12, y: 15, delay: 0 },
-    { color: '#4ECDC4', size: 26, x: 58, y: 10, delay: 0.3 },
-    { color: '#FFE66D', size: 20, x: 32, y: 40, delay: 0.6 },
-    { color: '#A855F7', size: 24, x: 68, y: 45, delay: 0.9 },
-    { color: '#F472B6', size: 18, x: 18, y: 58, delay: 1.2 },
-    { color: '#22D3EE', size: 22, x: 52, y: 65, delay: 1.5 },
-    { color: '#FB923C', size: 24, x: 38, y: 22, delay: 0.4 },
-    { color: '#86EFAC', size: 18, x: 75, y: 28, delay: 0.8 },
-    { color: '#FDA4AF', size: 20, x: 25, y: 75, delay: 1.0 },
+  // キラキラの設定
+  const sparkles = [
+    { delay: 0, duration: 3, x: 15, size: 16, color: '#FFD700' },
+    { delay: 0.5, duration: 3.5, x: 85, size: 14, color: '#FF69B4' },
+    { delay: 1, duration: 4, x: 25, size: 12, color: '#00BFFF' },
+    { delay: 1.5, duration: 3.2, x: 75, size: 18, color: '#FFB6C1' },
+    { delay: 2, duration: 3.8, x: 50, size: 14, color: '#98FB98' },
+    { delay: 2.5, duration: 3.3, x: 35, size: 16, color: '#DDA0DD' },
+    { delay: 3, duration: 4.2, x: 65, size: 12, color: '#FFDAB9' },
   ]
 
   return (
     <motion.div
-      className="relative flex flex-col items-center"
-      animate={isAnimating ? { scale: [1, 1.05, 1], rotate: [0, 2, -2, 0] } : {}}
-      transition={{ duration: 0.4 }}
+      className="relative flex flex-col items-center overflow-visible"
+      style={{ overflow: 'visible' }}
+      animate={isAnimating ? { scale: [1, 1.08, 1], rotate: [0, 3, -3, 0] } : {}}
+      transition={{ duration: 0.5 }}
     >
-      {/* 背景グロー */}
+      {/* 背景グロー - パルス効果 */}
       <motion.div
-        className="absolute -inset-8 sm:-inset-16 rounded-full blur-3xl"
-        style={{ background: config.glow }}
-        animate={{
-          opacity: [0.4, 0.7, 0.4],
-          scale: [1, 1.1, 1],
+        className="absolute rounded-full blur-3xl"
+        style={{
+          width: '300px',
+          height: '350px',
+          background: `radial-gradient(ellipse, ${config.glow} 0%, rgba(249, 168, 212, 0.3) 40%, transparent 70%)`,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
         }}
-        transition={{ duration: 2, repeat: Infinity }}
+        animate={{
+          opacity: [0.5, 0.8, 0.5],
+          scale: [1, 1.15, 1],
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* マシン本体 - モバイル対応サイズ */}
-      <div className="relative w-44 h-56 sm:w-56 sm:h-72 md:w-64 md:h-80">
-        {/* 台座 */}
-        <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-40 sm:w-52 md:w-60 h-6 sm:h-8 rounded-xl"
+      {/* 回転するリング装飾 */}
+      <motion.div
+        className="absolute"
+        style={{
+          width: '280px',
+          height: '280px',
+          top: '45%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          border: '2px dashed rgba(251, 191, 36, 0.3)',
+          borderRadius: '50%',
+        }}
+        animate={{ rotate: 360 }}
+        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+      />
+
+      {/* 浮遊エフェクト群 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* キラキラ */}
+        {sparkles.map((sparkle, i) => (
+          <FloatingSparkle key={`sparkle-${i}`} {...sparkle} />
+        ))}
+        {/* ハート */}
+        <FloatingHeart delay={0.3} x={20} size={20} />
+        <FloatingHeart delay={2.1} x={80} size={16} />
+        <FloatingHeart delay={3.8} x={45} size={18} />
+        {/* 星 */}
+        <FloatingStar delay={1.2} x={10} size={22} />
+        <FloatingStar delay={2.8} x={90} size={18} />
+        <FloatingStar delay={4.5} x={55} size={20} />
+      </div>
+
+      {/* マシン本体（画像） */}
+      <motion.div
+        className="relative z-10"
+        animate={{
+          y: [0, -6, 0],
+        }}
+        transition={{
+          duration: 2.5,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      >
+        {/* ガチャマシン画像 - overflow visible で切れないようにする */}
+        <motion.img
+          src="/images/Gacha_Tab/Gacha2.png"
+          alt="ガチャマシン"
+          className="w-52 sm:w-60 md:w-72 h-auto max-h-none"
           style={{
-            background: `linear-gradient(180deg, ${config.primary} 0%, ${config.primary}99 100%)`,
-            boxShadow: `0 4px 16px ${config.glow}`,
+            filter: `drop-shadow(0 0 25px ${config.glow}) drop-shadow(0 10px 20px rgba(0,0,0,0.15))`,
+            objectFit: 'contain',
           }}
+          animate={isAnimating ? {
+            filter: [
+              `drop-shadow(0 0 25px ${config.glow}) drop-shadow(0 10px 20px rgba(0,0,0,0.15))`,
+              `drop-shadow(0 0 50px ${config.glow}) drop-shadow(0 0 70px rgba(255,215,0,0.6))`,
+              `drop-shadow(0 0 25px ${config.glow}) drop-shadow(0 10px 20px rgba(0,0,0,0.15))`,
+            ],
+          } : {}}
+          transition={{ duration: 0.5 }}
+          draggable={false}
         />
 
-        {/* マシン下部 */}
-        <div
-          className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 h-14 sm:h-18 md:h-20 rounded-2xl"
-          style={{
-            width: 'calc(100% - 16px)',
-            background: `linear-gradient(180deg, ${config.secondary} 0%, ${config.primary} 100%)`,
-            boxShadow: `inset 0 4px 12px rgba(255,255,255,0.25), inset 0 -4px 12px rgba(0,0,0,0.25)`,
-          }}
-        >
-          {/* 出口 */}
-          <div
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-12 sm:w-14 h-8 sm:h-10 rounded-xl flex items-end justify-center pb-1"
-            style={{
-              background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)',
-              boxShadow: 'inset 0 3px 8px rgba(0,0,0,0.6)',
-            }}
-          >
-            <motion.div
-              className="w-8 sm:w-10 h-4 rounded-lg"
-              style={{
-                background: 'linear-gradient(180deg, #2d3748 0%, #1a202c 100%)',
-                border: '2px solid #4a5568',
-              }}
-              animate={{ opacity: [0.8, 1, 0.8] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
-          </div>
-          {/* 装飾ボルト */}
-          {[-1, 1].map((dir) => (
-            <motion.div
-              key={dir}
-              className="absolute top-3 w-3 h-3 sm:w-4 sm:h-4 rounded-full"
-              style={{
-                [dir === -1 ? 'left' : 'right']: '1rem',
-                background: 'linear-gradient(135deg, #E5E7EB 0%, #9CA3AF 100%)',
-                boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.2)',
-              }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-            />
-          ))}
-        </div>
-
-        {/* ガラスドーム - モバイル対応 */}
+        {/* 周囲のキラキラ装飾（相対位置で自然に配置） */}
         <motion.div
-          className="absolute bottom-16 sm:bottom-20 md:bottom-24 left-1/2 -translate-x-1/2 w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full overflow-hidden"
-          animate={isAnimating ? { boxShadow: [`0 0 40px ${config.glow}`, `0 0 70px ${config.glow}`, `0 0 40px ${config.glow}`] } : {}}
-          style={{
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 100%)',
-            boxShadow: `
-              inset 0 0 30px rgba(255,255,255,0.4),
-              inset 0 0 60px ${config.glow},
-              0 8px 30px rgba(0,0,0,0.3)
-            `,
-            border: '4px solid',
-            borderColor: config.primary,
-          }}
+          className="absolute -top-4 right-2 pointer-events-none"
+          animate={{ rotate: 360, scale: [1, 1.3, 1] }}
+          transition={{ rotate: { duration: 6, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
         >
-          {/* 内部の背景 */}
-          <div
-            className="absolute inset-1.5 rounded-full overflow-hidden"
-            style={{
-              background: `linear-gradient(180deg, ${config.primary}50 0%, ${config.secondary}70 100%)`,
-            }}
-          >
-            {/* カプセルたち */}
-            {capsules.map((capsule, i) => (
-              <BigCapsule key={i} {...capsule} />
-            ))}
-
-            {/* キラキラ */}
-            <MegaSparkles count={8} />
-          </div>
-
-          {/* ガラスの反射 */}
-          <div
-            className="absolute top-3 left-3 w-12 h-12 sm:w-16 sm:h-16 rounded-full"
-            style={{
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.6) 0%, transparent 50%)',
-            }}
-          />
+          <span style={{ fontSize: '22px', filter: 'drop-shadow(0 0 8px rgba(255,215,0,0.8))' }}>✨</span>
         </motion.div>
-
-        {/* 上部装飾 */}
         <motion.div
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-24 sm:w-28 md:w-32 h-10 sm:h-12 md:h-14 rounded-t-3xl"
-          style={{
-            background: `linear-gradient(180deg, ${config.accent} 0%, ${config.primary} 100%)`,
-            boxShadow: `inset 0 3px 10px rgba(255,255,255,0.4), 0 3px 16px ${config.glow}`,
-          }}
+          className="absolute -top-3 left-0 pointer-events-none"
+          animate={{ rotate: -360, scale: [1, 1.2, 1] }}
+          transition={{ rotate: { duration: 8, repeat: Infinity, ease: 'linear' }, scale: { duration: 2, repeat: Infinity, delay: 0.5 } }}
         >
-          {/* 回転するスター装飾 */}
-          <motion.div
-            className="absolute -top-3 left-1/2 -translate-x-1/2"
-            animate={{ rotate: 360, scale: [1, 1.2, 1] }}
-            transition={{ rotate: { duration: 8, repeat: Infinity, ease: 'linear' }, scale: { duration: 2, repeat: Infinity } }}
-          >
-            <span className="text-2xl sm:text-3xl md:text-4xl drop-shadow-lg" style={{ filter: 'drop-shadow(0 0 8px rgba(255,215,0,0.8))' }}>⭐</span>
-          </motion.div>
+          <span style={{ fontSize: '18px', filter: 'drop-shadow(0 0 8px rgba(244,114,182,0.8))' }}>💫</span>
         </motion.div>
-      </div>
+        <motion.div
+          className="absolute bottom-1/4 -right-5 pointer-events-none"
+          animate={{ y: [0, -5, 0], opacity: [0.7, 1, 0.7] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <span style={{ fontSize: '16px', filter: 'drop-shadow(0 0 6px rgba(147,197,253,0.8))' }}>🌟</span>
+        </motion.div>
+        <motion.div
+          className="absolute bottom-1/3 -left-5 pointer-events-none"
+          animate={{ y: [0, -8, 0], scale: [1, 1.1, 1] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+        >
+          <span style={{ fontSize: '14px', filter: 'drop-shadow(0 0 6px rgba(251,191,36,0.8))' }}>⭐</span>
+        </motion.div>
+      </motion.div>
 
       {/* バナー名と説明 */}
       <motion.div
-        className="mt-2 sm:mt-4 text-center px-4"
+        className="mt-3 sm:mt-4 text-center px-4 relative z-10"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
       >
@@ -396,11 +428,15 @@ const GiantGachaMachine: React.FC<{
         </p>
         {banner.endDate && (
           <motion.p
-            className="text-xs text-orange-400 mt-0.5 font-bold"
+            className="text-xs text-orange-400 mt-0.5 font-bold flex items-center justify-center gap-1"
             animate={{ opacity: [1, 0.6, 1] }}
             transition={{ duration: 1, repeat: Infinity }}
           >
-            ⏰ {banner.endDate}まで
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" fill="#FED7AA" stroke="#F97316" strokeWidth="2"/>
+              <path d="M12 6V12L16 14" stroke="#F97316" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            {banner.endDate}まで
           </motion.p>
         )}
       </motion.div>
@@ -465,10 +501,11 @@ const MegaGachaPullButton: React.FC<{
       {isPrimary && !disabled && (
         <div className="absolute inset-0 overflow-hidden">
           {[...Array(6)].map((_, i) => (
-            <motion.span
+            <motion.div
               key={i}
-              className="absolute text-white text-xs"
-              initial={{ x: Math.random() * 100 + '%', y: '100%', opacity: 0 }}
+              className="absolute"
+              style={{ left: `${15 + i * 14}%` }}
+              initial={{ y: '100%', opacity: 0 }}
               animate={{ y: '-20%', opacity: [0, 1, 0] }}
               transition={{
                 duration: 1.5,
@@ -476,21 +513,41 @@ const MegaGachaPullButton: React.FC<{
                 repeat: Infinity,
               }}
             >
-              ✨
-            </motion.span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M12 0L14 10L24 12L14 14L12 24L10 14L0 12L10 10L12 0Z" fill="white"/>
+              </svg>
+            </motion.div>
           ))}
         </div>
       )}
 
       <div className="relative z-10 flex flex-col items-center">
         <div className="flex items-center gap-1 sm:gap-2">
-          <motion.span
-            className="text-2xl sm:text-3xl md:text-4xl"
+          <motion.div
+            className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10"
             animate={isPrimary && !disabled ? { rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] } : {}}
             transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
           >
-            {count === 1 ? '🎰' : '🎊'}
-          </motion.span>
+            {count === 1 ? (
+              <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+                <rect x="3" y="4" width="18" height="16" rx="3" fill="#8B5CF6" stroke="#6D28D9" strokeWidth="1.5"/>
+                <rect x="6" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+                <rect x="10" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+                <rect x="14" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+                <circle cx="8" cy="12" r="1.5" fill="#EF4444"/>
+                <circle cx="12" cy="12" r="1.5" fill="#22C55E"/>
+                <circle cx="16" cy="12" r="1.5" fill="#3B82F6"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+                <path d="M12 2L14 8H20L15 12L17 18L12 14L7 18L9 12L4 8H10L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
+                <circle cx="6" cy="4" r="2" fill="#EC4899"/>
+                <circle cx="18" cy="4" r="2" fill="#8B5CF6"/>
+                <circle cx="4" cy="16" r="1.5" fill="#22C55E"/>
+                <circle cx="20" cy="16" r="1.5" fill="#3B82F6"/>
+              </svg>
+            )}
+          </motion.div>
           <span className="text-lg sm:text-xl md:text-2xl whitespace-nowrap">{label}</span>
         </div>
         <div className="flex items-center justify-center gap-1 mt-1 sm:mt-2">
@@ -505,28 +562,61 @@ const MegaGachaPullButton: React.FC<{
 // ============================================
 // バナー選択タブ（大きめ）
 // ============================================
+// バナータブ用SVGアイコン
+const BannerIcon: React.FC<{ type: GachaType }> = ({ type }) => {
+  const size = 18
+  switch (type) {
+    case 'normal':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="4" width="18" height="16" rx="3" fill="currentColor" fillOpacity="0.3" stroke="currentColor" strokeWidth="1.5"/>
+          <rect x="7" y="8" width="3" height="8" rx="1" fill="currentColor"/>
+          <rect x="10.5" y="8" width="3" height="8" rx="1" fill="currentColor"/>
+          <rect x="14" y="8" width="3" height="8" rx="1" fill="currentColor"/>
+        </svg>
+      )
+    case 'premium':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L15 8H21L16 12L18 19L12 15L6 19L8 12L3 8H9L12 2Z" fill="currentColor"/>
+        </svg>
+      )
+    case 'event':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L14 6H18L15 9L16 14L12 11L8 14L9 9L6 6H10L12 2Z" fill="currentColor"/>
+          <rect x="4" y="14" width="16" height="8" rx="2" fill="currentColor" fillOpacity="0.3" stroke="currentColor" strokeWidth="1"/>
+        </svg>
+      )
+    case 'collab':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M7 17L3 13L7 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M3 13H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M17 7L21 11L17 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M21 11H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 const BannerTabs: React.FC<{
   banners: GachaBanner[]
   selectedId: string
   onSelect: (id: string) => void
 }> = ({ banners, selectedId, onSelect }) => {
   const typeConfig = {
-    normal: { icon: '🎰', color: 'from-purple-500 via-pink-500 to-rose-500' },
-    premium: { icon: '👑', color: 'from-yellow-400 via-orange-500 to-red-500' },
-    event: { icon: '🎪', color: 'from-cyan-400 via-blue-500 to-purple-500' },
-    collab: { icon: '🤝', color: 'from-green-400 via-emerald-500 to-teal-500' },
+    normal: { color: 'from-purple-500 via-pink-500 to-rose-500' },
+    premium: { color: 'from-yellow-400 via-orange-500 to-red-500' },
+    event: { color: 'from-cyan-400 via-blue-500 to-purple-500' },
+    collab: { color: 'from-green-400 via-emerald-500 to-teal-500' },
   }
 
   return (
     <div className="relative">
-      <div
-        className="flex gap-2 overflow-x-auto pb-2 px-1"
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
+      <div className="flex justify-center gap-1.5 pb-2 px-1 flex-wrap">
         {banners.map((banner) => {
           const config = typeConfig[banner.type]
           const isSelected = selectedId === banner.id
@@ -535,19 +625,19 @@ const BannerTabs: React.FC<{
             <motion.button
               key={banner.id}
               onClick={() => onSelect(banner.id)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               className={`
-                relative flex-shrink-0 px-4 py-2.5 rounded-2xl font-bold text-sm
+                relative px-2.5 py-1.5 rounded-xl font-bold text-xs
                 transition-all duration-300 overflow-hidden
                 ${
                   isSelected
-                    ? 'text-white shadow-lg'
-                    : 'bg-white/90 text-purple-600 hover:bg-white border-2 border-purple-200'
+                    ? 'text-white shadow-md'
+                    : 'bg-white/90 text-purple-600 hover:bg-white border border-purple-200'
                 }
               `}
               style={isSelected ? {
-                boxShadow: '0 4px 20px rgba(139, 92, 246, 0.4)',
+                boxShadow: '0 3px 12px rgba(139, 92, 246, 0.35)',
               } : {}}
             >
               {isSelected && (
@@ -556,8 +646,7 @@ const BannerTabs: React.FC<{
                   layoutId="selectedBannerBg"
                 />
               )}
-              <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
-                <span className="text-lg">{config.icon}</span>
+              <span className="relative z-10 flex items-center gap-1">
                 <span>{banner.name}</span>
               </span>
             </motion.button>
@@ -569,18 +658,184 @@ const BannerTabs: React.FC<{
 }
 
 // ============================================
+// 確認ダイアログ
+// ============================================
+// 確認ダイアログ用の通貨アイコン（大きめ）
+export const ConfirmCurrencyIcon: React.FC<{ type: 'ticket' | 'star' | 'gem' }> = ({ type }) => {
+  const size = 32
+  if (type === 'ticket') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="6" width="20" height="12" rx="2" fill="#A855F7" stroke="#7C3AED" strokeWidth="1.5"/>
+        <circle cx="2" cy="12" r="2" fill="#FDF2F8"/>
+        <circle cx="22" cy="12" r="2" fill="#FDF2F8"/>
+        <line x1="8" y1="6" x2="8" y2="18" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="2 2"/>
+      </svg>
+    )
+  }
+  if (type === 'star') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
+      </svg>
+    )
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L4 8L12 22L20 8L12 2Z" fill="#60A5FA" stroke="#3B82F6" strokeWidth="1.5"/>
+      <path d="M4 8H20L12 2L4 8Z" fill="#93C5FD"/>
+    </svg>
+  )
+}
+
+export const GachaConfirmDialog: React.FC<{
+  isOpen: boolean
+  pullType: 'single' | 'multi' | null
+  cost: number
+  currency: 'ticket' | 'star' | 'gem'
+  currentAmount: number
+  onConfirm: () => void
+  onCancel: () => void
+}> = ({ isOpen, pullType, cost, currency, currentAmount, onConfirm, onCancel }) => {
+  const currencyNames = {
+    ticket: 'シルチケ',
+    star: 'どろっぷ',
+    gem: 'プレシル',
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      {/* 背景オーバーレイ */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+
+      {/* ダイアログ本体 */}
+      <motion.div
+        className="relative bg-white rounded-3xl overflow-hidden shadow-2xl"
+        style={{
+          width: '90%',
+          maxWidth: '340px',
+          minWidth: '280px',
+        }}
+        initial={{ scale: 0.8, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.8, y: 20 }}
+      >
+        {/* ヘッダー */}
+        <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 px-6 py-4">
+          <h3 className="text-xl font-bold text-white text-center">
+            ガチャをひく？
+          </h3>
+        </div>
+
+        {/* コンテンツ */}
+        <div className="px-6 py-5">
+          {/* 回数表示 */}
+          <div className="text-center mb-4">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mx-auto">
+              <rect x="3" y="4" width="18" height="16" rx="3" fill="#8B5CF6" stroke="#6D28D9" strokeWidth="1.5"/>
+              <rect x="6" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+              <rect x="10" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+              <rect x="14" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
+              <circle cx="8" cy="12" r="1.5" fill="#EF4444"/>
+              <circle cx="12" cy="12" r="1.5" fill="#22C55E"/>
+              <circle cx="16" cy="12" r="1.5" fill="#3B82F6"/>
+            </svg>
+            <p className="text-lg font-bold text-purple-600 mt-1">
+              {pullType === 'single' ? '1回ガチャ' : '10連ガチャ'}
+            </p>
+          </div>
+
+          {/* コスト表示 */}
+          <div className="bg-purple-50 rounded-2xl p-4 mb-4">
+            <p className="text-center text-sm text-purple-500 mb-2">
+              ひくのにひつようなもの
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <ConfirmCurrencyIcon type={currency} />
+              <span className="text-2xl font-bold text-purple-600">
+                {cost}
+              </span>
+              <span className="text-lg text-purple-500">
+                {currencyNames[currency]}
+              </span>
+            </div>
+          </div>
+
+          {/* 残り表示 */}
+          <div className="text-center mb-4">
+            <p className="text-sm text-gray-500">
+              いま もっている {currencyNames[currency]}：
+              <span className="font-bold text-purple-600 ml-1">
+                {currentAmount}
+              </span>
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              ひいたあと：
+              <span className={`font-bold ml-1 ${currentAmount - cost < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                {currentAmount - cost}
+              </span>
+            </p>
+          </div>
+
+          {/* ボタン */}
+          <div className="flex gap-3">
+            <motion.button
+              onClick={onCancel}
+              whileTap={{ scale: 0.95 }}
+              className="flex-1 py-3 px-4 rounded-xl bg-gray-200 text-gray-600 font-bold text-lg transition-colors hover:bg-gray-300"
+            >
+              いいえ
+            </motion.button>
+            <motion.button
+              onClick={onConfirm}
+              whileTap={{ scale: 0.95 }}
+              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-lg shadow-lg"
+            >
+              はい！
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============================================
 // レート表示（大きめ）
 // ============================================
-const RatesInfo: React.FC = () => {
+// レアリティごとのグラデーション色
+const rateColors: Record<number, string> = {
+  5: 'from-yellow-400 via-orange-500 to-red-500',
+  4: 'from-purple-400 via-pink-500 to-rose-500',
+  3: 'from-blue-400 via-cyan-500 to-teal-500',
+  2: 'from-green-400 via-emerald-500 to-lime-500',
+  1: 'from-gray-400 via-slate-500 to-zinc-500',
+}
+
+// デフォルト排出レート（通常ガチャ）
+const defaultRates: GachaRate[] = [
+  { stars: 5, rate: '1.4%' },
+  { stars: 4, rate: '4.7%' },
+  { stars: 3, rate: '14.1%' },
+  { stars: 2, rate: '28.2%' },
+  { stars: 1, rate: '51.6%' },
+]
+
+const RatesInfo: React.FC<{ rates?: GachaRate[] }> = ({ rates: bannerRates }) => {
   const [isOpen, setIsOpen] = useState(false)
 
-  const rates = [
-    { stars: 5, rate: '1%', color: 'from-yellow-400 via-orange-500 to-red-500' },
-    { stars: 4, rate: '5%', color: 'from-purple-400 via-pink-500 to-rose-500' },
-    { stars: 3, rate: '15%', color: 'from-blue-400 via-cyan-500 to-teal-500' },
-    { stars: 2, rate: '30%', color: 'from-green-400 via-emerald-500 to-lime-500' },
-    { stars: 1, rate: '49%', color: 'from-gray-400 via-slate-500 to-zinc-500' },
-  ]
+  // バナーにratesが設定されていればそれを使用、なければデフォルト
+  const rates = bannerRates || defaultRates
 
   return (
     <div>
@@ -589,7 +844,11 @@ const RatesInfo: React.FC = () => {
         className="w-full flex items-center justify-center gap-2 py-3 text-purple-400 text-base font-bold hover:text-purple-600 transition-colors"
         whileTap={{ scale: 0.98 }}
       >
-        <span className="text-lg">📊</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="14" width="4" height="8" rx="1" fill="currentColor"/>
+          <rect x="10" y="10" width="4" height="12" rx="1" fill="currentColor"/>
+          <rect x="17" y="4" width="4" height="18" rx="1" fill="currentColor"/>
+        </svg>
         <span>排出レートを見る</span>
         <motion.span animate={{ rotate: isOpen ? 180 : 0 }} className="text-sm">▼</motion.span>
       </motion.button>
@@ -618,7 +877,7 @@ const RatesInfo: React.FC = () => {
                     <motion.span
                       className={`
                         px-2.5 py-1 rounded-xl text-white text-sm font-bold mt-1
-                        bg-gradient-to-r ${rate.color}
+                        bg-gradient-to-r ${rateColors[rate.stars] || rateColors[1]}
                       `}
                       whileHover={{ scale: 1.1 }}
                     >
@@ -643,9 +902,17 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
   userCurrency,
   onPullSingle,
   onPullMulti,
+  onOpenShop,
+  onInsufficientFunds,
 }) => {
   const [selectedBannerId, setSelectedBannerId] = useState(banners[0]?.id || '')
   const [isAnimating, setIsAnimating] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    isOpen: false,
+    pullType: null,
+    cost: 0,
+    currency: 'ticket',
+  })
 
   const selectedBanner = banners.find((b) => b.id === selectedBannerId) || banners[0]
 
@@ -663,19 +930,73 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
     return userCurrency[`${currency}s` as keyof UserCurrency] >= cost
   }, [selectedBanner, userCurrency])
 
-  const handlePullSingle = useCallback(() => {
-    if (!canAffordSingle()) return
+  // 現在の通貨残高を取得
+  const getCurrentCurrencyAmount = useCallback(() => {
+    if (!selectedBanner) return 0
+    return userCurrency[`${selectedBanner.currency}s` as keyof UserCurrency]
+  }, [selectedBanner, userCurrency])
+
+  // 確認ダイアログを開く
+  const openConfirmDialog = useCallback((pullType: 'single' | 'multi') => {
+    if (!selectedBanner) return
+    const cost = pullType === 'single' ? selectedBanner.costSingle : selectedBanner.costMulti
+    setConfirmDialog({
+      isOpen: true,
+      pullType,
+      cost,
+      currency: selectedBanner.currency,
+    })
+  }, [selectedBanner])
+
+  // 確認ダイアログを閉じる
+  const closeConfirmDialog = useCallback(() => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }))
+  }, [])
+
+  // ガチャ実行
+  const executeGacha = useCallback(() => {
+    if (!selectedBanner || !confirmDialog.pullType) return
+
+    closeConfirmDialog()
     setIsAnimating(true)
     setTimeout(() => setIsAnimating(false), 600)
-    onPullSingle(selectedBanner.id)
-  }, [canAffordSingle, onPullSingle, selectedBanner])
+
+    if (confirmDialog.pullType === 'single') {
+      onPullSingle(selectedBanner.id)
+    } else {
+      onPullMulti(selectedBanner.id)
+    }
+  }, [selectedBanner, confirmDialog.pullType, closeConfirmDialog, onPullSingle, onPullMulti])
+
+  const handlePullSingle = useCallback(() => {
+    if (!selectedBanner) return
+    const current = getCurrentCurrencyAmount()
+    const cost = selectedBanner.costSingle
+    if (current < cost) {
+      // 残高不足
+      if (onInsufficientFunds) {
+        const fundType = selectedBanner.currency === 'ticket' ? 'tickets' : 'stars'
+        onInsufficientFunds(fundType, cost, current)
+      }
+      return
+    }
+    openConfirmDialog('single')
+  }, [selectedBanner, getCurrentCurrencyAmount, onInsufficientFunds, openConfirmDialog])
 
   const handlePullMulti = useCallback(() => {
-    if (!canAffordMulti()) return
-    setIsAnimating(true)
-    setTimeout(() => setIsAnimating(false), 600)
-    onPullMulti(selectedBanner.id)
-  }, [canAffordMulti, onPullMulti, selectedBanner])
+    if (!selectedBanner) return
+    const current = getCurrentCurrencyAmount()
+    const cost = selectedBanner.costMulti
+    if (current < cost) {
+      // 残高不足
+      if (onInsufficientFunds) {
+        const fundType = selectedBanner.currency === 'ticket' ? 'tickets' : 'stars'
+        onInsufficientFunds(fundType, cost, current)
+      }
+      return
+    }
+    openConfirmDialog('multi')
+  }, [selectedBanner, getCurrentCurrencyAmount, onInsufficientFunds, openConfirmDialog])
 
   if (!selectedBanner) {
     return (
@@ -687,58 +1008,40 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
 
   return (
     <div
-      className="flex flex-col h-full relative overflow-hidden"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+      }}
     >
-      {/* 動く背景装飾 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-0 right-0 w-72 h-72 bg-purple-400/30 rounded-full blur-3xl"
-          animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute bottom-0 left-0 w-64 h-64 bg-pink-400/30 rounded-full blur-3xl"
-          animate={{ x: [0, -30, 0], y: [0, 20, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-yellow-300/20 rounded-full blur-3xl"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] }}
-          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <RainbowGlow />
-        <MegaSparkles count={15} />
-      </div>
 
-      {/* コンテンツ - pb-20でボトムナビゲーション分のパディング確保 */}
-      <div className="relative z-10 flex flex-col h-full px-3 sm:px-4 py-2 sm:py-3 pb-20">
-        {/* 通貨バー */}
-        <div className="mb-2 sm:mb-3">
-          <CurrencyBar currency={userCurrency} />
-        </div>
-
+      {/* コンテンツ - ヘッダー下から全画面 */}
+      <div className="relative z-10 flex flex-col h-full px-2 pt-3 pb-24 overflow-x-hidden overflow-y-auto">
         {/* バナー選択 */}
-        <div className="mb-2 sm:mb-3">
+        <div className="mb-2">
           <BannerTabs banners={banners} selectedId={selectedBannerId} onSelect={setSelectedBannerId} />
         </div>
 
         {/* 巨大ガチャマシン */}
-        <div className="flex-1 flex items-center justify-center min-h-0 py-1 sm:py-2">
-          <GiantGachaMachine
-            banner={selectedBanner}
-            isAnimating={isAnimating}
-          />
+        <div className="flex-1 flex items-center justify-center min-h-0 py-1 sm:py-2 overflow-visible">
+          <div className="transform scale-[0.85] sm:scale-95 md:scale-100 origin-center overflow-visible">
+            <GiantGachaMachine
+              banner={selectedBanner}
+              isAnimating={isAnimating}
+            />
+          </div>
         </div>
 
-        {/* 巨大ガチャボタン */}
-        <div className="flex items-center justify-center gap-2 sm:gap-4 py-2 sm:py-4">
+        {/* 巨大ガチャボタン - 常にアクティブ（残高不足時はショップへ誘導） */}
+        <div className="flex-shrink-0 flex items-center justify-center gap-2 sm:gap-4 py-2 sm:py-3">
           <MegaGachaPullButton
             label="1回！"
             count={1}
             cost={selectedBanner.costSingle}
             currency={selectedBanner.currency}
-            disabled={!canAffordSingle()}
             onClick={handlePullSingle}
           />
           <MegaGachaPullButton
@@ -747,14 +1050,30 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
             cost={selectedBanner.costMulti}
             currency={selectedBanner.currency}
             isPrimary
-            disabled={!canAffordMulti()}
             onClick={handlePullMulti}
           />
         </div>
 
         {/* レート情報 */}
-        <RatesInfo />
+        <div className="flex-shrink-0">
+          <RatesInfo rates={selectedBanner?.rates} />
+        </div>
       </div>
+
+      {/* 確認ダイアログ */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <GachaConfirmDialog
+            isOpen={confirmDialog.isOpen}
+            pullType={confirmDialog.pullType}
+            cost={confirmDialog.cost}
+            currency={confirmDialog.currency}
+            currentAmount={getCurrentCurrencyAmount()}
+            onConfirm={executeGacha}
+            onCancel={closeConfirmDialog}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
