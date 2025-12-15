@@ -2689,8 +2689,18 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
     const isCurrentlySelected = myWantIds.includes(stickerId)
 
+    // 同じuserStickerId（同じシール）が別の配置で既に選択されているかチェック
+    // 同じシールが複数箇所に貼られている場合の対応
+    const existingSelectionWithSameUserSticker = userStickerId
+      ? myWantIds.find(id => {
+          const s = getStickerFromPages(partnerPages, id)
+          return s?.userStickerId === userStickerId && id !== stickerId
+        })
+      : undefined
+
     if (isCurrentlySelected) {
-      // 選択解除
+      // 選択解除（このplacement.idを解除）
+      console.log('[TradeSession] Deselecting sticker:', stickerId)
       setMyWantIds((prev) => prev.filter((id) => id !== stickerId))
 
       // Supabase連携: アイテムを削除
@@ -2704,9 +2714,16 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
           }
         }
       }
+    } else if (existingSelectionWithSameUserSticker) {
+      // 同じシールが別の配置で既に選択されている
+      // → 既存の選択を解除して、新しい配置を選択（位置切り替え）
+      console.log('[TradeSession] Same sticker already selected at different position, switching:', existingSelectionWithSameUserSticker, '->', stickerId)
+      setMyWantIds((prev) => prev.filter((id) => id !== existingSelectionWithSameUserSticker).concat([stickerId]))
+      // Supabase側は同じuserStickerId なので変更不要
     } else {
       // 新規選択
       if (myWantIds.length < MAX_SELECTIONS) {
+        console.log('[TradeSession] Selecting new sticker:', stickerId, 'userStickerId:', userStickerId)
         setMyWantIds((prev) => [...prev, stickerId])
 
         // Supabase連携: アイテムを追加（userStickerId を使用）
