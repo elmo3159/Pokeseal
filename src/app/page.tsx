@@ -1095,13 +1095,15 @@ export default function Home() {
   const [selectedScoutMatch, setSelectedScoutMatch] = useState<ScoutMatch | null>(null)
 
   // 自分のシール帳をTrade用に変換（ホームで編集したシール帳をそのまま交換画面で使用）
+  // シールとデコアイテムの両方を含める
   const myTradePages: TradeBookPageFull[] = useMemo(() => {
     return pages.map((page, index) => ({
       ...page,
       pageNumber: index,
       stickers: placedStickers.filter(s => s.pageId === page.id),
+      decoItems: placedDecoItems.filter(d => d.pageId === page.id),
     }))
-  }, [pages, placedStickers])
+  }, [pages, placedStickers, placedDecoItems])
 
   // Monetization state (includes currency)
   const [userMonetization, setUserMonetization] = useState<UserMonetization>(demoUserMonetization)
@@ -1328,7 +1330,7 @@ export default function Home() {
             console.log('[Supabase] No stickers found in Supabase, using localStorage data')
           }
 
-          // シール帳データもSupabaseから読み込み
+          // シール帳データ（シール配置 + デコ配置）もSupabaseから読み込み
           console.log('[Supabase] Loading sticker book from Supabase for user:', testUser.supabaseId)
           const stickerBook = await stickerBookService.getUserStickerBook(testUser.supabaseId)
           if (stickerBook && stickerBook.pages.length > 0) {
@@ -1344,7 +1346,11 @@ export default function Home() {
             // Supabaseのシール配置データを収集
             const supabasePlacedStickers: PlacedSticker[] = stickerBook.pages.flatMap(page => page.stickers)
 
+            // Supabaseのデコ配置データを収集
+            const supabasePlacedDecoItems: PlacedDecoItem[] = stickerBook.pages.flatMap(page => page.decoItems || [])
+
             console.log('[Supabase] Loaded', supabasePlacedStickers.length, 'placed stickers')
+            console.log('[Supabase] Loaded', supabasePlacedDecoItems.length, 'placed deco items')
 
             // userDataを更新
             if (!userData) {
@@ -1352,6 +1358,7 @@ export default function Home() {
             }
             userData.pages = supabasePages
             userData.placedStickers = supabasePlacedStickers
+            userData.placedDecoItems = supabasePlacedDecoItems
           } else {
             console.log('[Supabase] No sticker book found, using localStorage data')
           }
@@ -1820,7 +1827,7 @@ export default function Home() {
   // ======================
 
   // デコアイテム配置ハンドラー
-  const handlePlaceDecoItem = useCallback((pageId: string, x: number, y: number, rotation: number) => {
+  const handlePlaceDecoItem = useCallback(async (pageId: string, x: number, y: number, rotation: number) => {
     if (!selectedDecoItem) return
 
     // 現在のページにあるシールとデコアイテムの最大zIndexを取得
@@ -1835,20 +1842,44 @@ export default function Home() {
     // 初期サイズ：baseWidth/baseHeightを使用（レースは横長、スタンプは正方形）
     const initialWidth = selectedDecoItem.baseWidth
     const initialHeight = selectedDecoItem.baseHeight
+    const newZIndex = maxZIndex + 1
+    const placedAt = new Date().toISOString()
+    const actualRotation = selectedDecoItem.rotatable ? rotation : 0
+
+    // Supabaseに保存を試みる
+    let placementId = `deco-${Date.now()}`
+    try {
+      const supabaseId = await stickerBookService.addDecoPlacement({
+        pageId,
+        decoItemId: selectedDecoItem.id,
+        x,
+        y,
+        rotation: actualRotation,
+        width: initialWidth,
+        height: initialHeight,
+        zIndex: newZIndex,
+      })
+      if (supabaseId) {
+        placementId = supabaseId
+        console.log('[Deco] Saved to Supabase:', supabaseId)
+      }
+    } catch (err) {
+      console.warn('[Deco] Failed to save to Supabase (table may not exist yet):', err)
+    }
 
     const newDecoItem: PlacedDecoItem = {
-      id: `deco-${Date.now()}`,
+      id: placementId,
       decoItemId: selectedDecoItem.id,
       decoItem: selectedDecoItem,
       pageId,
       x,
       y,
-      rotation: selectedDecoItem.rotatable ? rotation : 0,
+      rotation: actualRotation,
       scale: 1,
       width: initialWidth,
       height: initialHeight,
-      zIndex: maxZIndex + 1,
-      placedAt: new Date().toISOString(),
+      zIndex: newZIndex,
+      placedAt,
     }
 
     setPlacedDecoItems(prev => [...prev, newDecoItem])
@@ -1880,7 +1911,16 @@ export default function Home() {
   }, [selectedDecoItem, placedStickers, placedDecoItems, isSpreadView, pages])
 
   // デコアイテム削除ハンドラー
-  const handleDeleteDecoItem = useCallback((decoItemId: string) => {
+  const handleDeleteDecoItem = useCallback(async (decoItemId: string) => {
+    // Supabaseから削除を試みる（UUIDの場合のみ）
+    if (decoItemId && !decoItemId.startsWith('deco-')) {
+      try {
+        await stickerBookService.removeDecoPlacement(decoItemId)
+        console.log('[Deco] Deleted from Supabase:', decoItemId)
+      } catch (err) {
+        console.warn('[Deco] Failed to delete from Supabase:', err)
+      }
+    }
     setPlacedDecoItems(prev => prev.filter(d => d.id !== decoItemId))
     setEditingDecoItem(null)
   }, [])
@@ -1947,6 +1987,33 @@ export default function Home() {
     ))
     setEditingDecoItem(prev => prev ? { ...prev, rotation } : null)
   }, [editingDecoItem])
+
+  // デコアイテム更新ハンドラー（編集完了時にSupabaseに保存）
+  const handleUpdateDecoItem = useCallback((updated: PlacedDecoItem) => {
+    setPlacedDecoItems(prev => prev.map(d => d.id === updated.id ? updated : d))
+    setEditingDecoItem(null)
+
+    // Supabaseに同期（UUIDの場合のみ）
+    if (updated.id && !updated.id.startsWith('deco-')) {
+      stickerBookService.updateDecoPlacement(updated.id, {
+        x: updated.x,
+        y: updated.y,
+        rotation: updated.rotation,
+        width: updated.width,
+        height: updated.height,
+        zIndex: updated.zIndex,
+        pageId: updated.pageId,
+      })
+        .then(success => {
+          if (success) {
+            console.log('[Deco] Updated in Supabase:', updated.id)
+          }
+        })
+        .catch(error => {
+          console.error('[Deco] Failed to update in Supabase:', error)
+        })
+    }
+  }, [])
 
   // ======================
   // 統合レイヤー制御ハンドラー
@@ -2895,7 +2962,7 @@ export default function Home() {
 
                       {/* 決定ボタン */}
                       <button
-                        onClick={() => setEditingDecoItem(null)}
+                        onClick={() => handleUpdateDecoItem(editingDecoItem)}
                         className="w-full mt-3 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98]"
                         style={{
                           fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -3458,6 +3525,7 @@ export default function Home() {
                   type: page.pageType as 'cover' | 'page' | 'back-cover' | 'inner-cover',
                   pageNumber: page.pageNumber,
                   stickers: page.stickers,
+                  decoItems: page.decoItems || [],
                 }))
               : demoPartnerTradePages
           }
@@ -3518,8 +3586,9 @@ export default function Home() {
           pages={pages.filter(p => p.type === 'page').map((p, index) => ({
             id: p.id,
             pageNumber: index + 1,
-            // 各ページに貼られたシールを渡す
+            // 各ページに貼られたシールとデコを渡す
             placedStickers: placedStickers.filter(s => s.pageId === p.id),
+            placedDecoItems: placedDecoItems.filter(d => d.pageId === p.id),
           }))}
           onClose={() => setIsCreatePostModalOpen(false)}
           onSubmit={(data) => {

@@ -184,7 +184,7 @@ export function DecoDrawer({
                         <img
                           src={item.imageUrl}
                           alt={item.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                           onError={(e) => {
                             // 画像読み込み失敗時はプレースホルダー表示
                             e.currentTarget.style.display = 'none'

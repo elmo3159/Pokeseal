@@ -2,6 +2,7 @@
 import { getSupabase } from '@/services/supabase'
 import type { Sticker } from '@/features/sticker-book/StickerTray'
 import type { PlacedSticker } from '@/features/sticker-book/StickerPlacement'
+import type { PlacedDecoItem, DecoItemData, DecoItemType } from '@/domain/decoItems'
 
 // シール帳ページの型（TradeBookPageFull互換）
 export interface StickerBookPage {
@@ -10,6 +11,7 @@ export interface StickerBookPage {
   pageType: 'cover' | 'page' | 'back-cover'
   side?: 'left' | 'right'
   stickers: PlacedSticker[]
+  decoItems?: PlacedDecoItem[]
 }
 
 // シール帳の型
@@ -53,6 +55,53 @@ interface RawPage {
   page_number: number
   page_type: string
   side: string | null
+}
+
+// デコ配置の生データ型
+interface RawDecoPlacement {
+  id: string
+  page_id: string
+  position_x: number
+  position_y: number
+  rotation: number
+  width: number
+  height: number
+  z_index: number
+  created_at: string
+  deco_item: {
+    id: string
+    name: string
+    type: string
+    image_url: string
+    base_width: number
+    base_height: number
+    rotatable: boolean
+    rarity: number
+    obtain_method: string
+  }
+}
+
+// デコ配置の入力型
+export interface DecoPlacementInput {
+  pageId: string
+  decoItemId: string
+  x: number
+  y: number
+  rotation: number
+  width: number
+  height: number
+  zIndex: number
+}
+
+// デコ配置の更新型
+export interface DecoPlacementUpdate {
+  x?: number
+  y?: number
+  rotation?: number
+  width?: number
+  height?: number
+  zIndex?: number
+  pageId?: string
 }
 
 // シール配置の入力型
@@ -143,11 +192,60 @@ export const stickerBookService = {
       return null
     }
 
-    // 4. データを整形
+    // 4. 各ページのデコ配置を取得
+    let decoPlacements: RawDecoPlacement[] = []
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: decoData, error: decoError } = await (supabase as any)
+        .from('deco_placements')
+        .select(`
+          id,
+          page_id,
+          position_x,
+          position_y,
+          rotation,
+          width,
+          height,
+          z_index,
+          created_at,
+          deco_item:deco_items(
+            id,
+            name,
+            type,
+            image_url,
+            base_width,
+            base_height,
+            rotatable,
+            rarity,
+            obtain_method
+          )
+        `)
+        .in('page_id', pageIds)
+
+      if (decoError) {
+        // deco_placements テーブルが存在しない場合はスキップ
+        console.warn('[StickerBookService] Deco placements not available:', decoError.message)
+      } else {
+        decoPlacements = (decoData as unknown as RawDecoPlacement[]) || []
+        console.log('[StickerBookService] Deco placements loaded:', decoPlacements.length)
+        // デバッグ: 生データを出力
+        if (decoPlacements.length > 0) {
+          console.log('[StickerBookService] Raw deco data:', JSON.stringify(decoPlacements[0], null, 2))
+        }
+      }
+    } catch (err) {
+      console.warn('[StickerBookService] Deco fetch skipped:', err)
+    }
+
+    // 5. データを整形
     const pagesWithStickers: StickerBookPage[] = (pages as RawPage[]).map(page => {
       const pageStickers = (placements as unknown as RawPlacement[] || [])
         .filter(p => p.page_id === page.id)
         .map(placement => this.convertToPlacedSticker(placement, page.id))
+
+      const pageDecos = decoPlacements
+        .filter(d => d.page_id === page.id)
+        .map(deco => this.convertToPlacedDecoItem(deco, page.id))
 
       return {
         id: page.id,
@@ -155,6 +253,7 @@ export const stickerBookService = {
         pageType: page.page_type as 'cover' | 'page' | 'back-cover',
         side: page.side as 'left' | 'right' | undefined,
         stickers: pageStickers,
+        decoItems: pageDecos.length > 0 ? pageDecos : undefined,
       }
     })
 
@@ -208,6 +307,40 @@ export const stickerBookService = {
       y: Number(placement.position_y),
       rotation: Number(placement.rotation),
       scale: Number(placement.scale),
+      zIndex: placement.z_index,
+      placedAt: placement.created_at,
+    }
+  },
+
+  /**
+   * Supabaseのデコ配置データをPlacedDecoItem型に変換
+   */
+  convertToPlacedDecoItem(placement: RawDecoPlacement, pageId: string): PlacedDecoItem {
+    const decoData = placement.deco_item
+
+    const decoItem: DecoItemData = {
+      id: decoData?.id || 'unknown',
+      name: decoData?.name || 'Unknown',
+      type: (decoData?.type as DecoItemType) || 'stamp',
+      imageUrl: decoData?.image_url || '',
+      baseWidth: decoData?.base_width || 50,
+      baseHeight: decoData?.base_height || 50,
+      rotatable: decoData?.rotatable ?? true,
+      rarity: (decoData?.rarity || 1) as 1 | 2 | 3 | 4 | 5,
+      obtainMethod: (decoData?.obtain_method as 'default' | 'gacha' | 'event' | 'purchase') || 'default',
+    }
+
+    return {
+      id: placement.id,
+      decoItemId: decoItem.id,
+      decoItem,
+      pageId,
+      x: Number(placement.position_x),
+      y: Number(placement.position_y),
+      rotation: Number(placement.rotation),
+      scale: 1, // 後方互換用
+      width: Number(placement.width),
+      height: Number(placement.height),
       zIndex: placement.z_index,
       placedAt: placement.created_at,
     }
@@ -492,6 +625,172 @@ export const stickerBookService = {
     const ids = data.map(d => d.id)
     console.log('[StickerBookService] Batch placements added:', ids.length)
     return ids
+  },
+
+  // =============================================
+  // デコ配置のCRUD操作
+  // =============================================
+
+  /**
+   * デコを配置する
+   */
+  async addDecoPlacement(input: DecoPlacementInput): Promise<string | null> {
+    const supabase = getSupabase()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('deco_placements')
+      .insert({
+        page_id: input.pageId,
+        deco_item_id: input.decoItemId,
+        position_x: input.x,
+        position_y: input.y,
+        rotation: input.rotation,
+        width: input.width,
+        height: input.height,
+        z_index: input.zIndex,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('[StickerBookService] Add deco placement error:', error)
+      return null
+    }
+
+    console.log('[StickerBookService] Deco placement added:', data.id)
+    return data.id
+  },
+
+  /**
+   * デコ配置を更新する
+   */
+  async updateDecoPlacement(placementId: string, update: DecoPlacementUpdate): Promise<boolean> {
+    const supabase = getSupabase()
+
+    const updateData: Record<string, unknown> = {}
+    if (update.x !== undefined) updateData.position_x = update.x
+    if (update.y !== undefined) updateData.position_y = update.y
+    if (update.rotation !== undefined) updateData.rotation = update.rotation
+    if (update.width !== undefined) updateData.width = update.width
+    if (update.height !== undefined) updateData.height = update.height
+    if (update.zIndex !== undefined) updateData.z_index = update.zIndex
+    if (update.pageId !== undefined) updateData.page_id = update.pageId
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('deco_placements')
+      .update(updateData)
+      .eq('id', placementId)
+
+    if (error) {
+      console.error('[StickerBookService] Update deco placement error:', error)
+      return false
+    }
+
+    console.log('[StickerBookService] Deco placement updated:', placementId)
+    return true
+  },
+
+  /**
+   * デコ配置を削除する
+   */
+  async removeDecoPlacement(placementId: string): Promise<boolean> {
+    const supabase = getSupabase()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('deco_placements')
+      .delete()
+      .eq('id', placementId)
+
+    if (error) {
+      console.error('[StickerBookService] Remove deco placement error:', error)
+      return false
+    }
+
+    console.log('[StickerBookService] Deco placement removed:', placementId)
+    return true
+  },
+
+  /**
+   * 複数のデコ配置を一括追加
+   */
+  async addDecosPlacements(inputs: DecoPlacementInput[]): Promise<string[]> {
+    if (inputs.length === 0) return []
+
+    const supabase = getSupabase()
+
+    const insertData = inputs.map(input => ({
+      page_id: input.pageId,
+      deco_item_id: input.decoItemId,
+      position_x: input.x,
+      position_y: input.y,
+      rotation: input.rotation,
+      width: input.width,
+      height: input.height,
+      z_index: input.zIndex,
+    }))
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('deco_placements')
+      .insert(insertData)
+      .select('id')
+
+    if (error) {
+      console.error('[StickerBookService] Batch add deco placements error:', error)
+      return []
+    }
+
+    const ids = data.map((d: { id: string }) => d.id)
+    console.log('[StickerBookService] Batch deco placements added:', ids.length)
+    return ids
+  },
+
+  /**
+   * 全デコ配置を一括削除（ユーザーのシール帳）
+   */
+  async clearAllDecoPlacements(userId: string): Promise<boolean> {
+    const supabase = getSupabase()
+
+    // シール帳を取得
+    const { data: book } = await supabase
+      .from('sticker_books')
+      .select('id')
+      .eq('user_id', userId)
+      .single()
+
+    if (!book) {
+      return false
+    }
+
+    // ページIDを取得
+    const { data: pages } = await supabase
+      .from('sticker_book_pages')
+      .select('id')
+      .eq('book_id', book.id)
+
+    if (!pages || pages.length === 0) {
+      return true
+    }
+
+    const pageIds = pages.map(p => p.id)
+
+    // デコ配置を削除
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('deco_placements')
+      .delete()
+      .in('page_id', pageIds)
+
+    if (error) {
+      console.error('[StickerBookService] Clear deco placements error:', error)
+      return false
+    }
+
+    console.log('[StickerBookService] All deco placements cleared for user:', userId)
+    return true
   },
 }
 

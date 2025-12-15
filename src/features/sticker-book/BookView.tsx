@@ -1108,13 +1108,13 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
 BookView.displayName = 'BookView'
 
 // ページ内シール表示コンポーネント
-interface PageStickersProps {
+export interface PageStickersProps {
   stickers: PlacedSticker[]
   editingStickerId?: string | null
   onLongPress?: (sticker: PlacedSticker) => void
 }
 
-function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersProps) {
+export function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersProps) {
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
   const handlePointerDown = (sticker: PlacedSticker) => {
@@ -1275,7 +1275,7 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
         zIndex: 50, // シールやコンテンツより上に配置
       }}
     >
-      {decoItems.map((deco) => {
+      {decoItems.map((deco, idx) => {
         // 編集中のデコアイテムは非表示（FloatingEditDecoで表示）
         if (deco.id === editingDecoItemId) {
           return null
@@ -1284,6 +1284,17 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
         // デコアイテムのサイズ（width/heightがあればそれを使用、なければbaseWidth/baseHeight）
         const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
         const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+
+        // デバッグログ（最初のデコのみ）
+        if (idx === 0) {
+          console.log('[BookView PageDecos] Deco render:', {
+            id: deco.id,
+            x: deco.x, y: deco.y, rotation: deco.rotation,
+            width: deco.width, height: deco.height,
+            baseW: deco.decoItem.baseWidth, baseH: deco.decoItem.baseHeight,
+            finalW: decoWidth, finalH: decoHeight,
+          })
+        }
 
         return (
           <div
@@ -1338,7 +1349,7 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
               <img
                 src={deco.decoItem.imageUrl}
                 alt={deco.decoItem.name}
-                className="w-full h-full object-cover pointer-events-none select-none"
+                className="w-full h-full object-fill pointer-events-none select-none"
                 draggable={false}
                 style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
               />

@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { PlacedSticker } from '../sticker-book/StickerPlacement'
 import type { BookPage, PageTheme } from '../sticker-book/BookView'
 import { getCoverDesignById, type CoverDesign } from '@/domain/theme'
+import type { PlacedDecoItem } from '@/domain/decoItems'
 import { filterContent, isKidSafe, getFilterReason, FilterResult } from '@/utils/contentFilter'
 import {
   UserIcon,
@@ -66,6 +67,7 @@ export interface TradeSticker {
 export interface TradeBookPageFull extends BookPage {
   pageNumber?: number
   stickers: PlacedSticker[]
+  decoItems?: PlacedDecoItem[]
 }
 
 export type StampType =
@@ -110,6 +112,23 @@ const PRESET_MESSAGES = [
   '考え中...',
   'いいね！',
 ]
+
+// シール帳の基準サイズ（BookViewと同じ）
+const BASE_PAGE_WIDTH = 320
+const BASE_PAGE_HEIGHT = 480
+const BASE_STICKER_SIZE = 60
+
+// ページサイズに応じたシールサイズを計算
+const getProportionalStickerSize = (stickerScale: number, pageWidth: number) => {
+  const scaleFactor = pageWidth / BASE_PAGE_WIDTH
+  return BASE_STICKER_SIZE * stickerScale * scaleFactor
+}
+
+// ページサイズに応じたデコサイズを計算
+const getProportionalDecoSize = (decoSize: number, pageWidth: number) => {
+  const scaleFactor = pageWidth / BASE_PAGE_WIDTH
+  return decoSize * scaleFactor
+}
 
 // レアリティカラー
 const RARITY_COLORS: Record<number, string> = {
@@ -765,8 +784,9 @@ const TradeBookPageComponent = React.forwardRef<
     maxSelections: number
     disabled?: boolean
     coverDesign?: CoverDesign  // カバーデザイン
+    pageWidth?: number  // ページ幅（シールサイズ計算用）
   }
->(({ page, selectedStickers, onStickerSelect, maxSelections, disabled, coverDesign }, ref) => {
+>(({ page, selectedStickers, onStickerSelect, maxSelections, disabled, coverDesign, pageWidth = BASE_PAGE_WIDTH }, ref) => {
   const canSelectMore = selectedStickers.length < maxSelections
   const stickers = page.stickers || []
 
@@ -794,9 +814,13 @@ const TradeBookPageComponent = React.forwardRef<
   return (
     <div
       ref={ref}
-      className="w-full h-full overflow-hidden relative"
+      className="book-page w-full h-full relative"
       style={{
         boxShadow: 'inset 0 0 15px rgba(0,0,0,0.03)',
+        // overflow: visibleでシールがページ境界を超えて表示可能に
+        // clip-pathでページ端でのクリッピングを制御
+        overflow: 'visible',
+        clipPath: 'inset(0)',
       }}
     >
       {page.type === 'cover' ? (
@@ -859,67 +883,66 @@ const TradeBookPageComponent = React.forwardRef<
             </div>
           )}
 
-          {/* シール配置エリア - 100%の領域を使用 */}
-          <div className="absolute inset-0">
+          {/* シール配置エリア - BookViewと同じレンダリング */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              zIndex: 40, // BookViewと同じz-index
+              transformStyle: 'preserve-3d',
+              backfaceVisibility: 'hidden',
+            }}
+          >
             {stickers.map((sticker) => {
               const isSelected = selectedStickers.includes(sticker.id)
-              // ホームと同じ60pxベースサイズを使用
-              const size = 60 * sticker.scale
-              const rarity = sticker.sticker.rarity
+              // ページサイズに比例したシールサイズ
+              const stickerSize = getProportionalStickerSize(sticker.scale, pageWidth)
+              const x = sticker.x * 100
+              const y = sticker.y * 100
 
               return (
-                <div
+                <button
                   key={sticker.id}
-                  className="absolute"
+                  onClick={(e) => handleStickerTap(e, sticker.id)}
+                  disabled={disabled || (!isSelected && !canSelectMore)}
+                  className="absolute pointer-events-auto p-0 border-0 bg-transparent cursor-pointer"
                   style={{
-                    // シールの中心を基準に配置（padding なしの全領域に対して）
-                    left: `${sticker.x * 100}%`,
-                    top: `${sticker.y * 100}%`,
-                    width: size,
-                    height: size,
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    width: `${stickerSize}px`,
+                    height: `${stickerSize}px`,
+                    zIndex: sticker.zIndex ?? 0,
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
-                    zIndex: isSelected ? 10 : 1,
+                    transformStyle: 'preserve-3d',
+                    backfaceVisibility: 'hidden',
+                    touchAction: 'manipulation',
                   }}
                 >
-                  <button
-                    onClick={(e) => handleStickerTap(e, sticker.id)}
-                    onTouchEnd={(e) => handleStickerTap(e, sticker.id)}
-                    disabled={disabled || (!isSelected && !canSelectMore)}
-                    className={`
-                      w-full h-full rounded-lg border-2 overflow-hidden
-                      bg-gradient-to-br ${RARITY_COLORS[rarity] || RARITY_COLORS[1]}
-                      transition-all duration-150 relative
-                      ${isSelected ? 'ring-2 ring-pink-500 ring-offset-1 scale-110' : ''}
-                      ${disabled || (!isSelected && !canSelectMore) ? 'opacity-50' : 'active:scale-95'}
-                    `}
-                    style={{ touchAction: 'manipulation' }}
-                  >
-                    {sticker.sticker.imageUrl ? (
-                      <img
-                        src={sticker.sticker.imageUrl}
-                        alt={sticker.sticker.name}
-                        className="w-full h-full object-contain p-0.5"
-                        draggable={false}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <StarIcon size={20} color="#FBBF24" />
-                      </div>
-                    )}
-                    {/* レア度表示 */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/40 py-0.5">
-                      <span className="text-[7px] text-yellow-300 block text-center font-bold">
-                        {'★'.repeat(rarity)}
-                      </span>
+                  {sticker.sticker.imageUrl ? (
+                    <img
+                      src={sticker.sticker.imageUrl}
+                      alt={sticker.sticker.name}
+                      className="w-full h-full object-contain"
+                      draggable={false}
+                      style={{
+                        filter: isSelected
+                          ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
+                          : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
+                        transition: 'filter 0.2s ease-out, transform 0.15s ease-out',
+                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <StarIcon size={20} color="#FBBF24" />
                     </div>
-                    {/* 選択マーク */}
-                    {isSelected && (
-                      <div className="absolute top-0 right-0 w-5 h-5 bg-pink-500 rounded-bl-lg flex items-center justify-center">
-                        <span className="text-white text-[10px] font-bold">✓</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
+                  )}
+                  {/* 選択マーク */}
+                  {isSelected && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center shadow-lg">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                  )}
+                </button>
               )
             })}
           </div>
@@ -968,11 +991,13 @@ const CleanPageComponent = React.forwardRef<
   return (
     <div
       ref={ref}
-      className="overflow-hidden relative"
+      className="book-page relative"
       style={{
         width: pageWidth,
         height: pageHeight,
         boxShadow: 'inset 0 0 15px rgba(0,0,0,0.03)',
+        overflow: 'visible',
+        clipPath: 'inset(0)',
       }}
     >
       {page.type === 'cover' ? (
@@ -1050,11 +1075,11 @@ const CleanPageComponent = React.forwardRef<
             </div>
           )}
 
-          {/* シール配置 - ホームタブと同じスタイル（選択UIなし） */}
+          {/* シール配置 - ページサイズに比例（選択UIなし） */}
           <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 40 }}>
             {stickers.map((sticker) => {
-              // ホームタブと同じサイズ計算: 60 * scale
-              const stickerSize = 60 * sticker.scale
+              // ページサイズに比例したシールサイズ
+              const stickerSize = getProportionalStickerSize(sticker.scale, pageWidth)
               const x = sticker.x * 100
               const y = sticker.y * 100
 
@@ -1134,11 +1159,13 @@ const SelectablePageComponent = React.forwardRef<
   return (
     <div
       ref={ref}
-      className="overflow-hidden relative"
+      className="book-page relative"
       style={{
         width: pageWidth,
         height: pageHeight,
         boxShadow: 'inset 0 0 15px rgba(0,0,0,0.03)',
+        overflow: 'visible',
+        clipPath: 'inset(0)',
       }}
     >
       {page.type === 'cover' ? (
@@ -1214,8 +1241,15 @@ const SelectablePageComponent = React.forwardRef<
             </div>
           )}
 
-          {/* シール配置 - タップ可能 */}
-          <div className="absolute inset-0" style={{ zIndex: 40 }}>
+          {/* シール配置 - BookViewのPageStickersと完全に同じ構造 */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              zIndex: 40,
+              transformStyle: 'preserve-3d',
+              backfaceVisibility: 'hidden',
+            }}
+          >
             {stickers.map((sticker) => {
               const stickerSize = 60 * sticker.scale
               const x = sticker.x * 100
@@ -1223,15 +1257,18 @@ const SelectablePageComponent = React.forwardRef<
               const isSelected = selectedStickers.includes(sticker.id)
 
               return (
-                <button
+                <div
                   key={sticker.id}
-                  className="absolute p-0 border-0 bg-transparent cursor-pointer"
+                  data-sticker-id={sticker.id}
+                  className="absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105"
                   style={{
                     left: `${x}%`,
                     top: `${y}%`,
                     width: `${stickerSize}px`,
                     height: `${stickerSize}px`,
                     zIndex: sticker.zIndex ?? 0,
+                    transformStyle: 'preserve-3d',
+                    backfaceVisibility: 'hidden',
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   }}
                   onClick={(e) => {
@@ -1243,7 +1280,7 @@ const SelectablePageComponent = React.forwardRef<
                     <img
                       src={sticker.sticker.imageUrl}
                       alt={sticker.sticker.name}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain pointer-events-none"
                       draggable={false}
                       style={{
                         filter: isSelected
@@ -1270,12 +1307,62 @@ const SelectablePageComponent = React.forwardRef<
                       <span className="text-white text-xs">✓</span>
                     </div>
                   )}
-                </button>
+                </div>
               )
             })}
           </div>
 
-          {stickers.length === 0 && (
+          {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
+          {page.decoItems && page.decoItems.length > 0 && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                zIndex: 50,
+                backfaceVisibility: 'hidden',
+              }}
+            >
+              {page.decoItems.map((deco, idx) => {
+                const baseDecoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+                const baseDecoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+                // ページサイズに応じてスケーリング
+                const scaledDecoWidth = getProportionalDecoSize(baseDecoWidth, pageWidth)
+                const scaledDecoHeight = getProportionalDecoSize(baseDecoHeight, pageWidth)
+                // デバッグログ（最初のデコのみ）
+                if (idx === 0) {
+                  console.log('[TradeSession] Deco render:', {
+                    id: deco.id,
+                    x: deco.x, y: deco.y, rotation: deco.rotation,
+                    baseW: baseDecoWidth, baseH: baseDecoHeight,
+                    scaledW: scaledDecoWidth, scaledH: scaledDecoHeight,
+                    pageWidth,
+                  })
+                }
+                return (
+                  <div
+                    key={deco.id}
+                    className="absolute select-none"
+                    style={{
+                      left: `${deco.x * 100}%`,
+                      top: `${deco.y * 100}%`,
+                      width: scaledDecoWidth,
+                      height: scaledDecoHeight,
+                      transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                      zIndex: 50 + (deco.zIndex ?? 1),
+                    }}
+                  >
+                    <img
+                      src={deco.decoItem.imageUrl}
+                      alt={deco.decoItem.name}
+                      className="w-full h-full object-contain"
+                      draggable={false}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {stickers.length === 0 && !page.decoItems?.length && (
             <div className="w-full h-full flex items-center justify-center text-purple-300 text-xs">
               シールがありません
             </div>
@@ -1316,9 +1403,12 @@ const EnlargedBookModal: React.FC<{
     setCurrentPage(e.data)
   }, [])
 
-  // 少し大きめサイズ（横スクロールで対応）
-  const pageWidth = 280
-  const pageHeight = 420
+  // BookViewと完全に同じサイズで描画（スケールなし）
+  const pageWidth = BASE_PAGE_WIDTH   // 320px
+  const pageHeight = BASE_PAGE_HEIGHT // 480px
+
+  // デバッグ
+  console.log('[EnlargedBookModal] Using BookView native size:', { pageWidth, pageHeight })
 
   // 表紙・裏表紙表示中かどうか（単ページ表示）
   const isOnCover = currentPage === 0
@@ -1461,68 +1551,68 @@ const EnlargedBookModal: React.FC<{
               touchAction: 'pan-x',
             }}
           >
-            {/* シール帳 - 固定サイズで配置 */}
+            {/* シール帳 - BookViewと完全同一サイズ（320x480） */}
             <div
               className="book-container enlarged-book-modal rounded-lg shadow-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50"
               style={{
-                // 表紙・裏表紙時は1ページ幅、見開き時は2ページ幅
                 width: isSinglePageView ? pageWidth : pageWidth * 2,
                 height: pageHeight,
                 transition: 'width 0.3s ease-out',
                 position: 'relative',
                 flexShrink: 0,
+                overflow: 'visible',
               }}
             >
-            {/* 内部コンテナ - 表紙表示時は右にシフトして表紙を中央に見せる */}
-            <div
-              style={{
-                transform: isOnCover ? `translateX(-${pageWidth}px)` : 'translateX(0)',
-                transition: 'transform 0.3s ease-out',
-                width: pageWidth * 2,
-                height: pageHeight,
-              }}
-            >
-              <HTMLFlipBook
-                ref={bookRef}
-                width={pageWidth}
-                height={pageHeight}
-                size="fixed"
-                minWidth={pageWidth}
-                maxWidth={pageWidth * 2}
-                minHeight={pageHeight}
-                maxHeight={pageHeight}
-                showCover={true}
-                mobileScrollSupport={false}
-                onFlip={handleFlip}
-                className="book-flip-container"
-                startPage={0}
-                drawShadow={true}
-                flippingTime={400}
-                usePortrait={false}
-                startZIndex={0}
-                autoSize={false}
-                maxShadowOpacity={0.3}
-                showPageCorners={true}
-                disableFlipByClick={true}
-                swipeDistance={9999}
-                clickEventForward={false}
-                useMouseEvents={false}
-                style={{}}
+              {/* 内部コンテナ - 表紙表示時は右にシフトして表紙を中央に見せる */}
+              <div
+                style={{
+                  transform: isOnCover ? `translateX(-${pageWidth}px)` : 'translateX(0)',
+                  transition: 'transform 0.3s ease-out',
+                  width: pageWidth * 2,
+                  height: pageHeight,
+                }}
               >
-                {pages.map((page) => (
-                  <SelectablePageComponent
-                    key={page.id}
-                    page={page}
-                    coverDesign={coverDesign}
-                    pageWidth={pageWidth}
-                    pageHeight={pageHeight}
-                    selectedStickers={selectedStickers}
-                    onStickerSelect={onStickerSelect}
-                  />
-                ))}
-              </HTMLFlipBook>
+                <HTMLFlipBook
+                  ref={bookRef}
+                  width={pageWidth}
+                  height={pageHeight}
+                  size="fixed"
+                  minWidth={pageWidth}
+                  maxWidth={pageWidth * 2}
+                  minHeight={pageHeight}
+                  maxHeight={pageHeight}
+                  showCover={true}
+                  mobileScrollSupport={false}
+                  onFlip={handleFlip}
+                  className="book-flip-container"
+                  startPage={0}
+                  drawShadow={true}
+                  flippingTime={400}
+                  usePortrait={false}
+                  startZIndex={0}
+                  autoSize={false}
+                  maxShadowOpacity={0.3}
+                  showPageCorners={true}
+                  disableFlipByClick={true}
+                  swipeDistance={9999}
+                  clickEventForward={false}
+                  useMouseEvents={false}
+                  style={{}}
+                >
+                  {pages.map((page) => (
+                    <SelectablePageComponent
+                      key={page.id}
+                      page={page}
+                      coverDesign={coverDesign}
+                      pageWidth={pageWidth}
+                      pageHeight={pageHeight}
+                      selectedStickers={selectedStickers}
+                      onStickerSelect={onStickerSelect}
+                    />
+                  ))}
+                </HTMLFlipBook>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
@@ -1582,8 +1672,9 @@ const MyBookEnlargedModal: React.FC<{
     setCurrentPage(e.data)
   }, [])
 
-  const pageWidth = 280
-  const pageHeight = 420
+  // BookViewと完全に同じサイズで描画（スケールなし）
+  const pageWidth = BASE_PAGE_WIDTH   // 320px
+  const pageHeight = BASE_PAGE_HEIGHT // 480px
 
   const isOnCover = currentPage === 0
   const isOnBackCover = currentPage === pages.length - 1
@@ -1740,7 +1831,7 @@ const MyBookEnlargedModal: React.FC<{
               touchAction: 'pan-x',
             }}
           >
-            {/* シール帳コンテナ（固定幅で中央配置） */}
+            {/* シール帳コンテナ - BookViewと完全同一サイズ（320x480） */}
             <div
               className="book-container enlarged-book-modal rounded-lg shadow-2xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-purple-50"
               style={{
@@ -1752,56 +1843,57 @@ const MyBookEnlargedModal: React.FC<{
                 flexShrink: 0,
               }}
             >
-            <div
-              style={{
-                transform: isOnCover ? `translateX(-${pageWidth}px)` : 'translateX(0)',
-                transition: 'transform 0.3s ease-out',
-                width: pageWidth * 2,
-                height: pageHeight,
-              }}
-            >
-              <HTMLFlipBook
-                ref={bookRef}
-                width={pageWidth}
-                height={pageHeight}
-                size="fixed"
-                minWidth={pageWidth}
-                maxWidth={pageWidth * 2}
-                minHeight={pageHeight}
-                maxHeight={pageHeight}
-                showCover={true}
-                mobileScrollSupport={false}
-                onFlip={handleFlip}
-                className="book-flip-container"
-                startPage={0}
-                drawShadow={true}
-                flippingTime={400}
-                usePortrait={false}
-                startZIndex={0}
-                autoSize={false}
-                maxShadowOpacity={0.3}
-                showPageCorners={true}
-                disableFlipByClick={true}
-                swipeDistance={9999}
-                clickEventForward={false}
-                useMouseEvents={false}
-                style={{}}
+              {/* 内部コンテナ - 表紙表示時は右にシフトして表紙を中央に見せる */}
+              <div
+                style={{
+                  transform: isOnCover ? `translateX(-${pageWidth}px)` : 'translateX(0)',
+                  transition: 'transform 0.3s ease-out',
+                  width: pageWidth * 2,
+                  height: pageHeight,
+                }}
               >
-                {pages.map((page) => (
-                  <MyBookSelectablePage
-                    key={page.id}
-                    page={page}
-                    coverDesign={coverDesign}
-                    pageWidth={pageWidth}
-                    pageHeight={pageHeight}
-                    selectedStickers={selectedStickers}
-                    partnerSelectedStickers={partnerSelectedStickers}
-                    onStickerSelect={onStickerSelect}
-                  />
-                ))}
-              </HTMLFlipBook>
+                <HTMLFlipBook
+                  ref={bookRef}
+                  width={pageWidth}
+                  height={pageHeight}
+                  size="fixed"
+                  minWidth={pageWidth}
+                  maxWidth={pageWidth * 2}
+                  minHeight={pageHeight}
+                  maxHeight={pageHeight}
+                  showCover={true}
+                  mobileScrollSupport={false}
+                  onFlip={handleFlip}
+                  className="book-flip-container"
+                  startPage={0}
+                  drawShadow={true}
+                  flippingTime={400}
+                  usePortrait={false}
+                  startZIndex={0}
+                  autoSize={false}
+                  maxShadowOpacity={0.3}
+                  showPageCorners={true}
+                  disableFlipByClick={true}
+                  swipeDistance={9999}
+                  clickEventForward={false}
+                  useMouseEvents={false}
+                  style={{}}
+                >
+                  {pages.map((page) => (
+                    <MyBookSelectablePage
+                      key={page.id}
+                      page={page}
+                      coverDesign={coverDesign}
+                      pageWidth={pageWidth}
+                      pageHeight={pageHeight}
+                      selectedStickers={selectedStickers}
+                      partnerSelectedStickers={partnerSelectedStickers}
+                      onStickerSelect={onStickerSelect}
+                    />
+                  ))}
+                </HTMLFlipBook>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
@@ -1869,11 +1961,13 @@ const MyBookSelectablePage = React.forwardRef<
   return (
     <div
       ref={ref}
-      className="overflow-hidden relative"
+      className="book-page relative"
       style={{
         width: pageWidth,
         height: pageHeight,
         boxShadow: 'inset 0 0 15px rgba(0,0,0,0.03)',
+        overflow: 'visible',
+        clipPath: 'inset(0)',
       }}
     >
       {page.type === 'cover' ? (
@@ -1938,8 +2032,15 @@ const MyBookSelectablePage = React.forwardRef<
             </div>
           )}
 
-          {/* シール配置 */}
-          <div className="absolute inset-0" style={{ zIndex: 40 }}>
+          {/* シール配置 - BookViewのPageStickersと完全に同じ構造 */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              zIndex: 40,
+              transformStyle: 'preserve-3d',
+              backfaceVisibility: 'hidden',
+            }}
+          >
             {stickers.map((sticker) => {
               const stickerSize = 60 * sticker.scale
               const x = sticker.x * 100
@@ -1948,15 +2049,18 @@ const MyBookSelectablePage = React.forwardRef<
               const isWantedByPartner = partnerSelectedStickers.includes(sticker.id)
 
               return (
-                <button
+                <div
                   key={sticker.id}
-                  className="absolute p-0 border-0 bg-transparent cursor-pointer"
+                  data-sticker-id={sticker.id}
+                  className="absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105"
                   style={{
                     left: `${x}%`,
                     top: `${y}%`,
                     width: `${stickerSize}px`,
                     height: `${stickerSize}px`,
                     zIndex: sticker.zIndex ?? 0,
+                    transformStyle: 'preserve-3d',
+                    backfaceVisibility: 'hidden',
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   }}
                   onClick={(e) => {
@@ -1968,7 +2072,7 @@ const MyBookSelectablePage = React.forwardRef<
                     <img
                       src={sticker.sticker.imageUrl}
                       alt={sticker.sticker.name}
-                      className={`w-full h-full object-contain ${isWantedByPartner ? 'animate-pulse' : ''}`}
+                      className={`w-full h-full object-contain pointer-events-none ${isWantedByPartner ? 'animate-pulse' : ''}`}
                       draggable={false}
                       style={{
                         filter: isWantedByPartner
@@ -2005,12 +2109,62 @@ const MyBookSelectablePage = React.forwardRef<
                       <span className="text-white text-xs">✓</span>
                     </div>
                   )}
-                </button>
+                </div>
               )
             })}
           </div>
 
-          {stickers.length === 0 && (
+          {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
+          {page.decoItems && page.decoItems.length > 0 && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                zIndex: 50,
+                backfaceVisibility: 'hidden',
+              }}
+            >
+              {page.decoItems.map((deco, idx) => {
+                const baseDecoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+                const baseDecoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+                // ページサイズに応じてスケーリング
+                const scaledDecoWidth = getProportionalDecoSize(baseDecoWidth, pageWidth)
+                const scaledDecoHeight = getProportionalDecoSize(baseDecoHeight, pageWidth)
+                // デバッグログ（最初のデコのみ）
+                if (idx === 0) {
+                  console.log('[TradeSession] Deco render:', {
+                    id: deco.id,
+                    x: deco.x, y: deco.y, rotation: deco.rotation,
+                    baseW: baseDecoWidth, baseH: baseDecoHeight,
+                    scaledW: scaledDecoWidth, scaledH: scaledDecoHeight,
+                    pageWidth,
+                  })
+                }
+                return (
+                  <div
+                    key={deco.id}
+                    className="absolute select-none"
+                    style={{
+                      left: `${deco.x * 100}%`,
+                      top: `${deco.y * 100}%`,
+                      width: scaledDecoWidth,
+                      height: scaledDecoHeight,
+                      transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                      zIndex: 50 + (deco.zIndex ?? 1),
+                    }}
+                  >
+                    <img
+                      src={deco.decoItem.imageUrl}
+                      alt={deco.decoItem.name}
+                      className="w-full h-full object-contain"
+                      draggable={false}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {stickers.length === 0 && !page.decoItems?.length && (
             <div className="w-full h-full flex items-center justify-center text-purple-300 text-xs">
               シールがありません
             </div>
@@ -2056,9 +2210,12 @@ const TradeBookViewer: React.FC<{
     bookRef.current?.pageFlip()?.flipNext()
   }, [])
 
-  // シール帳サイズ (iPhone 12: 390px幅想定)
-  const pageWidth = 160
-  const pageHeight = 200
+  // BookViewと同じサイズで描画し、CSSスケールで縮小（重なり・配置を完全保持）
+  const originalPageWidth = BASE_PAGE_WIDTH   // 320px
+  const originalPageHeight = BASE_PAGE_HEIGHT // 480px
+  const displayScale = 0.5  // 表示時の縮小率
+  const displayWidth = originalPageWidth * displayScale   // 160px
+  const displayHeight = originalPageHeight * displayScale // 240px
 
   // 表紙・裏表紙表示中かどうか（単ページ表示）
   const isSinglePageView = currentPage === 0 || currentPage === pages.length - 1
@@ -2105,17 +2262,25 @@ const TradeBookViewer: React.FC<{
         </div>
       </div>
 
-      {/* シール帳 - 中央配置 */}
+      {/* シール帳 - CSSスケールで縮小表示（BookViewと同じ内部サイズを維持） */}
       <div
         ref={containerRef}
-        className="flex justify-center items-center overflow-x-auto"
-        style={{ touchAction: 'pan-x pan-y' }}
+        className="flex justify-center items-center overflow-hidden"
+        style={{
+          touchAction: 'pan-x pan-y',
+          // 縮小後のサイズでコンテナを確保
+          height: displayHeight + 8,
+        }}
       >
         <div
           className="trade-book-container relative rounded-lg shadow-lg border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 flex-shrink-0"
           style={{
-            width: pageWidth * 2,
-            height: pageHeight,
+            // 元のサイズで描画
+            width: originalPageWidth * 2,
+            height: originalPageHeight,
+            // CSSスケールで縮小表示
+            transform: `scale(${displayScale})`,
+            transformOrigin: 'top center',
           }}
         >
           {/* HTMLFlipBookラッパー - BookViewと同じパターン */}
@@ -2127,13 +2292,13 @@ const TradeBookViewer: React.FC<{
           >
           <HTMLFlipBook
             ref={bookRef}
-            width={pageWidth}
-            height={pageHeight}
+            width={originalPageWidth}
+            height={originalPageHeight}
             size="fixed"
-            minWidth={pageWidth}
-            maxWidth={pageWidth}
-            minHeight={pageHeight}
-            maxHeight={pageHeight}
+            minWidth={originalPageWidth}
+            maxWidth={originalPageWidth}
+            minHeight={originalPageHeight}
+            maxHeight={originalPageHeight}
             showCover={true}
             mobileScrollSupport={false}
             onFlip={handleFlip}
@@ -2161,6 +2326,7 @@ const TradeBookViewer: React.FC<{
                 maxSelections={maxSelections}
                 disabled={false}
                 coverDesign={coverDesign}
+                pageWidth={originalPageWidth}
               />
             ))}
           </HTMLFlipBook>

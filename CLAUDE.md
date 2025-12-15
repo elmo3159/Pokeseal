@@ -151,3 +151,29 @@ function PillButton({ label, color, onClick }: Props) {
 新しい画面を作成する際は、ユーザーから詳細な要件（配置や機能）を聞き出してから実装すること。このファイルは「設計思想と既存のコアロジック」を守るために参照せよ。
 
 日本語で回答してください。
+
+## 9. Supabase マイグレーション手順
+
+ClaudeCodeがマイグレーションを適用する手順：
+
+```bash
+# 1. ログイン（初回のみ、または期限切れ時）
+npx supabase login --token sbp_9c93904e9468015d9688582be59d3d629b7b3647
+
+# 2. プロジェクトリンク（初回のみ）
+npx supabase link --project-ref pwdrmbjcrwzhqtajfivk
+
+# 3. マイグレーション適用
+npx supabase db push --include-all
+```
+
+**プロジェクト情報:**
+- Project Ref: `pwdrmbjcrwzhqtajfivk`
+- Access Token: `sbp_9c93904e9468015d9688582be59d3d629b7b3647`
+
+**マイグレーションファイル配置:** `supabase/migrations/XXX_name.sql`
+
+**確認コマンド:**
+```bash
+npx supabase migration list  # 適用済みマイグレーション一覧
+```

@@ -411,7 +411,7 @@ export function FloatingEditDeco({
         <img
           src={imageUrl}
           alt={decoItem.decoItem.name}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-fill"
           draggable={false}
         />
       ) : (
