@@ -35,6 +35,7 @@ import { CollectionView, CollectionSticker, StickerDetailModal } from '@/feature
 import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker, GachaConfirmDialog, GachaRate } from '@/features/gacha'
 import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage, TradeSessionFull, TradeUser, TradeBookPageFull } from '@/features/trade'
 import { TimelineView, Post, ReactionType, CreatePostModal, CommentModal, StickerBookPage, Comment } from '@/features/timeline'
+import { timelineService } from '@/services/timeline/timelineService'
 import { ProfileView, ProfileEditModal, LevelUpModal, StatsModal, AchievementsModal, FollowListModal, OtherUserProfileModal, UserProfile, UserStats, Achievement, FollowUser, OtherUserProfile, StickerBookPreview } from '@/features/profile'
 import {
   calculateLevel,
@@ -1404,6 +1405,52 @@ export default function Home() {
 
     loadData()
   }, [allStickerIds])
+
+  // タイムライン投稿をSupabaseから読み込む
+  useEffect(() => {
+    if (!isDataLoaded) return
+    if (currentDataSource !== 'supabase') return
+
+    const loadTimeline = async () => {
+      console.log('[Timeline] Loading posts from Supabase for user:', currentTestUser.supabaseId)
+      try {
+        const supabasePosts = await timelineService.getPublicTimeline(currentTestUser.supabaseId)
+        console.log('[Timeline] Loaded', supabasePosts.length, 'posts from Supabase')
+
+        if (supabasePosts.length > 0) {
+          // Supabase投稿をUI用Post形式に変換
+          const convertedPosts: Post[] = supabasePosts.map(sp => ({
+            id: sp.id,
+            userId: sp.user_id,
+            userName: sp.author?.name || 'Unknown',
+            userAvatarUrl: sp.author?.avatar_url || undefined,
+            pageData: undefined, // TODO: pageDataの復元
+            caption: sp.caption || undefined,
+            hashtags: sp.hashtags,
+            reactions: sp.reactions?.map(r => ({
+              type: r.type as 'heart' | 'sparkle' | 'hot' | 'cute',
+              count: r.count,
+              isReacted: r.isReacted,
+            })) || [{ type: 'heart', count: 0, isReacted: false }],
+            commentCount: sp.comment_count || 0,
+            createdAt: sp.created_at,
+            isFollowing: sp.isFollowing,
+            visibility: sp.visibility,
+          }))
+          // デモ投稿とマージ（Supabase投稿を先頭に）
+          setPosts(prev => {
+            const demoIds = prev.map(p => p.id)
+            const newPosts = convertedPosts.filter(p => !demoIds.includes(p.id))
+            return [...newPosts, ...prev]
+          })
+        }
+      } catch (error) {
+        console.error('[Timeline] Failed to load posts:', error)
+      }
+    }
+
+    loadTimeline()
+  }, [isDataLoaded, currentDataSource, currentTestUser.supabaseId])
 
   // データ変更時に自動保存（デバウンス）
   useEffect(() => {
@@ -3361,8 +3408,8 @@ export default function Home() {
     }
   }
 
-  // 編集中は下部タブバーを非表示にする
-  const shouldHideTabBar = isGachaResultModalOpen || editingSticker || editingDecoItem
+  // 編集中・交換中・マッチング中は下部タブバーを非表示にする
+  const shouldHideTabBar = isGachaResultModalOpen || editingSticker || editingDecoItem || isTradeSessionOpen || matchingStatus !== 'idle'
   // プロフィールタブは独自ヘッダーがあるのでTopBarを非表示
   const shouldHideTopBar = activeTab === 'profile'
 
@@ -3591,27 +3638,58 @@ export default function Home() {
             placedDecoItems: placedDecoItems.filter(d => d.pageId === p.id),
           }))}
           onClose={() => setIsCreatePostModalOpen(false)}
-          onSubmit={(data) => {
-            // 新しい投稿を作成
-            const newPost: Post = {
-              id: `post-${Date.now()}`,
-              userId: 'user-me',
-              userName: 'プレイヤー',
-              userAvatarUrl: undefined,
-              // pageData を使用してシール帳ページを表示
-              pageData: data.pageData,
+          onSubmit={async (data) => {
+            // Supabaseに投稿を保存
+            const savedPost = await timelineService.createPost(currentTestUser.supabaseId, {
+              pageId: data.pageId,
               caption: data.caption,
               hashtags: data.hashtags,
-              reactions: [
-                { type: 'heart', count: 0, isReacted: false },
-              ],
-              commentCount: 0,
-              createdAt: new Date().toISOString(),
-              isFollowing: true, // 自分の投稿
               visibility: data.visibility,
+            })
+
+            if (savedPost) {
+              console.log('[Timeline] Post saved to Supabase:', savedPost.id)
+              // 新しい投稿を作成（Supabaseから返されたIDを使用）
+              const newPost: Post = {
+                id: savedPost.id,
+                userId: currentTestUser.supabaseId,
+                userName: currentTestUser.name,
+                userAvatarUrl: undefined,
+                // pageData を使用してシール帳ページを表示
+                pageData: data.pageData,
+                caption: data.caption,
+                hashtags: data.hashtags,
+                reactions: [
+                  { type: 'heart', count: 0, isReacted: false },
+                ],
+                commentCount: 0,
+                createdAt: savedPost.created_at,
+                isFollowing: true, // 自分の投稿
+                visibility: data.visibility,
+              }
+              // 投稿を追加（先頭に）
+              setPosts(prev => [newPost, ...prev])
+            } else {
+              console.error('[Timeline] Failed to save post to Supabase')
+              // Supabase保存失敗時もローカルには表示（UX向上）
+              const newPost: Post = {
+                id: `post-${Date.now()}`,
+                userId: currentTestUser.supabaseId,
+                userName: currentTestUser.name,
+                userAvatarUrl: undefined,
+                pageData: data.pageData,
+                caption: data.caption,
+                hashtags: data.hashtags,
+                reactions: [
+                  { type: 'heart', count: 0, isReacted: false },
+                ],
+                commentCount: 0,
+                createdAt: new Date().toISOString(),
+                isFollowing: true,
+                visibility: data.visibility,
+              }
+              setPosts(prev => [newPost, ...prev])
             }
-            // 投稿を追加（先頭に）
-            setPosts(prev => [newPost, ...prev])
             setIsCreatePostModalOpen(false)
 
             // 投稿したら経験値獲得 (+20 EXP)

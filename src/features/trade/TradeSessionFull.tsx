@@ -1273,6 +1273,7 @@ const SelectablePageComponent = React.forwardRef<
                   }}
                   onClick={(e) => {
                     e.stopPropagation()
+                    console.log('[SelectablePage] Clicked sticker:', sticker.id, sticker.sticker.name, 'pos:', sticker.x, sticker.y, 'zIndex:', sticker.zIndex)
                     onStickerSelect(sticker.id)
                   }}
                 >
@@ -2065,6 +2066,7 @@ const MyBookSelectablePage = React.forwardRef<
                   }}
                   onClick={(e) => {
                     e.stopPropagation()
+                    console.log('[SelectablePage] Clicked sticker:', sticker.id, sticker.sticker.name, 'pos:', sticker.x, sticker.y, 'zIndex:', sticker.zIndex)
                     onStickerSelect(sticker.id)
                   }}
                 >
@@ -2675,7 +2677,9 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   const handleSelectPartnerSticker = useCallback(async (stickerId: string) => {
     // stickerId は placement.id (sticker_placements.id)
     // Supabase連携には userStickerId (user_stickers.id) が必要
+    console.log('[TradeSession] Sticker tapped - placement.id:', stickerId)
     const placedSticker = getStickerFromPages(partnerPages, stickerId)
+    console.log('[TradeSession] Found sticker:', placedSticker?.sticker.name, 'at position:', placedSticker?.x, placedSticker?.y)
     const userStickerId = placedSticker?.userStickerId
 
     if (!userStickerId) {
