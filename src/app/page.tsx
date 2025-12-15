@@ -123,6 +123,7 @@ import {
   loadCollectionFromSupabase,
   loadAllStickersFromSupabase,
   getDataSource,
+  addStickersToSupabase,
 } from '@/utils/supabaseSync'
 import { useSupabaseTrade } from '@/hooks'
 import { AdminView } from '@/features/admin'
@@ -2359,10 +2360,23 @@ export default function Home() {
     setLastGachaPull({ bannerId, count }) // 前回のガチャ設定を保存
     setIsGachaResultModalOpen(true)
 
-    // コレクションにシールを追加
+    // コレクションにシールを追加（ローカル）
     const { collection: newCollection, newStickers } = addStickersToCollection(collection, pulledStickerIds)
     setCollection(newCollection)
     console.log('[Gacha] Added stickers to collection:', pulledStickerIds.length, 'total, new:', newStickers.length)
+
+    // Supabaseにも保存（本番環境モード時）
+    if (currentDataSource === 'supabase') {
+      console.log('[Gacha] Saving to Supabase for user:', currentTestUser.id)
+      addStickersToSupabase(currentTestUser.id, pulledStickerIds).then(result => {
+        console.log('[Gacha] Supabase save result:', result)
+        if (!result.success) {
+          console.error('[Gacha] Failed to save to Supabase')
+        }
+      }).catch(error => {
+        console.error('[Gacha] Supabase save error:', error)
+      })
+    }
 
     // Deduct currency
     const banner = demoBanners.find(b => b.id === bannerId)
@@ -2379,7 +2393,7 @@ export default function Home() {
 
     // 経験値獲得（1回引く: +10 EXP, 10連: +100 EXP）
     gainExp(count === 1 ? 'gacha_single' : 'gacha_ten')
-  }, [gainExp, collection])
+  }, [gainExp, collection, currentDataSource, currentTestUser])
 
   // Handle reactions
   const handleReaction = useCallback((postId: string, reactionType: ReactionType) => {
