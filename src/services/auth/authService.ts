@@ -516,32 +516,56 @@ export const authService = {
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
     const supabase = getSupabase()
 
+    console.log('[Auth] Setting up onAuthStateChange listener')
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } } } | null) => {
+      (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } } } | null) => {
+        console.log('[Auth] onAuthStateChange callback triggered, event:', _event)
+
         if (session?.user) {
-          const { data: profile } = await supabase
+          const isAnonymous = session.user.app_metadata?.provider === 'anonymous' ||
+                              session.user.is_anonymous === true
+
+          console.log('[Auth] Session user found, fetching profile asynchronously...')
+
+          // プロフィール情報を非同期で取得（コールバックをブロックしない）
+          supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
-
-          const isAnonymous = session.user.app_metadata?.provider === 'anonymous' ||
-                              session.user.is_anonymous === true
-
-          callback({
-            id: session.user.id,
-            email: session.user.email,
-            userCode: profile?.user_code || null,
-            isAnonymous,
-            profile
-          })
+            .then(({ data: profile }) => {
+              console.log('[Auth] Profile fetched, calling callback with full user data')
+              callback({
+                id: session.user.id,
+                email: session.user.email,
+                userCode: profile?.user_code || null,
+                isAnonymous,
+                profile
+              })
+            })
+            .catch((error) => {
+              console.error('[Auth] Failed to fetch profile:', error)
+              // プロフィール取得失敗時もコールバックを呼ぶ（プロフィールなし）
+              callback({
+                id: session.user.id,
+                email: session.user.email,
+                userCode: null,
+                isAnonymous,
+                profile: null
+              })
+            })
         } else {
+          console.log('[Auth] No session user, calling callback with null')
           callback(null)
         }
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      console.log('[Auth] Unsubscribing from onAuthStateChange')
+      subscription.unsubscribe()
+    }
   },
 
   // ============================================
