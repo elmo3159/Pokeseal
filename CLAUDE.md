@@ -15,6 +15,10 @@
   * **Back:** Supabase (PostgreSQL, Auth, Realtime, Storage)
   * **Lib:** `react-page-flip` (シール帳), `st-page-flip`
   * **UI方針:** ゲーム特有の「画像ベースUI」と「絶対配置」を多用する。
+  * **モバイルラッパー:** Capacitor（iOS/Android両対応）
+    - Webでは公開せず、App Store / Google Play のみで配信
+    - 開発中はブラウザで完成させ、最終段階でCapacitorを導入する
+    - 静的エクスポート（`output: 'export'`）が必要
 
 ## 2\. 開発ルール (ClaudeCode Action Rules)
 

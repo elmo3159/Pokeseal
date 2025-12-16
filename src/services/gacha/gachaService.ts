@@ -46,7 +46,7 @@ export const gachaService = {
       return null
     }
 
-    const totalWeight = data.reduce((sum: number, s: Sticker) => sum + s.gacha_weight, 0)
+    const totalWeight = data.reduce((sum: number, s: Sticker) => sum + (s.gacha_weight || 0), 0)
 
     return {
       type,
@@ -100,9 +100,9 @@ export const gachaService = {
       sticker: selectedSticker,
       userSticker,
       isNew,
-      rankUp: userSticker.rank > previousRank,
+      rankUp: (userSticker.rank || 0) > previousRank,
       previousRank,
-      newRank: userSticker.rank
+      newRank: userSticker.rank || 0
     }
   },
 
@@ -182,11 +182,11 @@ export const gachaService = {
       return []
     }
 
-    return (data || []).map((item: { id: string; gacha_type: string; sticker: unknown; created_at: string }) => ({
+    return (data || []).map((item: { id: string; gacha_type: string; sticker: unknown; created_at: string | null }) => ({
       id: item.id,
       gacha_type: item.gacha_type as GachaType,
       sticker: item.sticker as Sticker,
-      created_at: item.created_at
+      created_at: item.created_at || new Date().toISOString()
     }))
   },
 
@@ -204,7 +204,7 @@ export const gachaService = {
     for (const sticker of pool.stickers) {
       const existing = rarityGroups.get(sticker.rarity) || { weight: 0, count: 0 }
       rarityGroups.set(sticker.rarity, {
-        weight: existing.weight + sticker.gacha_weight,
+        weight: existing.weight + (sticker.gacha_weight || 0),
         count: existing.count + 1
       })
     }
@@ -226,7 +226,7 @@ function weightedRandom(stickers: Sticker[], totalWeight: number): Sticker | nul
   let random = Math.random() * totalWeight
 
   for (const sticker of stickers) {
-    random -= sticker.gacha_weight
+    random -= (sticker.gacha_weight || 0)
     if (random <= 0) {
       return sticker
     }

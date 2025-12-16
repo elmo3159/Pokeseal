@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
   title: 'ポケシル - ポケットシールちょう',
@@ -44,7 +45,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="antialiased" suppressHydrationWarning>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         {/* Service Worker Registration */}
         <script
           dangerouslySetInnerHTML={{

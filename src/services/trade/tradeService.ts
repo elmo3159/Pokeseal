@@ -135,6 +135,11 @@ export const tradeService = {
     // 相手のIDを特定
     const partnerId = trade.user1_id === userId ? trade.user2_id : trade.user1_id
 
+    if (!partnerId) {
+      console.error('Partner ID not found')
+      return null
+    }
+
     // 相手のプロフィール取得
     const { data: partnerProfile } = await supabase
       .from('profiles')
@@ -208,7 +213,7 @@ export const tradeService = {
       // 数量更新
       const { data, error } = await supabase
         .from('trade_items')
-        .update({ quantity: existing.quantity + quantity })
+        .update({ quantity: (existing.quantity || 0) + quantity })
         .eq('id', existing.id)
         .select()
         .single()
@@ -352,12 +357,13 @@ export const tradeService = {
     // 各アイテムの所有権を移転
     for (const item of items) {
       const newOwnerId = item.user_id === trade.user1_id ? trade.user2_id : trade.user1_id
+      if (!newOwnerId) continue
 
       // 元の所有者のシール数量を減らす
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userSticker = (item as any).user_sticker as { id: string; quantity: number; sticker_id: string } | null
       if (userSticker) {
-        const newQuantity = userSticker.quantity - item.quantity
+        const newQuantity = userSticker.quantity - (item.quantity || 0)
         if (newQuantity <= 0) {
           await supabase
             .from('user_stickers')
@@ -382,8 +388,8 @@ export const tradeService = {
           await supabase
             .from('user_stickers')
             .update({
-              quantity: existingNew.quantity + item.quantity,
-              total_acquired: existingNew.total_acquired + item.quantity
+              quantity: (existingNew.quantity || 0) + (item.quantity || 0),
+              total_acquired: (existingNew.total_acquired || 0) + (item.quantity || 0)
             })
             .eq('id', existingNew.id)
         } else {
@@ -392,8 +398,8 @@ export const tradeService = {
             .insert({
               user_id: newOwnerId,
               sticker_id: userSticker.sticker_id,
-              quantity: item.quantity,
-              total_acquired: item.quantity,
+              quantity: item.quantity || 1,
+              total_acquired: item.quantity || 1,
               rank: 1
             })
         }
@@ -401,8 +407,10 @@ export const tradeService = {
     }
 
     // 両ユーザーの交換回数をインクリメント
-    await supabase.rpc('increment_trade_count', { user_id: trade.user1_id })
-    await supabase.rpc('increment_trade_count', { user_id: trade.user2_id })
+    await supabase.rpc('increment_trade_count', { p_user_id: trade.user1_id })
+    if (trade.user2_id) {
+      await supabase.rpc('increment_trade_count', { p_user_id: trade.user2_id })
+    }
 
     return true
   },

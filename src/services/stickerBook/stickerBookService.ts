@@ -140,7 +140,8 @@ export const stickerBookService = {
       .single()
 
     if (bookError || !book) {
-      console.error('[StickerBookService] Book not found:', bookError)
+      // 新規ユーザーの場合はシール帳がないのは正常
+      console.log('[StickerBookService] No sticker book found for user (will be created on first use)')
       return null
     }
 
@@ -262,7 +263,7 @@ export const stickerBookService = {
       userId: book.user_id,
       name: book.name,
       themeId: book.theme_id || undefined,
-      isPublic: book.is_public,
+      isPublic: book.is_public ?? false,
       pages: pagesWithStickers,
     }
   },
@@ -526,7 +527,8 @@ export const stickerBookService = {
       .single()
 
     if (!book) {
-      console.error('[StickerBookService] Book not found for page mapping')
+      // 新規ユーザーの場合はシール帳がないのは正常
+      console.log('[StickerBookService] No sticker book for page mapping (new user)')
       return new Map()
     }
 
@@ -746,6 +748,112 @@ export const stickerBookService = {
     const ids = data.map((d: { id: string }) => d.id)
     console.log('[StickerBookService] Batch deco placements added:', ids.length)
     return ids
+  },
+
+  /**
+   * 特定のページIDからシール帳ページデータを取得（タイムライン表示用）
+   */
+  async getPageById(pageId: string): Promise<StickerBookPage | null> {
+    const supabase = getSupabase()
+
+    // ページ情報を取得
+    const { data: page, error: pageError } = await supabase
+      .from('sticker_book_pages')
+      .select('id, page_number, page_type, side')
+      .eq('id', pageId)
+      .single()
+
+    if (pageError || !page) {
+      console.error('[StickerBookService] Page not found:', pageError)
+      return null
+    }
+
+    // シール配置を取得
+    const { data: placements, error: placementsError } = await supabase
+      .from('sticker_placements')
+      .select(`
+        id,
+        page_id,
+        position_x,
+        position_y,
+        rotation,
+        scale,
+        z_index,
+        created_at,
+        user_sticker:user_stickers(
+          id,
+          sticker_id,
+          sticker:stickers(
+            id,
+            name,
+            image_url,
+            rarity,
+            type,
+            series,
+            base_rate,
+            gacha_weight
+          )
+        )
+      `)
+      .eq('page_id', pageId)
+
+    if (placementsError) {
+      console.error('[StickerBookService] Get page placements error:', placementsError)
+      return null
+    }
+
+    // デコ配置を取得
+    let decoPlacements: RawDecoPlacement[] = []
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: decoData, error: decoError } = await (supabase as any)
+        .from('deco_placements')
+        .select(`
+          id,
+          page_id,
+          position_x,
+          position_y,
+          rotation,
+          width,
+          height,
+          z_index,
+          created_at,
+          deco_item:deco_items(
+            id,
+            name,
+            type,
+            image_url,
+            base_width,
+            base_height,
+            rotatable,
+            rarity,
+            obtain_method
+          )
+        `)
+        .eq('page_id', pageId)
+
+      if (!decoError && decoData) {
+        decoPlacements = decoData as unknown as RawDecoPlacement[]
+      }
+    } catch (err) {
+      console.warn('[StickerBookService] Deco fetch skipped for page:', err)
+    }
+
+    // データを整形
+    const pageStickers = (placements as unknown as RawPlacement[] || [])
+      .map(placement => this.convertToPlacedSticker(placement, pageId))
+
+    const pageDecos = decoPlacements
+      .map(deco => this.convertToPlacedDecoItem(deco, pageId))
+
+    return {
+      id: page.id,
+      pageNumber: page.page_number,
+      pageType: page.page_type as 'cover' | 'page' | 'back-cover',
+      side: page.side as 'left' | 'right' | undefined,
+      stickers: pageStickers,
+      decoItems: pageDecos.length > 0 ? pageDecos : undefined,
+    }
   },
 
   /**

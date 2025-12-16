@@ -51,6 +51,7 @@ import {
 import { TutorialOverlay, defaultTutorialSteps } from '@/features/tutorial'
 import { SettingsView, SettingsData } from '@/features/settings'
 import { AuthView } from '@/features/auth'
+import { useAuth } from '@/contexts/AuthContext'
 import { ReportModal, BlockModal } from '@/features/safety'
 import { CreateReportInput, CreateBlockInput, ReportTargetType } from '@/domain/safety'
 import { ThemeSelectModal } from '@/features/theme'
@@ -129,6 +130,9 @@ import {
 import { useSupabaseTrade } from '@/hooks'
 import { AdminView } from '@/features/admin'
 import { stickerBookService, type StickerBookPage as SupabaseStickerBookPage } from '@/services/stickerBook'
+import { profileService } from '@/services/profile'
+import { mysteryPostService } from '@/services/mysteryPost'
+import { tradeScoutService } from '@/services/tradeScout'
 
 // キャラクター定義（レアリティ・タイプ・ガチャ重み付き）
 // ★★★★★ (5) もっちも, ウールン, トイラン: レジェンド（排出率: 約1.4%）
@@ -312,23 +316,11 @@ const demoBanners: GachaBanner[] = [
 // Demo user monetization (default state)
 const demoUserMonetization: UserMonetization = DEFAULT_USER_MONETIZATION
 
-// Demo friends
-const demoFriends: Friend[] = [
-  { id: 'friend-1', name: 'ゆうき', isOnline: true, avatarUrl: undefined },
-  { id: 'friend-2', name: 'はるか', isOnline: false, lastActive: '2じかんまえ', avatarUrl: undefined },
-  { id: 'friend-3', name: 'そうた', isOnline: true, avatarUrl: undefined },
-]
+// Friends list - will be populated from Supabase
+const demoFriends: Friend[] = []
 
-// Demo trade history
-const demoTradeHistory: TradeHistory[] = [
-  {
-    id: 'trade-1',
-    partnerName: 'ゆうき',
-    givenStickers: [{ name: 'サニたん', rarity: 3 }],
-    receivedStickers: [{ name: 'ドロル', rarity: 3 }],
-    tradedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-]
+// Trade history - will be populated from Supabase
+const demoTradeHistory: TradeHistory[] = []
 
 // Demo posts for timeline
 const createDemoPosts = (placedStickers: PlacedSticker[]): Post[] => [
@@ -390,14 +382,14 @@ const createDemoPosts = (placedStickers: PlacedSticker[]): Post[] => [
   },
 ]
 
-// Demo user profile - 初期累積経験値 (レベル5相当)
-const INITIAL_TOTAL_EXP = 750
+// 初期累積経験値 (新規ユーザーは0からスタート)
+const INITIAL_TOTAL_EXP = 0
 
 // 経験値からプロフィールを計算する関数
 function createUserProfile(
   totalExp: number,
-  name: string = 'シールだいすき',
-  bio: string = 'シールあつめがすき！'
+  name: string = 'ゲスト',
+  bio: string = ''
 ): UserProfile {
   const level = calculateLevel(totalExp)
   const currentExp = getCurrentLevelExp(totalExp)
@@ -942,6 +934,22 @@ const BOOK_WIDTH = 320
 const BOOK_HEIGHT = 480
 
 export default function Home() {
+  // Auth state - 実際の認証ユーザーを使用
+  const { user, userCode, isLoading: isAuthLoading, isAccountLinked, linkedProviders, linkGoogle, linkApple } = useAuth()
+
+  // 認証ユーザーから現在のユーザー情報を導出
+  const currentUser = useMemo(() => {
+    if (!user) return null
+    return {
+      id: user.id, // Supabase UUID（データ読み込みに使用）
+      supabaseId: user.id, // 互換性のため同じ値
+      name: user.profile?.display_name || 'ゲスト',
+      userCode: userCode || '',
+      emoji: '🎫',
+      color: '#A855F7',
+    }
+  }, [user, userCode])
+
   // Tab state
   const [activeTab, setActiveTab] = useState<TabId>('home')
 
@@ -1033,20 +1041,7 @@ export default function Home() {
   const [mysteryPostState, setMysteryPostState] = useState<MysteryPostState>({
     todayPosted: null,
     pendingStickers: [],
-    receivedStickers: [
-      // デモ用：未開封シール
-      {
-        id: 'received-1',
-        stickerId: demoStickers[25].id,
-        stickerName: demoStickers[25].name,
-        stickerImageUrl: demoStickers[25].imageUrl || '',
-        rarity: demoStickers[25].rarity,
-        message: 'キミのもとへ旅立つよ♪',
-        fromUserName: 'ふしぎなたびびと',
-        receivedAt: new Date().toISOString(),
-        isOpened: false,
-      },
-    ],
+    receivedStickers: [], // Supabaseから取得
     nextDeliveryTime: getNextDeliveryTime(),
   })
   const [isPostStickerModalOpen, setIsPostStickerModalOpen] = useState(false)
@@ -1055,40 +1050,11 @@ export default function Home() {
   // トレード画面のサブタブ（交換/ミステリーポスト/スカウト切替）
   const [tradeSubTab, setTradeSubTab] = useState<'trade' | 'mystery' | 'scout'>('trade')
 
-  // トレード・スカウトの状態
+  // トレード・スカウトの状態 - Supabaseから取得
   const [tradeScoutState, setTradeScoutState] = useState<TradeScoutState>({
     ...initialTradeScoutState,
-    // デモ用マッチング
-    matches: [
-      {
-        id: 'match-1',
-        user: {
-          id: 'user-scout-1',
-          name: 'シールコレクター',
-          avatarUrl: '',
-          level: 12,
-        },
-        myOffersTheyWant: [
-          {
-            stickerId: demoStickers[5].id,
-            stickerName: demoStickers[5].name,
-            stickerImageUrl: demoStickers[5].imageUrl || '',
-            rarity: demoStickers[5].rarity,
-          },
-        ],
-        theirOffersIWant: [
-          {
-            stickerId: demoStickers[20].id,
-            stickerName: demoStickers[20].name,
-            stickerImageUrl: demoStickers[20].imageUrl || '',
-            rarity: demoStickers[20].rarity,
-          },
-        ],
-        matchScore: 4,
-        matchedAt: new Date().toISOString(),
-        isRead: false,
-      },
-    ],
+    // matches will be populated from Supabase
+    matches: [],
   })
   const [isScoutWantListModalOpen, setIsScoutWantListModalOpen] = useState(false)
   const [isScoutOfferListModalOpen, setIsScoutOfferListModalOpen] = useState(false)
@@ -1142,18 +1108,26 @@ export default function Home() {
   const [adminMode, setAdminMode] = useState<AdminMode>('production')
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false)
   const [collection, setCollection] = useState<SavedCollectionItem[]>([])
-  const [currentTestUser, setCurrentTestUser] = useState<TestUser>(TEST_USERS[0])
+  // 注: currentTestUser は currentUser (認証ユーザー) に置き換えられました
 
   // Supabase交換システム（Supabase接続時のみ有効）
   const dataSource = getDataSource()
   const [supabaseTradeState, supabaseTradeActions] = useSupabaseTrade({
-    currentUser: currentTestUser,
+    currentUser: currentUser ? {
+      id: currentUser.id,
+      supabaseId: currentUser.supabaseId,
+      name: currentUser.name,
+      emoji: currentUser.emoji,
+      color: currentUser.color,
+    } : null,
     onTradeComplete: (trade) => {
       console.log('[Trade] Completed via Supabase:', trade)
       // コレクションをリロード
-      loadCollectionFromSupabase(currentTestUser.id).then(newCollection => {
-        setCollection(newCollection)
-      })
+      if (currentUser) {
+        loadCollectionFromSupabase(currentUser.id).then(newCollection => {
+          setCollection(newCollection)
+        })
+      }
     },
     onError: (error) => {
       console.error('[Trade] Error:', error)
@@ -1163,27 +1137,29 @@ export default function Home() {
   // Supabase交換状態の変化を監視してUIを更新
   useEffect(() => {
     const trade = supabaseTradeState.currentTrade
-    if (!trade) return
+    if (!trade || !currentUser) return
 
     console.log('[Trade] Supabase trade state changed:', trade.status)
 
     // 誰かが自分の交換に参加した場合（matching → negotiating）
     if (trade.status === 'negotiating' && matchingStatus === 'searching') {
       // 相手ユーザーを特定
-      const isTradeCreator = trade.user1_id === currentTestUser.supabaseId
+      const isTradeCreator = trade.user1_id === currentUser.supabaseId
       const partnerId = isTradeCreator ? trade.user2_id : trade.user1_id
-      const partnerTestUser = TEST_USERS.find(u => u.supabaseId === partnerId)
+      if (!partnerId) return // パートナーIDがない場合は処理しない
 
-      if (partnerTestUser) {
-        console.log('[Trade] Partner joined! Setting up trade session with:', partnerTestUser.name)
+      // パートナー情報をSupabaseから取得
+      profileService.getProfile(partnerId).then(partnerProfile => {
+        const partnerName = partnerProfile?.displayName || '交換相手'
+        console.log('[Trade] Partner joined! Setting up trade session with:', partnerName)
         console.log('[Trade] I am trade creator:', isTradeCreator)
 
         if (isTradeCreator) {
           // 交換作成者の場合：既に参加済みなので、直接交換セッションを開く
           setTradePartner({
             id: trade.id,
-            name: partnerTestUser.name,
-            avatarUrl: undefined,
+            name: partnerName,
+            avatarUrl: partnerProfile?.avatarUrl || undefined,
             level: 1,
           })
           setMatchingStatus('idle')
@@ -1194,14 +1170,14 @@ export default function Home() {
           setMatchingStatus('found')
           setMatchedUser({
             id: trade.id,
-            name: partnerTestUser.name,
-            avatarUrl: undefined,
+            name: partnerName,
+            avatarUrl: partnerProfile?.avatarUrl || undefined,
             level: 1,
           })
         }
-      }
+      })
     }
-  }, [supabaseTradeState.currentTrade, matchingStatus, currentTestUser.supabaseId])
+  }, [supabaseTradeState.currentTrade, matchingStatus, currentUser?.supabaseId])
 
   // 全シールIDのリスト（マスターデータ）
   const allStickerIds = useMemo(() => demoStickers.map(s => s.id), [])
@@ -1263,6 +1239,29 @@ export default function Home() {
     })
   }, [collection, placedStickers])
 
+  // 実際のデータから userStats を計算
+  const userStats: UserStats = useMemo(() => {
+    // コレクションからシール数を計算
+    const totalStickers = collection.reduce((sum, item) => sum + item.quantity, 0)
+    const uniqueStickers = collection.filter(item => item.quantity > 0).length
+
+    // コンプリート数（キャラクターごとにすべてのシールを持っているか）
+    // TODO: 実際のシリーズごとのコンプリート判定を実装
+    const completedSeries = 0
+
+    return {
+      totalStickers,
+      uniqueStickers,
+      completedSeries,
+      totalTrades: 0, // TODO: tradesテーブルから取得
+      friendsCount: 0, // TODO: friendsテーブルから取得
+      followersCount: 0, // TODO: followersテーブルから取得
+      followingCount: 0, // TODO: followingテーブルから取得
+      postsCount: posts.length,
+      reactionsReceived: 0, // TODO: reactionsテーブルから取得
+    }
+  }, [collection, posts])
+
   // SavedUserDataを構築
   const buildSavedUserData = useCallback((): SavedUserData => ({
     version: 1,
@@ -1290,23 +1289,62 @@ export default function Home() {
     lastSavedAt: new Date().toISOString(),
   }), [collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, userProfile, totalExp, settings, posts])
 
-  // データを保存（自動保存）- 現在のテストユーザーに保存
+  // データを保存（自動保存）- 認証ユーザーに保存
   const saveData = useCallback(() => {
-    if (!isDataLoaded) return // 初期化前は保存しない
+    if (!isDataLoaded || !currentUser) return // 初期化前または未認証は保存しない
     const data = buildSavedUserData()
     saveCurrentUserData(data)
-    console.log('[Persistence] Data saved for user:', currentTestUser.id)
-  }, [isDataLoaded, buildSavedUserData, currentTestUser])
+    console.log('[Persistence] Data saved for user:', currentUser.id)
+  }, [isDataLoaded, buildSavedUserData, currentUser])
 
-  // 初回読み込み（Supabase対応）
+  // 初回読み込み（認証完了を待ってからSupabase対応）
   useEffect(() => {
+    // 認証中は待機
+    if (isAuthLoading) {
+      console.log('[Data] Waiting for authentication...')
+      return
+    }
+
+    // 認証失敗時はローカルモードで動作
+    if (!currentUser) {
+      console.log('[Data] Authentication failed, loading local data only')
+      const loadData = async () => {
+        const mode = loadAdminMode()
+        setAdminMode(mode)
+
+        let userData = loadCurrentUserData()
+        if (!userData) {
+          console.log('[Data] No saved data, creating initial data')
+          userData = createInitialUserData()
+        }
+
+        // ローカルデータを読み込み
+        setCollection(userData.collection.map(item => ({
+          stickerId: item.stickerId,
+          quantity: item.quantity,
+          totalAcquired: item.totalAcquired,
+          firstAcquiredAt: item.firstAcquiredAt || new Date().toISOString(),
+        })))
+        setPlacedStickers(userData.placedStickers)
+        setPlacedDecoItems(userData.placedDecoItems)
+        setPages(userData.pages)
+        setCoverDesignId(userData.coverDesignId)
+        setUserMonetization(userData.monetization)
+        setTotalExp(userData.profile.totalExp)
+        setSettings(userData.settings)
+
+        console.log('[Data] Local data loaded successfully (offline mode)')
+        setIsDataLoaded(true)
+      }
+      loadData()
+      return
+    }
+
     const loadData = async () => {
       const mode = loadAdminMode()
       setAdminMode(mode)
 
-      // 現在のテストユーザーを取得
-      const testUser = getCurrentTestUser()
-      setCurrentTestUser(testUser)
+      console.log('[Data] Loading data for authenticated user:', currentUser.id, currentUser.userCode)
 
       // データソースを判定
       const dataSource = getDataSource()
@@ -1314,17 +1352,18 @@ export default function Home() {
       console.log('[Data] Data source:', dataSource)
 
       let userData = loadCurrentUserData()
+      let supabaseAvatarUrl: string | null = null // Supabaseから読み込んだアバターURL
 
       // Supabaseモードの場合、コレクションをSupabaseから読み込み
       if (dataSource === 'supabase' && mode !== 'test') {
-        console.log('[Supabase] Loading collection from Supabase for user:', testUser.id)
+        console.log('[Supabase] Loading collection from Supabase for user:', currentUser.id)
         try {
-          const supabaseCollection = await loadCollectionFromSupabase(testUser.id)
+          const supabaseCollection = await loadCollectionFromSupabase(currentUser.id)
           if (supabaseCollection.length > 0) {
             console.log('[Supabase] Loaded', supabaseCollection.length, 'stickers from Supabase')
             // Supabaseのコレクションをマージ
             if (!userData) {
-              userData = createInitialUserDataForTestUser(testUser.id)
+              userData = createInitialUserDataForTestUser(currentUser.id)
             }
             userData.collection = supabaseCollection
           } else {
@@ -1332,8 +1371,8 @@ export default function Home() {
           }
 
           // シール帳データ（シール配置 + デコ配置）もSupabaseから読み込み
-          console.log('[Supabase] Loading sticker book from Supabase for user:', testUser.supabaseId)
-          const stickerBook = await stickerBookService.getUserStickerBook(testUser.supabaseId)
+          console.log('[Supabase] Loading sticker book from Supabase for user:', currentUser.supabaseId)
+          const stickerBook = await stickerBookService.getUserStickerBook(currentUser.supabaseId)
           if (stickerBook && stickerBook.pages.length > 0) {
             console.log('[Supabase] Loaded sticker book with', stickerBook.pages.length, 'pages')
 
@@ -1355,13 +1394,153 @@ export default function Home() {
 
             // userDataを更新
             if (!userData) {
-              userData = createInitialUserDataForTestUser(testUser.id)
+              userData = createInitialUserDataForTestUser(currentUser.id)
             }
             userData.pages = supabasePages
             userData.placedStickers = supabasePlacedStickers
             userData.placedDecoItems = supabasePlacedDecoItems
           } else {
             console.log('[Supabase] No sticker book found, using localStorage data')
+          }
+
+          // プロフィールもSupabaseから読み込み
+          console.log('[Supabase] Loading profile from Supabase for user:', currentUser.supabaseId)
+          const supabaseProfile = await profileService.getProfile(currentUser.supabaseId)
+          if (supabaseProfile) {
+            console.log('[Supabase] Loaded profile:', supabaseProfile.displayName, 'Exp:', supabaseProfile.totalExp, 'Avatar:', supabaseProfile.avatarUrl)
+            if (!userData) {
+              userData = createInitialUserDataForTestUser(currentUser.id)
+            }
+            // Supabaseプロフィールをローカル形式に反映
+            userData.profile = {
+              name: supabaseProfile.displayName || userData.profile.name,
+              bio: supabaseProfile.bio || userData.profile.bio,
+              totalExp: supabaseProfile.totalExp || userData.profile.totalExp,
+            }
+            // アバターURLも保持
+            supabaseAvatarUrl = supabaseProfile.avatarUrl
+          } else {
+            console.log('[Supabase] No profile found, using localStorage data')
+          }
+
+          // ミステリーポストデータをSupabaseから読み込み
+          console.log('[Supabase] Loading mystery post data for user:', currentUser.supabaseId)
+          try {
+            const [userPosts, receivedStickers, canPost] = await Promise.all([
+              mysteryPostService.getUserPosts(currentUser.supabaseId),
+              mysteryPostService.getReceivedStickers(currentUser.supabaseId),
+              mysteryPostService.canPostToday(currentUser.supabaseId),
+            ])
+
+            if (userPosts.length > 0 || receivedStickers.length > 0) {
+              console.log('[Supabase] Loaded mystery post data:', userPosts.length, 'posts,', receivedStickers.length, 'received')
+
+              // 今日投函したシールを取得
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              const todayPost = userPosts.find(p => new Date(p.postedAt) >= today)
+
+              // pending状態のシールを取得
+              const pendingPosts = userPosts.filter(p => p.status === 'pending')
+
+              // 受け取ったシールをドメイン形式に変換
+              const receivedStickersForState: ReceivedSticker[] = receivedStickers.map(r => ({
+                id: r.postId,
+                stickerId: r.stickerId,
+                stickerName: r.stickerName,
+                stickerImageUrl: r.stickerImageUrl,
+                rarity: r.stickerRarity,
+                message: (r.message as PresetMessage) || '大切にしてね！',
+                fromUserName: r.senderName,
+                receivedAt: r.deliveredAt,
+                isOpened: true, // 配達済みなので開封済みとして表示
+              }))
+
+              // 状態を更新するデータを準備
+              setMysteryPostState({
+                todayPosted: todayPost ? {
+                  id: todayPost.id,
+                  stickerId: todayPost.userStickerId,
+                  stickerName: todayPost.stickerName || '',
+                  stickerImageUrl: todayPost.stickerImageUrl || '',
+                  rarity: todayPost.stickerRarity || 1,
+                  message: (todayPost.message as PresetMessage) || '大切にしてね！',
+                  postedAt: todayPost.postedAt,
+                  status: todayPost.status as 'pending' | 'matched' | 'delivered' | 'expired',
+                } : null,
+                pendingStickers: pendingPosts.map(p => ({
+                  id: p.id,
+                  stickerId: p.userStickerId,
+                  stickerName: p.stickerName || '',
+                  stickerImageUrl: p.stickerImageUrl || '',
+                  rarity: p.stickerRarity || 1,
+                  message: (p.message as PresetMessage) || '大切にしてね！',
+                  postedAt: p.postedAt,
+                  status: p.status as 'pending' | 'matched' | 'delivered' | 'expired',
+                })),
+                receivedStickers: receivedStickersForState,
+                nextDeliveryTime: getNextDeliveryTime(),
+              })
+            }
+          } catch (mysteryPostError) {
+            console.error('[Supabase] Failed to load mystery post data:', mysteryPostError)
+          }
+
+          // スカウト設定をSupabaseから読み込み
+          console.log('[Supabase] Loading scout settings for user:', currentUser.supabaseId)
+          try {
+            const [scoutSettings, scoutMatches] = await Promise.all([
+              tradeScoutService.getSettings(currentUser.supabaseId),
+              tradeScoutService.getMatches(currentUser.supabaseId),
+            ])
+
+            if (scoutSettings || scoutMatches.length > 0) {
+              console.log('[Supabase] Loaded scout data:', scoutSettings ? 'settings found' : 'no settings', scoutMatches.length, 'matches')
+
+              // スカウト設定をドメイン形式に変換
+              const wantListForState: ScoutSticker[] = (scoutSettings?.wantList || []).map(w => ({
+                stickerId: w.stickerId,
+                stickerName: '', // 後で補完が必要
+                stickerImageUrl: '',
+                rarity: 1,
+              }))
+
+              const offerListForState: ScoutSticker[] = (scoutSettings?.offerList || []).map(o => ({
+                stickerId: o.stickerId,
+                stickerName: '',
+                stickerImageUrl: '',
+                rarity: 1,
+              }))
+
+              // マッチをドメイン形式に変換
+              const matchesForState: ScoutMatch[] = scoutMatches.map(m => ({
+                id: m.id,
+                user: {
+                  id: m.matchedUserId,
+                  name: m.matchedUserName,
+                  avatarUrl: '',
+                  level: 1, // 後で補完が必要
+                },
+                myOffersTheyWant: [], // 詳細は後で取得
+                theirOffersIWant: [],
+                matchScore: m.matchScore,
+                matchedAt: m.matchedAt,
+                isRead: m.status !== 'found',
+              }))
+
+              setTradeScoutState({
+                settings: {
+                  wantList: wantListForState,
+                  offerList: offerListForState,
+                  isActive: scoutSettings?.isActive || false,
+                  updatedAt: scoutSettings?.updatedAt || new Date().toISOString(),
+                },
+                matches: matchesForState,
+                lastScoutedAt: null,
+              })
+            }
+          } catch (scoutError) {
+            console.error('[Supabase] Failed to load scout data:', scoutError)
           }
         } catch (error) {
           console.error('[Supabase] Failed to load from Supabase, falling back to localStorage:', error)
@@ -1370,8 +1549,8 @@ export default function Home() {
 
       // データがない場合は初期データを作成
       if (!userData) {
-        console.log('[Persistence] No saved data for user:', testUser.id, ', creating initial data')
-        userData = createInitialUserDataForTestUser(testUser.id)
+        console.log('[Persistence] No saved data for user:', currentUser.id, ', creating initial data')
+        userData = createInitialUserDataForTestUser(currentUser.id)
         saveCurrentUserData(userData)
       }
 
@@ -1393,6 +1572,7 @@ export default function Home() {
         ...prev,
         name: userData!.profile.name,
         bio: userData!.profile.bio,
+        avatarUrl: supabaseAvatarUrl || prev.avatarUrl, // Supabaseからのアバター優先
         level: calculateLevel(userData!.profile.totalExp),
         exp: getCurrentLevelExp(userData!.profile.totalExp),
         expToNextLevel: getExpToNextLevel(userData!.profile.totalExp),
@@ -1400,43 +1580,87 @@ export default function Home() {
       }))
 
       setIsDataLoaded(true)
-      console.log('[Data] Data loaded for user:', testUser.id, ', collection:', userData.collection.length, 'stickers', '(source:', dataSource, ')')
+      console.log('[Data] Data loaded for user:', currentUser.id, ', collection:', userData.collection.length, 'stickers', '(source:', dataSource, ')')
     }
 
     loadData()
-  }, [allStickerIds])
+  }, [currentUser, isAuthLoading, allStickerIds])
 
   // タイムライン投稿をSupabaseから読み込む
   useEffect(() => {
-    if (!isDataLoaded) return
+    if (!isDataLoaded || !currentUser) return
     if (currentDataSource !== 'supabase') return
 
     const loadTimeline = async () => {
-      console.log('[Timeline] Loading posts from Supabase for user:', currentTestUser.supabaseId)
+      console.log('[Timeline] Loading posts from Supabase for user:', currentUser.supabaseId)
       try {
-        const supabasePosts = await timelineService.getPublicTimeline(currentTestUser.supabaseId)
+        const supabasePosts = await timelineService.getPublicTimeline(currentUser.supabaseId)
         console.log('[Timeline] Loaded', supabasePosts.length, 'posts from Supabase')
 
         if (supabasePosts.length > 0) {
-          // Supabase投稿をUI用Post形式に変換
-          const convertedPosts: Post[] = supabasePosts.map(sp => ({
-            id: sp.id,
-            userId: sp.user_id,
-            userName: sp.author?.name || 'Unknown',
-            userAvatarUrl: sp.author?.avatar_url || undefined,
-            pageData: undefined, // TODO: pageDataの復元
-            caption: sp.caption || undefined,
-            hashtags: sp.hashtags,
-            reactions: sp.reactions?.map(r => ({
-              type: r.type as 'heart' | 'sparkle' | 'hot' | 'cute',
-              count: r.count,
-              isReacted: r.isReacted,
-            })) || [{ type: 'heart', count: 0, isReacted: false }],
-            commentCount: sp.comment_count || 0,
-            createdAt: sp.created_at,
-            isFollowing: sp.isFollowing,
-            visibility: sp.visibility,
-          }))
+          console.log('[Timeline] First post author data:', supabasePosts[0].author)
+
+          // 各投稿のpage_idからシール帳ページデータを取得
+          const convertedPosts: Post[] = await Promise.all(supabasePosts.map(async (sp) => {
+            // page_idがある場合はシール帳ページデータを取得
+            let pageData: Post['pageData'] = undefined
+            if (sp.page_id) {
+              const pageResult = await stickerBookService.getPageById(sp.page_id)
+              if (pageResult) {
+                // SupabaseStickerBookPage型からPostPageData型に変換
+                pageData = {
+                  placedStickers: pageResult.stickers.map(s => ({
+                    id: s.id,
+                    stickerId: s.stickerId,
+                    sticker: s.sticker,
+                    pageId: s.pageId || pageResult.id,
+                    x: s.x,
+                    y: s.y,
+                    rotation: s.rotation,
+                    scale: s.scale,
+                    zIndex: s.zIndex,
+                    placedAt: s.placedAt || new Date().toISOString(),
+                  })),
+                  placedDecoItems: pageResult.decoItems?.map(d => ({
+                    id: d.id,
+                    decoItemId: d.decoItemId,
+                    decoItem: d.decoItem,
+                    pageId: d.pageId || pageResult.id,
+                    x: d.x,
+                    y: d.y,
+                    rotation: d.rotation,
+                    scale: d.scale,
+                    width: d.width,
+                    height: d.height,
+                    zIndex: d.zIndex,
+                    placedAt: d.placedAt || new Date().toISOString(),
+                  })),
+                }
+                console.log('[Timeline] Page data loaded for post:', sp.id, 'stickers:', pageData.placedStickers.length, 'decos:', pageData.placedDecoItems?.length || 0)
+              }
+            }
+
+            return {
+              id: sp.id,
+              userId: sp.user_id,
+              // profilesテーブルのカラム名は display_name
+              userName: sp.author?.display_name || sp.author?.username || 'Unknown',
+              userAvatarUrl: sp.author?.avatar_url,
+              pageData,
+              caption: sp.caption || '',
+              hashtags: sp.hashtags,
+              reactions: sp.reactions?.map(r => ({
+                type: r.type as ReactionType,
+                count: r.count,
+                isReacted: r.isReacted,
+              })) || [{ type: 'heart' as ReactionType, count: 0, isReacted: false }],
+              commentCount: 0, // PostWithDetailsにはcommentCountがないため固定値
+              createdAt: sp.created_at,
+              isFollowing: sp.isFollowing,
+              visibility: sp.visibility,
+            }
+          })) as unknown as Post[]
+
           // デモ投稿とマージ（Supabase投稿を先頭に）
           setPosts(prev => {
             const demoIds = prev.map(p => p.id)
@@ -1450,7 +1674,7 @@ export default function Home() {
     }
 
     loadTimeline()
-  }, [isDataLoaded, currentDataSource, currentTestUser.supabaseId])
+  }, [isDataLoaded, currentDataSource, currentUser?.supabaseId])
 
   // データ変更時に自動保存（デバウンス）
   useEffect(() => {
@@ -1537,8 +1761,19 @@ export default function Home() {
       setIsLevelUpModalOpen(true)
     }
 
+    // Supabaseモード時は経験値をSupabaseにも保存
+    if (currentDataSource === 'supabase') {
+      profileService.setExp(currentUser!.supabaseId, result.newTotalExp)
+        .then(success => {
+          if (success) {
+            console.log('[Exp] Saved to Supabase:', result.newTotalExp)
+          }
+        })
+        .catch(err => console.error('[Exp] Failed to save to Supabase:', err))
+    }
+
     return result
-  }, [totalExp])
+  }, [totalExp, currentDataSource, currentUser?.supabaseId])
 
   const handlePageTurn = useCallback((pageIndex: number) => {
     setCurrentPage(pageIndex)
@@ -1603,10 +1838,10 @@ export default function Home() {
       (async () => {
         try {
           // user_sticker_idを取得
-          const userStickerId = await stickerBookService.getUserStickerId(
-            currentTestUser.supabaseId,
+          const userStickerId = currentUser?.supabaseId ? await stickerBookService.getUserStickerId(
+            currentUser.supabaseId,
             selectedSticker.id
-          )
+          ) : null
           if (!userStickerId) {
             console.error('[Supabase] User sticker not found for:', selectedSticker.id)
             return
@@ -1635,7 +1870,7 @@ export default function Home() {
         }
       })()
     }
-  }, [selectedSticker, placedStickers, gainExp, isSpreadView, pages, collection, currentDataSource, currentTestUser])
+  }, [selectedSticker, placedStickers, gainExp, isSpreadView, pages, collection, currentDataSource, currentUser])
 
   // 編集中シールのページサイド（見開き時に左右どちらか）
   const [editingStickerPageSide, setEditingStickerPageSide] = useState<'left' | 'right'>('left')
@@ -2218,7 +2453,7 @@ export default function Home() {
     if (dataSource === 'supabase') {
       // Supabase: 実際のマッチング
       setMatchingStatus('searching')
-      console.log('[Trade] Starting Supabase matching for user:', currentTestUser.name)
+      console.log('[Trade] Starting Supabase matching for user:', currentUser?.name)
 
       // 1. まず待機中の交換を最新取得
       await supabaseTradeActions.refreshWaitingTrades()
@@ -2227,26 +2462,27 @@ export default function Home() {
       await new Promise(resolve => setTimeout(resolve, 500))
 
       // 2. 待機中の交換があるかチェック（直接DBから取得）
+      if (!currentUser?.supabaseId) return
       const { tradeService } = await import('@/services/trades')
-      const waitingTrades = await tradeService.findWaitingTrades(currentTestUser.supabaseId)
+      const waitingTrades = await tradeService.findWaitingTrades(currentUser.supabaseId)
       console.log('[Trade] Found waiting trades:', waitingTrades.length)
 
       if (waitingTrades.length > 0) {
         // 相手の交換が見つかった！
         const waitingTrade = waitingTrades[0]
-        const partnerTestUser = TEST_USERS.find(u => u.supabaseId === waitingTrade.user1_id)
-        console.log('[Trade] Found partner:', partnerTestUser?.name, 'Trade ID:', waitingTrade.id, 'Created:', waitingTrade.created_at)
+        // プロフィールサービスで相手の情報を取得
+        const partnerProfile = await profileService.getProfile(waitingTrade.user1_id)
+        const partnerName = partnerProfile?.displayName || '交換相手'
+        console.log('[Trade] Found partner:', partnerName, 'Trade ID:', waitingTrade.id, 'Created:', waitingTrade.created_at)
 
-        if (partnerTestUser) {
-          setMatchingStatus('found')
-          setMatchedUser({
-            id: waitingTrade.id, // 交換IDを使用
-            name: partnerTestUser.name,
-            avatarUrl: undefined,
-            level: 1,
-          })
-          return
-        }
+        setMatchingStatus('found')
+        setMatchedUser({
+          id: waitingTrade.id, // 交換IDを使用
+          name: partnerName,
+          avatarUrl: partnerProfile?.avatarUrl || undefined,
+          level: 1,
+        })
+        return
       }
 
       // 3. 見つからなかった場合、自分の交換を作成して待機
@@ -2268,7 +2504,7 @@ export default function Home() {
         })
       }, 2000 + Math.random() * 1000)
     }
-  }, [dataSource, supabaseTradeActions, currentTestUser])
+  }, [dataSource, supabaseTradeActions, currentUser])
 
   const handleCancelMatching = useCallback(async () => {
     if (dataSource === 'supabase') {
@@ -2316,7 +2552,7 @@ export default function Home() {
   }, [matchedUser, dataSource, supabaseTradeActions])
 
   // ミステリーポスト ハンドラー
-  const handlePostSticker = useCallback((stickerId: string, message: PresetMessage) => {
+  const handlePostSticker = useCallback(async (stickerId: string, message: PresetMessage) => {
     const sticker = collectionStickers.find(s => s.id === stickerId)
     if (!sticker) return
 
@@ -2338,9 +2574,61 @@ export default function Home() {
       nextDeliveryTime: getNextDeliveryTime(),
     }))
 
+    // Supabaseモードの場合、DBにも保存
+    if (currentDataSource === 'supabase') {
+      // stickerId を使って user_stickers テーブルから該当シールを探す必要がある
+      // ここでは stickerId をそのまま渡す（サービス側で解決）
+      if (!currentUser?.supabaseId) return
+      mysteryPostService.postSticker(currentUser.supabaseId, stickerId, message)
+        .then(async result => {
+          if (result.success) {
+            console.log('[MysteryPost] Posted to Supabase:', result.postId)
+            // IDをSupabaseのIDに更新
+            if (result.postId) {
+              setMysteryPostState(prev => ({
+                ...prev,
+                todayPosted: prev.todayPosted ? { ...prev.todayPosted, id: result.postId! } : null,
+                pendingStickers: prev.pendingStickers.map(p =>
+                  p.id === newPosted.id ? { ...p, id: result.postId! } : p
+                ),
+              }))
+            }
+
+            // ポスト成功後、マッチングと配達を実行
+            try {
+              console.log('[MysteryPost] Running matching...')
+              await mysteryPostService.runMatching()
+              console.log('[MysteryPost] Running delivery...')
+              await mysteryPostService.runDelivery()
+              console.log('[MysteryPost] Matching and delivery completed')
+
+              // 受信したシールを再取得して更新
+              const receivedStickers = await mysteryPostService.getReceivedStickers(currentUser.supabaseId)
+              setMysteryPostState(prev => ({
+                ...prev,
+                receivedStickers: receivedStickers.map(rs => ({
+                  id: rs.id,
+                  stickerId: rs.stickerId,
+                  stickerName: rs.stickerName,
+                  stickerImageUrl: rs.stickerImageUrl,
+                  rarity: rs.rarity,
+                  message: rs.message,
+                  receivedAt: rs.receivedAt,
+                  opened: rs.opened,
+                })),
+              }))
+            } catch (error) {
+              console.error('[MysteryPost] Failed to run matching/delivery:', error)
+            }
+          } else {
+            console.error('[MysteryPost] Failed to post to Supabase:', result.error)
+          }
+        })
+    }
+
     // 投函したら経験値獲得
     gainExp('place_sticker')
-  }, [gainExp])
+  }, [gainExp, currentDataSource, currentUser, collectionStickers])
 
   const handleOpenReceivedSticker = useCallback((sticker: ReceivedSticker) => {
     setSelectedReceivedSticker(sticker)
@@ -2376,7 +2664,19 @@ export default function Home() {
         updatedAt: new Date().toISOString(),
       },
     }))
-  }, [])
+
+    // Supabaseモードの場合、DBにも保存
+    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+      tradeScoutService.setActive(currentUser.supabaseId, active)
+        .then(success => {
+          if (success) {
+            console.log('[TradeScout] Saved active state to Supabase:', active)
+          } else {
+            console.error('[TradeScout] Failed to save active state to Supabase')
+          }
+        })
+    }
+  }, [currentDataSource, currentUser])
 
   const handleSaveWantList = useCallback((stickers: ScoutSticker[]) => {
     setTradeScoutState(prev => ({
@@ -2387,7 +2687,64 @@ export default function Home() {
         updatedAt: new Date().toISOString(),
       },
     }))
-  }, [])
+
+    // Supabaseモードの場合、DBにも保存
+    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+      const wantListData = stickers.map(s => ({ stickerId: s.stickerId, priority: 1 }))
+      tradeScoutService.updateWantList(currentUser.supabaseId, wantListData)
+        .then(async success => {
+          if (success) {
+            console.log('[TradeScout] Saved want list to Supabase:', stickers.length, 'items')
+
+            // リスト更新後、マッチング検索を実行
+            try {
+              console.log('[TradeScout] Running matching...')
+              const matches = await tradeScoutService.findMatches(currentUser.supabaseId)
+              console.log('[TradeScout] Found', matches.length, 'matches')
+
+              // マッチ結果をstateに反映
+              setTradeScoutState(prev => ({
+                ...prev,
+                matches: matches.map(m => ({
+                  id: m.id,
+                  user: {
+                    id: m.matchedUserId,
+                    name: m.matchedUserName,
+                    avatarUrl: '',
+                    level: 1,
+                  },
+                  myOffersTheyWant: m.offersMatched.map(sid => {
+                    const sticker = demoStickers.find(s => s.id === sid)
+                    return {
+                      stickerId: sid,
+                      stickerName: sticker?.name || 'Unknown',
+                      stickerImageUrl: sticker?.imageUrl || '',
+                      rarity: sticker?.rarity || 1,
+                    }
+                  }),
+                  theirOffersIWant: m.wantsMatched.map(sid => {
+                    const sticker = demoStickers.find(s => s.id === sid)
+                    return {
+                      stickerId: sid,
+                      stickerName: sticker?.name || 'Unknown',
+                      stickerImageUrl: sticker?.imageUrl || '',
+                      rarity: sticker?.rarity || 1,
+                    }
+                  }),
+                  matchScore: m.matchScore,
+                  matchedAt: m.matchedAt,
+                  isRead: m.status === 'viewed',
+                })),
+              }))
+            } catch (error) {
+              console.error('[TradeScout] Failed to find matches:', error)
+            }
+          } else {
+            console.error('[TradeScout] Failed to save want list to Supabase')
+          }
+        })
+    }
+  }, [currentDataSource, currentUser])
 
   const handleSaveOfferList = useCallback((stickers: ScoutSticker[]) => {
     setTradeScoutState(prev => ({
@@ -2398,7 +2755,64 @@ export default function Home() {
         updatedAt: new Date().toISOString(),
       },
     }))
-  }, [])
+
+    // Supabaseモードの場合、DBにも保存
+    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+      const offerListData = stickers.map(s => ({ stickerId: s.stickerId }))
+      tradeScoutService.updateOfferList(currentUser.supabaseId, offerListData)
+        .then(async success => {
+          if (success) {
+            console.log('[TradeScout] Saved offer list to Supabase:', stickers.length, 'items')
+
+            // リスト更新後、マッチング検索を実行
+            try {
+              console.log('[TradeScout] Running matching...')
+              const matches = await tradeScoutService.findMatches(currentUser.supabaseId)
+              console.log('[TradeScout] Found', matches.length, 'matches')
+
+              // マッチ結果をstateに反映
+              setTradeScoutState(prev => ({
+                ...prev,
+                matches: matches.map(m => ({
+                  id: m.id,
+                  user: {
+                    id: m.matchedUserId,
+                    name: m.matchedUserName,
+                    avatarUrl: '',
+                    level: 1,
+                  },
+                  myOffersTheyWant: m.offersMatched.map(sid => {
+                    const sticker = demoStickers.find(s => s.id === sid)
+                    return {
+                      stickerId: sid,
+                      stickerName: sticker?.name || 'Unknown',
+                      stickerImageUrl: sticker?.imageUrl || '',
+                      rarity: sticker?.rarity || 1,
+                    }
+                  }),
+                  theirOffersIWant: m.wantsMatched.map(sid => {
+                    const sticker = demoStickers.find(s => s.id === sid)
+                    return {
+                      stickerId: sid,
+                      stickerName: sticker?.name || 'Unknown',
+                      stickerImageUrl: sticker?.imageUrl || '',
+                      rarity: sticker?.rarity || 1,
+                    }
+                  }),
+                  matchScore: m.matchScore,
+                  matchedAt: m.matchedAt,
+                  isRead: m.status === 'viewed',
+                })),
+              }))
+            } catch (error) {
+              console.error('[TradeScout] Failed to find matches:', error)
+            }
+          } else {
+            console.error('[TradeScout] Failed to save offer list to Supabase')
+          }
+        })
+    }
+  }, [currentDataSource, currentUser])
 
   const handleViewScoutMatch = useCallback((match: ScoutMatch) => {
     setSelectedScoutMatch(match)
@@ -2410,7 +2824,17 @@ export default function Home() {
         m.id === match.id ? { ...m, isRead: true } : m
       ),
     }))
-  }, [])
+
+    // Supabaseモードの場合、DBも更新
+    if (currentDataSource === 'supabase' && !match.isRead) {
+      tradeScoutService.updateMatchStatus(match.id, 'viewed')
+        .then(success => {
+          if (success) {
+            console.log('[TradeScout] Match marked as viewed in Supabase:', match.id)
+          }
+        })
+    }
+  }, [currentDataSource])
 
   const handleStartTradeFromScout = useCallback((match: ScoutMatch) => {
     // マッチしたユーザーとトレードを開始
@@ -2422,7 +2846,17 @@ export default function Home() {
     })
     setIsTradeSessionOpen(true)
     setIsMatchDetailModalOpen(false)
-  }, [])
+
+    // Supabaseモードの場合、マッチのステータスを更新
+    if (currentDataSource === 'supabase') {
+      tradeScoutService.updateMatchStatus(match.id, 'trade_started')
+        .then(success => {
+          if (success) {
+            console.log('[TradeScout] Match marked as trade_started in Supabase:', match.id)
+          }
+        })
+    }
+  }, [currentDataSource])
 
   // Handle gacha
   // 重み付きランダム抽選関数
@@ -2480,9 +2914,9 @@ export default function Home() {
     console.log('[Gacha] Added stickers to collection:', pulledStickerIds.length, 'total, new:', newStickers.length)
 
     // Supabaseにも保存（本番環境モード時）
-    if (currentDataSource === 'supabase') {
-      console.log('[Gacha] Saving to Supabase for user:', currentTestUser.id)
-      addStickersToSupabase(currentTestUser.id, pulledStickerIds).then(result => {
+    if (currentDataSource === 'supabase' && currentUser?.id) {
+      console.log('[Gacha] Saving to Supabase for user:', currentUser.id)
+      addStickersToSupabase(currentUser.id, pulledStickerIds).then(result => {
         console.log('[Gacha] Supabase save result:', result)
         if (!result.success) {
           console.error('[Gacha] Failed to save to Supabase')
@@ -2507,7 +2941,7 @@ export default function Home() {
 
     // 経験値獲得（1回引く: +10 EXP, 10連: +100 EXP）
     gainExp(count === 1 ? 'gacha_single' : 'gacha_ten')
-  }, [gainExp, collection, currentDataSource, currentTestUser])
+  }, [gainExp, collection, currentDataSource, currentUser])
 
   // Handle reactions
   const handleReaction = useCallback((postId: string, reactionType: ReactionType) => {
@@ -3384,7 +3818,7 @@ export default function Home() {
         return (
           <ProfileView
             profile={userProfile}
-            stats={demoUserStats}
+            stats={userStats}
             achievements={demoAchievements}
             onEditProfile={() => setIsProfileEditOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
@@ -3408,10 +3842,64 @@ export default function Home() {
     }
   }
 
-  // 編集中・交換中・マッチング中は下部タブバーを非表示にする
-  const shouldHideTabBar = isGachaResultModalOpen || editingSticker || editingDecoItem || isTradeSessionOpen || matchingStatus !== 'idle'
+  // 編集中・交換中・マッチング中・モーダル表示中は下部タブバーを非表示にする
+  const shouldHideTabBar =
+    // 編集・交換・マッチング
+    isGachaResultModalOpen ||
+    editingSticker ||
+    editingDecoItem ||
+    isTradeSessionOpen ||
+    matchingStatus !== 'idle' ||
+    // 全画面表示
+    isSettingsOpen ||
+    isShopOpen ||
+    isAuthOpen ||
+    isAdminPanelOpen ||
+    isOtherUserProfileOpen ||
+    // モーダル
+    isProfileEditOpen ||
+    isCreatePostModalOpen ||
+    isCommentModalOpen ||
+    isStickerDetailModalOpen ||
+    isReportModalOpen ||
+    isBlockModalOpen ||
+    isThemeSelectOpen ||
+    isPostStickerModalOpen ||
+    isReceivedStickerModalOpen ||
+    isScoutWantListModalOpen ||
+    isScoutOfferListModalOpen ||
+    isMatchDetailModalOpen ||
+    isStatsModalOpen ||
+    isAchievementsModalOpen ||
+    isFollowListModalOpen ||
+    // ドロワー・パネル
+    isDecoDrawerOpen ||
+    isLayerPanelOpen ||
+    isPageEditModalOpen
   // プロフィールタブは独自ヘッダーがあるのでTopBarを非表示
   const shouldHideTopBar = activeTab === 'profile'
+
+  // 認証中はローディング画面を表示
+  if (isAuthLoading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          background: 'linear-gradient(180deg, #FDF2F8 0%, #F5F3FF 100%)',
+        }}
+      >
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-bounce">🎫</div>
+          <p
+            className="text-lg font-bold text-purple-700"
+            style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+          >
+            読み込み中...
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <AppLayout
@@ -3543,11 +4031,11 @@ export default function Home() {
         />
       )}
 
-      {isTradeSessionOpen && tradePartner && (
+      {isTradeSessionOpen && tradePartner && currentUser && (
         <TradeSessionFull
           myUser={{
-            id: currentTestUser.supabaseId, // Supabase UUIDを使用
-            name: currentTestUser.name,
+            id: currentUser.supabaseId, // Supabase UUIDを使用
+            name: currentUser.name,
             avatarUrl: undefined,
             level: 5,
             bio: 'シール交換はじめました！',
@@ -3639,8 +4127,9 @@ export default function Home() {
           }))}
           onClose={() => setIsCreatePostModalOpen(false)}
           onSubmit={async (data) => {
+            if (!currentUser?.supabaseId) return
             // Supabaseに投稿を保存
-            const savedPost = await timelineService.createPost(currentTestUser.supabaseId, {
+            const savedPost = await timelineService.createPost(currentUser.supabaseId, {
               pageId: data.pageId,
               caption: data.caption,
               hashtags: data.hashtags,
@@ -3652,8 +4141,8 @@ export default function Home() {
               // 新しい投稿を作成（Supabaseから返されたIDを使用）
               const newPost: Post = {
                 id: savedPost.id,
-                userId: currentTestUser.supabaseId,
-                userName: currentTestUser.name,
+                userId: currentUser.supabaseId,
+                userName: currentUser.name,
                 userAvatarUrl: undefined,
                 // pageData を使用してシール帳ページを表示
                 pageData: data.pageData,
@@ -3663,7 +4152,7 @@ export default function Home() {
                   { type: 'heart', count: 0, isReacted: false },
                 ],
                 commentCount: 0,
-                createdAt: savedPost.created_at,
+                createdAt: savedPost.created_at || new Date().toISOString(),
                 isFollowing: true, // 自分の投稿
                 visibility: data.visibility,
               }
@@ -3674,8 +4163,8 @@ export default function Home() {
               // Supabase保存失敗時もローカルには表示（UX向上）
               const newPost: Post = {
                 id: `post-${Date.now()}`,
-                userId: currentTestUser.supabaseId,
-                userName: currentTestUser.name,
+                userId: currentUser.supabaseId,
+                userName: currentUser.name,
                 userAvatarUrl: undefined,
                 pageData: data.pageData,
                 caption: data.caption,
@@ -3736,8 +4225,13 @@ export default function Home() {
               onContactSupport={() => console.log('Contact support')}
               onViewTerms={() => console.log('View terms')}
               onViewPrivacy={() => console.log('View privacy')}
-              userName="プレイヤー"
-              userEmail="player@example.com"
+              userName={user?.profile?.display_name || 'ゲスト'}
+              userEmail={user?.email}
+              userCode={userCode}
+              isAccountLinked={isAccountLinked}
+              linkedProviders={linkedProviders}
+              onLinkGoogle={linkGoogle}
+              onLinkApple={linkApple}
             />
 
             {/* 管理者パネルへのアクセスボタン（開発用） */}
@@ -3839,7 +4333,8 @@ export default function Home() {
         isOpen={isProfileEditOpen}
         onClose={() => setIsProfileEditOpen(false)}
         profile={userProfile}
-        onSave={(updates) => {
+        onSave={async (updates) => {
+          // ローカルstate更新
           setUserProfile(prev => ({
             ...prev,
             name: updates.name,
@@ -3847,6 +4342,20 @@ export default function Home() {
             avatarUrl: updates.avatarUrl || prev.avatarUrl,
           }))
           setIsProfileEditOpen(false)
+
+          // Supabaseモードの場合はSupabaseにも保存
+          if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+            const success = await profileService.updateProfile(currentUser.supabaseId, {
+              displayName: updates.name,
+              bio: updates.bio,
+              avatarUrl: updates.avatarUrl,
+            })
+            if (success) {
+              console.log('[Profile] Saved to Supabase')
+            } else {
+              console.error('[Profile] Failed to save to Supabase')
+            }
+          }
         }}
       />
 
@@ -3854,7 +4363,7 @@ export default function Home() {
       <StatsModal
         isOpen={isStatsModalOpen}
         onClose={() => setIsStatsModalOpen(false)}
-        stats={demoUserStats}
+        stats={userStats}
       />
 
       {/* 実績一覧モーダル */}
@@ -4116,12 +4625,18 @@ export default function Home() {
       )}
 
       {/* 管理者パネル */}
-      {isAdminPanelOpen && (
+      {isAdminPanelOpen && currentUser && (
         <AdminView
           adminMode={adminMode}
           userData={buildSavedUserData()}
           allStickers={demoStickers}
-          currentTestUser={currentTestUser}
+          currentTestUser={{
+            id: currentUser.id,
+            supabaseId: currentUser.supabaseId,
+            name: currentUser.name,
+            emoji: currentUser.emoji,
+            color: currentUser.color,
+          }}
           onChangeMode={handleChangeAdminMode}
           onSwitchUser={handleSwitchUser}
           onGrantCurrency={handleGrantCurrency}

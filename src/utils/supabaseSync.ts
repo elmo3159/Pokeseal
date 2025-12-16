@@ -1,37 +1,37 @@
 /**
  * Supabase同期サービス
  *
- * テストユーザーシステムとSupabaseを連携
+ * 認証ユーザーとSupabaseを連携
  * - コレクションデータをSupabaseから読み込み
  * - ローカルフォーマットに変換
  */
 
-import { stickerService, UserStickerWithDetails } from '@/services/stickers/stickerService'
-import { TEST_USERS, SavedCollectionItem, getCurrentTestUser } from './persistence'
+import { stickerService } from '@/services/stickers/stickerService'
+import { SavedCollectionItem } from './persistence'
 import type { Sticker } from '@/types/database'
 
 // Supabaseからコレクションデータを読み込み
-export async function loadCollectionFromSupabase(testUserId: string): Promise<SavedCollectionItem[]> {
-  const testUser = TEST_USERS.find(u => u.id === testUserId)
-  if (!testUser) {
-    console.error('[SupabaseSync] Invalid test user ID:', testUserId)
+// userId: Supabase認証ユーザーのUUID
+export async function loadCollectionFromSupabase(userId: string): Promise<SavedCollectionItem[]> {
+  if (!userId) {
+    console.error('[SupabaseSync] No user ID provided')
     return []
   }
 
-  console.log(`[SupabaseSync] Loading collection for ${testUser.name} (${testUser.supabaseId})`)
+  console.log(`[SupabaseSync] Loading collection for user: ${userId}`)
 
   try {
-    const userStickers = await stickerService.getUserStickers(testUser.supabaseId)
+    const userStickers = await stickerService.getUserStickers(userId)
 
     // UserStickerWithDetails → SavedCollectionItem に変換
     const collection: SavedCollectionItem[] = userStickers.map(us => ({
       stickerId: us.sticker_id,
-      quantity: us.quantity,
-      totalAcquired: us.total_acquired,
+      quantity: us.quantity || 0,
+      totalAcquired: us.total_acquired || 0,
       firstAcquiredAt: us.first_acquired_at || null,
     }))
 
-    console.log(`[SupabaseSync] Loaded ${collection.length} stickers for ${testUser.name}`)
+    console.log(`[SupabaseSync] Loaded ${collection.length} stickers for user`)
     return collection
   } catch (error) {
     console.error('[SupabaseSync] Failed to load collection:', error)
@@ -39,10 +39,10 @@ export async function loadCollectionFromSupabase(testUserId: string): Promise<Sa
   }
 }
 
-// 現在のテストユーザーのコレクションを読み込み
+// 注: この関数は廃止予定。代わりに loadCollectionFromSupabase(userId) を直接使用してください
 export async function loadCurrentUserCollectionFromSupabase(): Promise<SavedCollectionItem[]> {
-  const currentUser = getCurrentTestUser()
-  return loadCollectionFromSupabase(currentUser.id)
+  console.warn('[SupabaseSync] loadCurrentUserCollectionFromSupabase is deprecated. Use loadCollectionFromSupabase(userId) instead.')
+  return []
 }
 
 // Supabaseから全シールマスターデータを読み込み
@@ -60,15 +60,15 @@ export async function loadAllStickersFromSupabase(): Promise<Sticker[]> {
 }
 
 // Supabaseにシールを追加（ガチャ結果用）
-export async function addStickerToSupabase(testUserId: string, stickerId: string): Promise<boolean> {
-  const testUser = TEST_USERS.find(u => u.id === testUserId)
-  if (!testUser) {
-    console.error('[SupabaseSync] Invalid test user ID:', testUserId)
+// userId: Supabase認証ユーザーのUUID
+export async function addStickerToSupabase(userId: string, stickerId: string): Promise<boolean> {
+  if (!userId) {
+    console.error('[SupabaseSync] No user ID provided')
     return false
   }
 
   try {
-    const result = await stickerService.addStickerToUser(testUser.supabaseId, stickerId)
+    const result = await stickerService.addStickerToUser(userId, stickerId)
     return result !== null
   } catch (error) {
     console.error('[SupabaseSync] Failed to add sticker:', error)
@@ -77,18 +77,18 @@ export async function addStickerToSupabase(testUserId: string, stickerId: string
 }
 
 // 複数シールを追加（ガチャ10連用）
-export async function addStickersToSupabase(testUserId: string, stickerIds: string[]): Promise<{
+// userId: Supabase認証ユーザーのUUID
+export async function addStickersToSupabase(userId: string, stickerIds: string[]): Promise<{
   success: boolean
   addedCount: number
 }> {
-  const testUser = TEST_USERS.find(u => u.id === testUserId)
-  if (!testUser) {
+  if (!userId) {
     return { success: false, addedCount: 0 }
   }
 
   let addedCount = 0
   for (const stickerId of stickerIds) {
-    const result = await stickerService.addStickerToUser(testUser.supabaseId, stickerId)
+    const result = await stickerService.addStickerToUser(userId, stickerId)
     if (result) addedCount++
   }
 
@@ -96,17 +96,17 @@ export async function addStickersToSupabase(testUserId: string, stickerIds: stri
 }
 
 // コレクション統計を取得
-export async function getCollectionStatsFromSupabase(testUserId: string): Promise<{
+// userId: Supabase認証ユーザーのUUID
+export async function getCollectionStatsFromSupabase(userId: string): Promise<{
   totalStickers: number
   ownedStickers: number
   completionRate: number
   maxRankCount: number
 } | null> {
-  const testUser = TEST_USERS.find(u => u.id === testUserId)
-  if (!testUser) return null
+  if (!userId) return null
 
   try {
-    return await stickerService.getCollectionStats(testUser.supabaseId)
+    return await stickerService.getCollectionStats(userId)
   } catch (error) {
     console.error('[SupabaseSync] Failed to get stats:', error)
     return null

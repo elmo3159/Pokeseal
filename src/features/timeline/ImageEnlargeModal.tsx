@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PlacedSticker } from '@/features/sticker-book'
+import { PlacedDecoItem } from '@/domain/decoItems'
 
 interface ImageEnlargeModalProps {
   isOpen: boolean
@@ -12,6 +13,7 @@ interface ImageEnlargeModalProps {
   // シール帳ページとして表示する場合
   pageData?: {
     placedStickers: PlacedSticker[]
+    placedDecoItems?: PlacedDecoItem[]
     backgroundColor?: string
   }
   userName?: string
@@ -126,14 +128,16 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
           </div>
         )}
 
-        {/* シール帳ページ表示の場合 */}
+        {/* シール帳ページ表示の場合 - BookViewと同じ表示方式 */}
         {pageData && (
           <div
             style={{
               position: 'relative',
-              width: '90vw',
-              maxWidth: '500px',
-              aspectRatio: '3/4',
+              // BookViewと同じアスペクト比 (320:480 = 2:3)
+              width: '320px',
+              height: '480px',
+              maxWidth: '90vw',
+              maxHeight: '70vh',
               background: pageData.backgroundColor || '#fff',
               borderRadius: '16px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -159,34 +163,100 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
               )}
             </div>
 
-            {/* シール */}
-            {pageData.placedStickers.map((sticker) => (
+            {/* シール配置 - BookViewのPageStickersと同じ構造 */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                pointerEvents: 'none',
+                zIndex: 40,
+                transformStyle: 'preserve-3d',
+                backfaceVisibility: 'hidden',
+              }}
+            >
+              {pageData.placedStickers.map((sticker) => {
+                // BookViewと同じ計算: 60 * scale
+                const stickerSize = 60 * (sticker.scale || 1)
+                return (
+                  <div
+                    key={sticker.id}
+                    style={{
+                      position: 'absolute',
+                      left: `${sticker.x * 100}%`,
+                      top: `${sticker.y * 100}%`,
+                      width: stickerSize,
+                      height: stickerSize,
+                      transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+                      zIndex: 40 + (sticker.zIndex || 1),
+                      transformStyle: 'preserve-3d',
+                      backfaceVisibility: 'hidden',
+                    }}
+                  >
+                    <img
+                      src={sticker.sticker.imageUrl}
+                      alt={sticker.sticker.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        filter: 'drop-shadow(0 10px 8px rgba(0,0,0,0.04)) drop-shadow(0 4px 3px rgba(0,0,0,0.1))',
+                      }}
+                      draggable={false}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
+            {pageData.placedDecoItems && pageData.placedDecoItems.length > 0 && (
               <div
-                key={sticker.id}
                 style={{
                   position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                   pointerEvents: 'none',
-                  left: `${sticker.x * 100}%`,
-                  top: `${sticker.y * 100}%`,
-                  transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(${sticker.scale || 1})`,
-                  width: '80px',
-                  height: '80px',
-                  zIndex: sticker.zIndex || 1,
+                  zIndex: 50,
+                  backfaceVisibility: 'hidden',
                 }}
               >
-                <img
-                  src={sticker.sticker.imageUrl}
-                  alt={sticker.sticker.name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    filter: 'drop-shadow(0 10px 8px rgba(0,0,0,0.04)) drop-shadow(0 4px 3px rgba(0,0,0,0.1))',
-                  }}
-                  draggable={false}
-                />
+                {pageData.placedDecoItems.map((deco) => {
+                  // BookViewと同じ計算
+                  const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+                  const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+                  return (
+                    <div
+                      key={deco.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${deco.x * 100}%`,
+                        top: `${deco.y * 100}%`,
+                        width: decoWidth,
+                        height: decoHeight,
+                        transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                        zIndex: 50 + (deco.zIndex ?? 1),
+                      }}
+                    >
+                      <img
+                        src={deco.decoItem.imageUrl}
+                        alt={deco.decoItem.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                        }}
+                        draggable={false}
+                      />
+                    </div>
+                  )
+                })}
               </div>
-            ))}
+            )}
           </div>
         )}
 

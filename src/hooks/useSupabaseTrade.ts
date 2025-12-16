@@ -15,7 +15,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 
 // フック用の型定義
 export interface UseSupabaseTradeOptions {
-  currentUser: TestUser
+  currentUser: TestUser | null  // 認証完了前はnull
   onTradeComplete?: (trade: Trade) => void
   onError?: (error: string) => void
 }
@@ -91,8 +91,8 @@ export function useSupabaseTrade(
   const tradeChannelRef = useRef<RealtimeChannel | null>(null)
   const matchingChannelRef = useRef<RealtimeChannel | null>(null)
 
-  // Supabase UUID
-  const supabaseUserId = currentUser.supabaseId
+  // Supabase UUID（認証完了前は空文字）
+  const supabaseUserId = currentUser?.supabaseId || ''
 
   // 計算されたプロパティ
   const isMatching = currentTrade?.status === 'matching'

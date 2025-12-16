@@ -86,7 +86,7 @@ export const tradeService = {
       return null
     }
 
-    return data
+    return data as Trade
   },
 
   // 古いマッチング交換をクリーンアップ（10分以上経過）
@@ -124,7 +124,8 @@ export const tradeService = {
     const { data, error } = await (supabase.rpc as any)('find_waiting_trades', { p_user_id: userId })
 
     if (error) {
-      console.error('[TradeService] Find waiting trades error:', error)
+      // RPC関数が存在しない場合や認証エラーの場合は警告として処理
+      console.warn('[TradeService] Could not find waiting trades (RPC may not exist or permission denied):', error.message || error)
       return []
     }
 
@@ -226,7 +227,7 @@ export const tradeService = {
       return []
     }
 
-    return data || []
+    return (data || []) as Trade[]
   },
 
   // 交換ステータスを更新
@@ -328,8 +329,10 @@ export const tradeService = {
 
     return {
       ...data,
+      quantity: data.quantity || 1,
+      created_at: data.created_at || new Date().toISOString(),
       sticker: (data as any).user_sticker?.sticker
-    }
+    } as TradeItem
   },
 
   // アイテムを削除
@@ -398,7 +401,7 @@ export const tradeService = {
       return null
     }
 
-    return data
+    return data as TradeMessage
   },
 
   // テキストメッセージを送信
@@ -440,7 +443,7 @@ export const tradeService = {
       return []
     }
 
-    return data || []
+    return (data || []) as TradeMessage[]
   },
 
   // ============================================

@@ -107,8 +107,8 @@ export function createInitialUserData(): SavedUserData {
     ],
     coverDesignId: 'cover-mochimo',
     profile: {
-      name: 'シールだいすき',
-      bio: 'シールあつめがすき！',
+      name: 'ゲスト',
+      bio: '',
       totalExp: 0, // レベル1からスタート
     },
     settings: {
@@ -440,7 +440,7 @@ export function createInitialUserDataForTestUser(userId: string): SavedUserData 
     ...createInitialUserData(),
     profile: {
       name: baseName,
-      bio: `${user?.emoji || '🎨'} シールあつめがすき！`,
+      bio: '',
       totalExp: 0,
     },
   }

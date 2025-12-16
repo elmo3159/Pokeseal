@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react'
 import { PlacedSticker } from '@/features/sticker-book'
+import { PlacedDecoItem } from '@/domain/decoItems'
 import { PostPageData } from './PostCard'
 
 // 投稿する対象のページ
@@ -11,6 +12,8 @@ export interface StickerBookPage {
   thumbnailUrl?: string
   // 実際の配置シールデータ
   placedStickers?: PlacedSticker[]
+  // 実際の配置デコアイテムデータ
+  placedDecoItems?: PlacedDecoItem[]
 }
 
 interface CreatePostModalProps {
@@ -83,7 +86,7 @@ const PagePreviewMini: React.FC<{
       </div>
 
       {/* シールを表示 - ホームと同じ60px基準、縮小表示 */}
-      {page.placedStickers && page.placedStickers.length > 0 ? (
+      {page.placedStickers && page.placedStickers.length > 0 && (
         page.placedStickers.map((sticker) => {
           const stickerSize = 60 * (sticker.scale || 1) * previewScale
           return (
@@ -97,7 +100,7 @@ const PagePreviewMini: React.FC<{
                 transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                 width: `${stickerSize}px`,
                 height: `${stickerSize}px`,
-                zIndex: sticker.zIndex || 1,
+                zIndex: 40 + (sticker.zIndex || 1),
               }}
             >
               <img
@@ -109,17 +112,52 @@ const PagePreviewMini: React.FC<{
             </div>
           )
         })
-      ) : page.thumbnailUrl ? (
-        <img
-          src={page.thumbnailUrl}
-          alt={`ページ ${page.pageNumber}`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-      ) : (
-        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '24px', marginBottom: '4px' }}>📖</span>
-          <span style={{ fontSize: '10px', color: '#A78BFA' }}>空のページ</span>
-        </div>
+      )}
+
+      {/* デコアイテムを表示 */}
+      {page.placedDecoItems && page.placedDecoItems.length > 0 && (
+        page.placedDecoItems.map((deco) => {
+          const decoWidth = (deco.width ?? deco.decoItem.baseWidth ?? 60) * previewScale
+          const decoHeight = (deco.height ?? deco.decoItem.baseHeight ?? 60) * previewScale
+          return (
+            <div
+              key={deco.id}
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                left: `${deco.x * 100}%`,
+                top: `${deco.y * 100}%`,
+                transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                width: `${decoWidth}px`,
+                height: `${decoHeight}px`,
+                zIndex: 50 + (deco.zIndex ?? 1),
+              }}
+            >
+              <img
+                src={deco.decoItem.imageUrl}
+                alt={deco.decoItem.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                draggable={false}
+              />
+            </div>
+          )
+        })
+      )}
+
+      {/* サムネイルまたはプレースホルダー */}
+      {(!page.placedStickers || page.placedStickers.length === 0) && (!page.placedDecoItems || page.placedDecoItems.length === 0) && (
+        page.thumbnailUrl ? (
+          <img
+            src={page.thumbnailUrl}
+            alt={`ページ ${page.pageNumber}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '24px', marginBottom: '4px' }}>📖</span>
+            <span style={{ fontSize: '10px', color: '#A78BFA' }}>空のページ</span>
+          </div>
+        )
       )}
 
       {/* 選択マーク */}
@@ -175,7 +213,7 @@ const PagePreviewLarge: React.FC<{
         </div>
 
         {/* シールを表示 - ホームと同じ60px基準 */}
-        {page.placedStickers && page.placedStickers.length > 0 ? (
+        {page.placedStickers && page.placedStickers.length > 0 && (
           page.placedStickers.map((sticker) => {
             const stickerSize = baseStickerSize * (sticker.scale || 1)
             return (
@@ -189,7 +227,7 @@ const PagePreviewLarge: React.FC<{
                   transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   width: `${stickerSize}px`,
                   height: `${stickerSize}px`,
-                  zIndex: sticker.zIndex || 1,
+                  zIndex: 40 + (sticker.zIndex || 1),
                 }}
               >
                 <img
@@ -201,19 +239,54 @@ const PagePreviewLarge: React.FC<{
               </div>
             )
           })
-        ) : page.thumbnailUrl ? (
-          <img
-            src={page.thumbnailUrl}
-            alt="投稿プレビュー"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '8px' }}>📖</div>
-              <p style={{ color: '#A78BFA', fontSize: '14px' }}>シールを貼ってね！</p>
+        )}
+
+        {/* デコアイテムを表示 */}
+        {page.placedDecoItems && page.placedDecoItems.length > 0 && (
+          page.placedDecoItems.map((deco) => {
+            const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+            const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+            return (
+              <div
+                key={deco.id}
+                style={{
+                  position: 'absolute',
+                  pointerEvents: 'none',
+                  left: `${deco.x * 100}%`,
+                  top: `${deco.y * 100}%`,
+                  transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                  width: `${decoWidth}px`,
+                  height: `${decoHeight}px`,
+                  zIndex: 50 + (deco.zIndex ?? 1),
+                }}
+              >
+                <img
+                  src={deco.decoItem.imageUrl}
+                  alt={deco.decoItem.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  draggable={false}
+                />
+              </div>
+            )
+          })
+        )}
+
+        {/* サムネイルまたはプレースホルダー */}
+        {(!page.placedStickers || page.placedStickers.length === 0) && (!page.placedDecoItems || page.placedDecoItems.length === 0) && (
+          page.thumbnailUrl ? (
+            <img
+              src={page.thumbnailUrl}
+              alt="投稿プレビュー"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '48px', marginBottom: '8px' }}>📖</div>
+                <p style={{ color: '#A78BFA', fontSize: '14px' }}>シールを貼ってね！</p>
+              </div>
             </div>
-          </div>
+          )
         )}
       </div>
     </div>
@@ -318,13 +391,16 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   // 投稿
   const handleSubmit = () => {
     if (selectedPageId && selectedPage) {
+      // シールまたはデコがあればページデータを含める
+      const hasContent = (selectedPage.placedStickers?.length ?? 0) > 0 || (selectedPage.placedDecoItems?.length ?? 0) > 0
       onSubmit({
         pageId: selectedPageId,
         caption,
         hashtags: selectedTags,
         visibility,
-        pageData: selectedPage.placedStickers ? {
-          placedStickers: selectedPage.placedStickers,
+        pageData: hasContent ? {
+          placedStickers: selectedPage.placedStickers || [],
+          placedDecoItems: selectedPage.placedDecoItems,
         } : undefined,
       })
       handleClose()

@@ -75,7 +75,7 @@ export function PostStickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center"
       style={{ background: 'rgba(0, 0, 0, 0.5)' }}
       onClick={handleClose}
     >
@@ -84,6 +84,7 @@ export function PostStickerModal({
         style={{
           background: 'linear-gradient(180deg, #FFFFFF 0%, #FFF5F8 100%)',
           maxHeight: '85vh',
+          marginBottom: 'calc(90px + env(safe-area-inset-bottom))', // タブバー分の余白
         }}
         onClick={(e) => e.stopPropagation()}
       >

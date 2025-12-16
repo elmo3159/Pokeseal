@@ -86,13 +86,13 @@ export const stickerService = {
 
     if (existing) {
       // 既存シールの数量と累計を増加
-      const newTotalAcquired = existing.total_acquired + 1
+      const newTotalAcquired = (existing.total_acquired || 0) + 1
       const newRank = calculateRank(newTotalAcquired)
 
       const { data: updated, error } = await supabase
         .from('user_stickers')
         .update({
-          quantity: existing.quantity + 1,
+          quantity: (existing.quantity || 0) + 1,
           total_acquired: newTotalAcquired,
           rank: newRank,
           updated_at: new Date().toISOString()
@@ -158,17 +158,17 @@ export const stickerService = {
       .eq('user_id', userId)
       .single()
 
-    if (!userSticker || userSticker.quantity < quantity) {
+    if (!userSticker || (userSticker.quantity || 0) < quantity) {
       return 0
     }
 
     const sticker = userSticker.sticker as unknown as Sticker
-    const pointsPerSticker = Math.ceil(sticker.base_rate * sticker.rarity)
+    const pointsPerSticker = Math.ceil((sticker.base_rate || 0) * sticker.rarity)
     const totalPoints = pointsPerSticker * quantity
 
     // トランザクション的に処理
     // 1. シール数量を減らす
-    const newQuantity = userSticker.quantity - quantity
+    const newQuantity = (userSticker.quantity || 0) - quantity
     if (newQuantity <= 0) {
       await supabase
         .from('user_stickers')
@@ -195,7 +195,7 @@ export const stickerService = {
       await supabase
         .from('profiles')
         .update({
-          star_points: profile.star_points + totalPoints,
+          star_points: (profile.star_points || 0) + totalPoints,
           updated_at: new Date().toISOString()
         })
         .eq('id', userId)
@@ -225,7 +225,7 @@ export const stickerService = {
       .eq('user_id', userId)
 
     const ownedStickers = userStickers?.length || 0
-    const maxRankCount = userStickers?.filter((s: { rank: number }) => s.rank >= 5).length || 0
+    const maxRankCount = userStickers?.filter((s: { rank: number | null }) => (s.rank || 0) >= 5).length || 0
     const completionRate = totalStickers ? Math.round((ownedStickers / totalStickers) * 100) : 0
 
     return {

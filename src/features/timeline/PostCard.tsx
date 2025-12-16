@@ -3,6 +3,7 @@
 import React, { memo, useState } from 'react'
 import { SafetyMenu } from '@/features/safety'
 import { PlacedSticker } from '@/features/sticker-book'
+import { PlacedDecoItem } from '@/domain/decoItems'
 import { ImageEnlargeModal } from './ImageEnlargeModal'
 
 // リアクションの種類（いいねのみに簡略化）
@@ -18,6 +19,7 @@ export interface Reaction {
 // シール帳ページのデータ（投稿用）
 export interface PostPageData {
   placedStickers: PlacedSticker[]
+  placedDecoItems?: PlacedDecoItem[]
   backgroundColor?: string
 }
 
@@ -92,59 +94,121 @@ const formatTime = (dateStr: string) => {
 }
 
 // シール帳ページのプレビュー表示
+// BookViewと同じ表示になるように、固定ベースサイズ（18.75%）× scaleで計算
 const StickerPagePreview: React.FC<{
   pageData: PostPageData
   onClick: () => void
 }> = ({ pageData, onClick }) => {
+  // BookViewのページ幅320pxに対する60pxシールの比率 = 18.75%
+  const BASE_STICKER_PERCENT = 18.75
+  // デコの基準サイズも同様の比率で計算
+  const BASE_DECO_PERCENT = 18.75
+
   return (
     <button
       onClick={onClick}
-      className="relative w-full aspect-[4/3] bg-white overflow-hidden group"
+      className="relative w-full aspect-[2/3] bg-white overflow-hidden group"
     >
       {/* グリッドライン */}
       <div className="absolute inset-0 opacity-10 pointer-events-none">
-        {Array.from({ length: 4 }).map((_, row) =>
+        {Array.from({ length: 6 }).map((_, row) =>
           Array.from({ length: 4 }).map((_, col) => (
             <div
               key={`grid-${row}-${col}`}
-              className="absolute w-[25%] h-[25%] border border-purple-300"
+              className="absolute w-[25%] h-[16.666%] border border-purple-300"
               style={{
                 left: `${col * 25}%`,
-                top: `${row * 25}%`,
+                top: `${row * 16.666}%`,
               }}
             />
           ))
         )}
       </div>
 
-      {/* シール - コンテナに対して相対サイズで表示 */}
-      {pageData.placedStickers.map((sticker) => (
+      {/* シール配置 - BookViewと同じ構造 */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          zIndex: 40,
+          transformStyle: 'preserve-3d',
+          backfaceVisibility: 'hidden',
+        }}
+      >
+        {pageData.placedStickers.map((sticker) => {
+          // BookViewと同じ計算: ベースサイズ × scale
+          const stickerWidthPercent = BASE_STICKER_PERCENT * (sticker.scale || 1)
+          return (
+            <div
+              key={sticker.id}
+              className="absolute select-none"
+              style={{
+                left: `${sticker.x * 100}%`,
+                top: `${sticker.y * 100}%`,
+                width: `${stickerWidthPercent}%`,
+                height: 'auto',
+                aspectRatio: '1 / 1',
+                transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+                zIndex: 40 + (sticker.zIndex || 1),
+                transformStyle: 'preserve-3d',
+                backfaceVisibility: 'hidden',
+              }}
+            >
+              <img
+                src={sticker.sticker.imageUrl}
+                alt={sticker.sticker.name}
+                className="w-full h-full object-contain drop-shadow-md"
+                draggable={false}
+              />
+            </div>
+          )
+        })}
+      </div>
+
+      {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
+      {pageData.placedDecoItems && pageData.placedDecoItems.length > 0 && (
         <div
-          key={sticker.id}
-          className="absolute pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            left: `${sticker.x * 100}%`,
-            top: `${sticker.y * 100}%`,
-            transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(${sticker.scale || 1})`,
-            // コンテナ幅に対する相対サイズ（18%）で表示
-            // これにより、どのサイズのプレビューでも適切な比率を維持
-            width: '18%',
-            height: 'auto',
-            aspectRatio: '1 / 1',
-            zIndex: sticker.zIndex || 1,
+            zIndex: 50,
+            backfaceVisibility: 'hidden',
           }}
         >
-          <img
-            src={sticker.sticker.imageUrl}
-            alt={sticker.sticker.name}
-            className="w-full h-full object-contain drop-shadow-md"
-            draggable={false}
-          />
+          {pageData.placedDecoItems.map((deco) => {
+            // デコのサイズ計算: 元のピクセルサイズを比率に変換
+            // BookViewでは deco.width ?? deco.decoItem.baseWidth ?? 60
+            const decoWidthPx = deco.width ?? deco.decoItem.baseWidth ?? 60
+            const decoHeightPx = deco.height ?? deco.decoItem.baseHeight ?? 60
+            // 320px基準での比率に変換
+            const decoWidthPercent = (decoWidthPx / 320) * 100
+            const decoHeightPercent = (decoHeightPx / 480) * 100
+
+            return (
+              <div
+                key={deco.id}
+                className="absolute select-none"
+                style={{
+                  left: `${deco.x * 100}%`,
+                  top: `${deco.y * 100}%`,
+                  width: `${decoWidthPercent}%`,
+                  height: `${decoHeightPercent}%`,
+                  transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                  zIndex: 50 + (deco.zIndex ?? 1),
+                }}
+              >
+                <img
+                  src={deco.decoItem.imageUrl}
+                  alt={deco.decoItem.name}
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
+              </div>
+            )
+          })}
         </div>
-      ))}
+      )}
 
       {/* ホバー時の拡大アイコン */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center" style={{ zIndex: 100 }}>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-full p-3 shadow-lg">
           <span className="text-2xl">🔍</span>
         </div>

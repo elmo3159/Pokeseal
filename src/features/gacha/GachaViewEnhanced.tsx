@@ -688,6 +688,7 @@ export const ConfirmCurrencyIcon: React.FC<{ type: 'ticket' | 'star' | 'gem' }> 
   )
 }
 
+// ガチャ確認ダイアログ
 export const GachaConfirmDialog: React.FC<{
   isOpen: boolean
   pullType: 'single' | 'multi' | null
