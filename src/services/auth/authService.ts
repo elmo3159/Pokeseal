@@ -1,10 +1,12 @@
-// 認証サービス - Supabase Auth連携
+// 認証サービス - Supabase Auth連携（匿名認証対応）
 import { getSupabase } from '@/services/supabase'
 import type { Profile } from '@/types/database'
 
 export interface AuthUser {
   id: string
   email: string | undefined
+  userCode: string | null // 6桁ユーザーコード
+  isAnonymous: boolean
   profile: Profile | null
 }
 
@@ -27,6 +29,16 @@ export interface AuthResult<T = void> {
   error?: string
 }
 
+// ユーザー検索結果
+export interface UserSearchResult {
+  id: string
+  userCode: string
+  displayName: string | null
+  avatarUrl: string | null
+  totalStickers: number
+  totalTrades: number
+}
+
 // 認証サービス
 export const authService = {
   // 現在のセッション取得
@@ -43,13 +55,71 @@ export const authService = {
   },
 
   // 現在のユーザー取得（プロフィール付き）
+  // getSession() を使用してローカルストレージから高速に取得
   async getCurrentUser(): Promise<AuthUser | null> {
+    console.log('[Auth] getCurrentUser called')
     const supabase = getSupabase()
-    const { data: { user }, error } = await supabase.auth.getUser()
+    console.log('[Auth] supabase client obtained')
 
-    if (error || !user) {
+    try {
+      // getSession() はローカルストレージから取得するため高速
+      // autoRefreshToken: true の場合、内部処理を信頼してタイムアウトなしで待つ
+      console.log('[Auth] Calling supabase.auth.getSession()...')
+      console.log('[Auth] supabase.auth exists:', !!supabase.auth)
+      console.log('[Auth] supabase.auth.getSession exists:', typeof supabase.auth.getSession)
+
+      const startTime = Date.now()
+
+      // タイムアウトなしでgetSessionを実行（Supabaseの内部処理を信頼）
+      const result = await supabase.auth.getSession()
+      const endTime = Date.now()
+      console.log('[Auth] getSession completed in', endTime - startTime, 'ms')
+
+      const session = result.data.session
+      const sessionError = result.error
+
+      console.log('[Auth] getSession result - session:', session ? 'exists' : 'null', 'error:', sessionError)
+
+      if (sessionError || !session?.user) {
+        console.log('[Auth] No session found')
+        return null
+      }
+
+      // セッションが見つかった場合、プロフィール取得
+      console.log('[Auth] Session found, fetching profile...')
+      const user = session.user
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      const isAnonymous = user.app_metadata?.provider === 'anonymous' ||
+                          user.is_anonymous === true
+
+      console.log('[Auth] getCurrentUser success, userCode:', profile?.user_code)
+      return {
+        id: user.id,
+        email: user.email,
+        userCode: profile?.user_code || null,
+        isAnonymous,
+        profile
+      }
+    } catch (err) {
+      console.error('[Auth] getSession threw an error:', err)
       return null
     }
+  },
+
+  // 現在のユーザー取得（セッションから）- 内部用
+  async _getCurrentUserFromSession(): Promise<AuthUser | null> {
+    const supabase = getSupabase()
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return null
+
+    const user = session.user
 
     // プロフィール取得
     const { data: profile } = await supabase
@@ -58,10 +128,181 @@ export const authService = {
       .eq('id', user.id)
       .single()
 
+    // 匿名ユーザーかどうかを判定
+    const isAnonymous = user.app_metadata?.provider === 'anonymous' ||
+                        user.is_anonymous === true
+
     return {
       id: user.id,
       email: user.email,
+      userCode: profile?.user_code || null,
+      isAnonymous,
       profile
+    }
+  },
+
+  // 古いgetCurrentUser（参考用・削除予定）
+  async getCurrentUserOld(): Promise<AuthUser | null> {
+    console.log('[Auth] getCurrentUser called')
+    const supabase = getSupabase()
+
+    // getSession() はローカルストレージから取得するため高速
+    console.log('[Auth] Calling supabase.auth.getSession()...')
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    console.log('[Auth] getSession result - session:', session ? 'exists' : 'null', 'error:', sessionError)
+
+    if (sessionError || !session?.user) {
+      console.log('[Auth] No session found')
+      return null
+    }
+
+    const user = session.user
+
+    // プロフィール取得
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    // 匿名ユーザーかどうかを判定
+    const isAnonymous = user.app_metadata?.provider === 'anonymous' ||
+                        user.is_anonymous === true
+
+    return {
+      id: user.id,
+      email: user.email,
+      userCode: profile?.user_code || null,
+      isAnonymous,
+      profile
+    }
+  },
+
+  // 匿名サインイン（新規ユーザー作成）
+  async signInAnonymously(): Promise<AuthResult<AuthUser>> {
+    console.log('[Auth] signInAnonymously called')
+    const supabase = getSupabase()
+
+    console.log('[Auth] Calling supabase.auth.signInAnonymously()...')
+
+    const startTime = Date.now()
+    const { data: authData, error: authError } = await supabase.auth.signInAnonymously()
+    const endTime = Date.now()
+
+    console.log('[Auth] signInAnonymously completed in', endTime - startTime, 'ms')
+    console.log('[Auth] signInAnonymously user:', authData?.user ? 'created' : 'null')
+    console.log('[Auth] error from response:', authError)
+
+    if (authError) {
+      console.error('[Auth] Anonymous sign in error:', authError)
+      return {
+        success: false,
+        error: '匿名ログインに失敗しました'
+      }
+    }
+
+    if (!authData.user) {
+      return {
+        success: false,
+        error: 'ユーザー作成に失敗しました'
+      }
+    }
+
+    // プロフィール作成（user_codeはトリガーで自動生成）
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        display_name: 'ゲスト',
+        tutorial_completed: false
+      })
+      .select()
+      .single()
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError)
+      // プロフィール作成失敗の場合は既存プロフィールを取得
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single()
+
+      return {
+        success: true,
+        data: {
+          id: authData.user.id,
+          email: undefined,
+          userCode: existingProfile?.user_code || null,
+          isAnonymous: true,
+          profile: existingProfile
+        }
+      }
+    }
+
+    console.log('[Auth] Anonymous user created with code:', profile.user_code)
+
+    return {
+      success: true,
+      data: {
+        id: authData.user.id,
+        email: undefined,
+        userCode: profile.user_code,
+        isAnonymous: true,
+        profile
+      }
+    }
+  },
+
+  // 認証を保証（未認証なら匿名ログイン）
+  async ensureAuthenticated(): Promise<AuthUser | null> {
+    console.log('[Auth] ensureAuthenticated called')
+    // まず既存のセッションを確認
+    console.log('[Auth] Checking for existing user...')
+    const currentUser = await this.getCurrentUser()
+    console.log('[Auth] getCurrentUser result:', currentUser)
+    if (currentUser) {
+      console.log('[Auth] Existing user found:', currentUser.userCode)
+      return currentUser
+    }
+
+    // 未認証なら匿名ログイン
+    console.log('[Auth] No session, signing in anonymously...')
+    const result = await this.signInAnonymously()
+    console.log('[Auth] signInAnonymously result:', result)
+    if (result.success && result.data) {
+      return result.data
+    }
+
+    console.error('[Auth] Failed to ensure authentication')
+    return null
+  },
+
+  // ユーザーコードで検索
+  async searchUserByCode(userCode: string): Promise<UserSearchResult | null> {
+    const supabase = getSupabase()
+
+    // 6桁の数字かどうかチェック
+    if (!/^\d{6}$/.test(userCode)) {
+      return null
+    }
+
+    const { data, error } = await supabase
+      .rpc('search_user_by_code', { p_user_code: userCode })
+
+    if (error || !data || data.length === 0) {
+      return null
+    }
+
+    const user = data[0]
+    return {
+      id: user.id,
+      userCode: user.user_code,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      totalStickers: user.total_stickers || 0,
+      totalTrades: user.total_trades || 0
     }
   },
 
@@ -131,6 +372,8 @@ export const authService = {
       data: {
         id: authData.user.id,
         email: authData.user.email,
+        userCode: profile?.user_code || null,
+        isAnonymous: false,
         profile
       }
     }
@@ -171,6 +414,8 @@ export const authService = {
       data: {
         id: authData.user.id,
         email: authData.user.email,
+        userCode: profile?.user_code || null,
+        isAnonymous: false,
         profile
       }
     }
@@ -272,7 +517,7 @@ export const authService = {
     const supabase = getSupabase()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event: string, session: { user: { id: string; email?: string } } | null) => {
+      async (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } } } | null) => {
         if (session?.user) {
           const { data: profile } = await supabase
             .from('profiles')
@@ -280,9 +525,14 @@ export const authService = {
             .eq('id', session.user.id)
             .single()
 
+          const isAnonymous = session.user.app_metadata?.provider === 'anonymous' ||
+                              session.user.is_anonymous === true
+
           callback({
             id: session.user.id,
             email: session.user.email,
+            userCode: profile?.user_code || null,
+            isAnonymous,
             profile
           })
         } else {
@@ -292,6 +542,117 @@ export const authService = {
     )
 
     return () => subscription.unsubscribe()
+  },
+
+  // ============================================
+  // アカウント連携（データ引き継ぎ用）
+  // ============================================
+
+  // Googleアカウントを連携（匿名→永続ユーザーへ変換）
+  async linkGoogleAccount(): Promise<AuthResult> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      console.error('Link Google account error:', error)
+      return {
+        success: false,
+        error: 'Googleアカウント連携に失敗しました'
+      }
+    }
+
+    return { success: true }
+  },
+
+  // Appleアカウントを連携（iOS向け）
+  async linkAppleAccount(): Promise<AuthResult> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: 'apple',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      console.error('Link Apple account error:', error)
+      return {
+        success: false,
+        error: 'Appleアカウント連携に失敗しました'
+      }
+    }
+
+    return { success: true }
+  },
+
+  // Googleでサインイン（データ復元用）
+  async signInWithGoogle(): Promise<AuthResult> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      console.error('Sign in with Google error:', error)
+      return {
+        success: false,
+        error: 'Googleログインに失敗しました'
+      }
+    }
+
+    return { success: true }
+  },
+
+  // Appleでサインイン（データ復元用）
+  async signInWithApple(): Promise<AuthResult> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+
+    if (error) {
+      console.error('Sign in with Apple error:', error)
+      return {
+        success: false,
+        error: 'Appleログインに失敗しました'
+      }
+    }
+
+    return { success: true }
+  },
+
+  // 連携済みプロバイダーを取得
+  async getLinkedProviders(): Promise<string[]> {
+    const supabase = getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return []
+
+    // identitiesから連携済みプロバイダーを抽出
+    const providers = user.identities?.map(identity => identity.provider) || []
+    return providers
+  },
+
+  // アカウント連携済みかどうか
+  async isAccountLinked(): Promise<boolean> {
+    const providers = await this.getLinkedProviders()
+    // anonymous以外のプロバイダーがあれば連携済み
+    return providers.some(p => p !== 'anonymous')
   }
 }
 
