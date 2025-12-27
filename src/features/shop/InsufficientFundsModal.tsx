@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import { getRemainingAdWatches, UserMonetization } from '@/domain/monetization'
+import { getRemainingAdWatches, UserMonetization, GACHA_COSTS } from '@/domain/monetization'
 
-type FundType = 'tickets' | 'stars'
+type FundType = 'tickets' | 'gems' | 'stars'
 
 interface InsufficientFundsModalProps {
   isOpen: boolean
@@ -11,6 +11,11 @@ interface InsufficientFundsModalProps {
   required: number
   current: number
   userMonetization: UserMonetization
+  // どろっぷで代替可能な場合の情報
+  canUseDropsInstead?: boolean
+  dropsRequired?: number
+  // コールバック
+  onUseDrops?: () => void  // どろっぷで引く
   onWatchAd: () => void
   onBuyStars: () => void
   onSubscribe: () => void
@@ -23,6 +28,9 @@ export function InsufficientFundsModal({
   required,
   current,
   userMonetization,
+  canUseDropsInstead = false,
+  dropsRequired = 0,
+  onUseDrops,
   onWatchAd,
   onBuyStars,
   onSubscribe,
@@ -33,6 +41,24 @@ export function InsufficientFundsModal({
   const shortage = required - current
   const remainingAds = getRemainingAdWatches(userMonetization)
   const canWatchAds = remainingAds > 0 && fundType === 'tickets'
+
+  // 通貨名を取得
+  const getCurrencyName = (type: FundType) => {
+    switch (type) {
+      case 'tickets': return 'シルチケ'
+      case 'gems': return 'プレシル'
+      case 'stars': return 'どろっぷ'
+    }
+  }
+
+  // 通貨アイコンを取得
+  const getCurrencyIcon = (type: FundType) => {
+    switch (type) {
+      case 'tickets': return '🎫'
+      case 'gems': return '💎'
+      case 'stars': return '💧'
+    }
+  }
 
   return (
     <div
@@ -51,15 +77,17 @@ export function InsufficientFundsModal({
         <div
           className="px-4 py-4 text-center"
           style={{
-            background: 'linear-gradient(90deg, #F87171 0%, #FBBF24 100%)',
+            background: fundType === 'gems'
+              ? 'linear-gradient(90deg, #8B5CF6 0%, #EC4899 100%)'
+              : 'linear-gradient(90deg, #F87171 0%, #FBBF24 100%)',
           }}
         >
-          <div className="text-3xl mb-1">!</div>
+          <div className="text-3xl mb-1">{getCurrencyIcon(fundType)}</div>
           <h2
             className="text-white font-bold text-lg"
             style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
           >
-            {fundType === 'tickets' ? 'シルチケがたりないよ' : 'どろっぷがたりないよ'}
+            {getCurrencyName(fundType)}がたりないよ
           </h2>
         </div>
 
@@ -87,12 +115,49 @@ export function InsufficientFundsModal({
             </div>
             <p className="text-sm text-red-400">
               あと <span className="font-bold">{shortage}</span>
-              {fundType === 'tickets' ? 'シルチケ' : 'どろっぷ'} たりないよ
+              {getCurrencyName(fundType)} たりないよ
             </p>
           </div>
 
           {/* 選択肢 */}
           <div className="space-y-3">
+            {/* どろっぷで引く（チケット/プレシル不足時、どろっぷ残高がある場合） */}
+            {canUseDropsInstead && onUseDrops && (fundType === 'tickets' || fundType === 'gems') && (
+              <button
+                onClick={onUseDrops}
+                className="w-full p-3 rounded-xl text-left flex items-center gap-3 active:scale-[0.98] transition-all relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+                  border: '3px solid #F59E0B',
+                  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                }}
+              >
+                {/* おすすめバッジ */}
+                <div
+                  className="absolute top-0 right-0 px-2 py-0.5 text-[10px] font-bold text-white rounded-bl-lg"
+                  style={{ background: 'linear-gradient(90deg, #F59E0B 0%, #EF4444 100%)' }}
+                >
+                  おすすめ！
+                </div>
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl"
+                  style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)' }}
+                >
+                  💧
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-amber-800 text-base">どろっぷで ひく</p>
+                  <p className="text-xs text-amber-600">
+                    {dropsRequired}どろっぷ でガチャがひけるよ！
+                  </p>
+                  <p className="text-[10px] text-amber-500 mt-0.5">
+                    いまの どろっぷ: {userMonetization.stars.toLocaleString()}
+                  </p>
+                </div>
+                <span className="text-amber-600 font-bold text-lg shrink-0">→</span>
+              </button>
+            )}
+
             {/* 広告を見る（チケット不足時のみ） */}
             {canWatchAds && (
               <button
@@ -109,47 +174,43 @@ export function InsufficientFundsModal({
                 >
                   ▷
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="font-bold text-green-700">こうこくを みる</p>
-                  <p className="text-xs text-green-600">
-                    のこり{remainingAds}かい +1シルチケ
+                  <p className="text-[10px] text-green-600">
+                    のこり{remainingAds}かい／+1シルチケ
                   </p>
                 </div>
-                <span className="text-green-600 font-bold">むりょう</span>
+                <span className="text-green-600 font-bold text-sm shrink-0">むりょう</span>
               </button>
             )}
 
-            {/* どろっぷを買う / どろっぷでガチャを引く */}
-            <button
-              onClick={onBuyStars}
-              className="w-full p-3 rounded-xl text-left flex items-center gap-3 active:scale-[0.98] transition-all"
-              style={{
-                background: fundType === 'tickets'
-                  ? 'linear-gradient(135deg, #FEF9C3 0%, #FDE68A 100%)'
-                  : 'linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%)',
-                border: fundType === 'tickets' ? '2px solid #F59E0B' : '2px solid #8B5CF6',
-              }}
-            >
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white"
-                style={{ background: fundType === 'tickets' ? '#F59E0B' : '#8B5CF6' }}
+            {/* どろっぷを買う（どろっぷ不足の場合、または代替できない場合） */}
+            {(fundType === 'stars' || !canUseDropsInstead) && (
+              <button
+                onClick={onBuyStars}
+                className="w-full p-3 rounded-xl text-left flex items-center gap-3 active:scale-[0.98] transition-all"
+                style={{
+                  background: 'linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%)',
+                  border: '2px solid #8B5CF6',
+                }}
               >
-                💧
-              </div>
-              <div className="flex-1">
-                <p className={`font-bold ${fundType === 'tickets' ? 'text-amber-700' : 'text-purple-700'}`}>
-                  {fundType === 'tickets' ? 'どろっぷで ひく' : 'どろっぷを かう'}
-                </p>
-                <p className={`text-xs ${fundType === 'tickets' ? 'text-amber-600' : 'text-purple-600'}`}>
-                  {fundType === 'tickets'
-                    ? 'シルチケの かわりに どろっぷでひけるよ！'
-                    : 'どろっぷでガチャがひけるよ'}
-                </p>
-              </div>
-              <span className={fundType === 'tickets' ? 'text-amber-600 font-bold' : 'text-purple-600'}>
-                {fundType === 'tickets' ? 'おすすめ' : '→'}
-              </span>
-            </button>
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                  style={{ background: '#8B5CF6' }}
+                >
+                  💧
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-purple-700">どろっぷを かう</p>
+                  <p className="text-[10px] text-purple-600">
+                    {fundType === 'stars'
+                      ? 'どろっぷでガチャがひけるよ'
+                      : 'どろっぷを買ってガチャをひこう'}
+                  </p>
+                </div>
+                <span className="text-purple-600 text-sm shrink-0">→</span>
+              </button>
+            )}
 
             {/* パスに入る */}
             {userMonetization.subscription === 'none' && (
@@ -157,25 +218,25 @@ export function InsufficientFundsModal({
                 onClick={onSubscribe}
                 className="w-full p-3 rounded-xl text-left flex items-center gap-3 active:scale-[0.98] transition-all"
                 style={{
-                  background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
-                  border: '2px solid #F59E0B',
+                  background: 'linear-gradient(135deg, #FDF4FF 0%, #FAE8FF 100%)',
+                  border: '2px solid #D946EF',
                 }}
               >
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white"
                   style={{
-                    background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)',
+                    background: 'linear-gradient(135deg, #D946EF 0%, #EC4899 100%)',
                   }}
                 >
                   ★
                 </div>
-                <div className="flex-1">
-                  <p className="font-bold text-amber-700">パスに はいる</p>
-                  <p className="text-xs text-amber-600">
-                    まいにち シルチケ＆どろっぷがもらえる！
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-purple-700">パスに はいる</p>
+                  <p className="text-[10px] text-purple-600">
+                    毎日シルチケ＆どろっぷがもらえてお得！
                   </p>
                 </div>
-                <span className="text-amber-600 font-bold">おとく</span>
+                <span className="text-purple-600 font-bold text-sm shrink-0">おとく</span>
               </button>
             )}
           </div>

@@ -1,6 +1,7 @@
 // ガチャサービス - シールガチャの排出ロジック
 import { getSupabase } from '@/services/supabase'
 import { stickerService, type UserStickerWithDetails } from '@/services/stickers'
+import { dailyMissionService } from '@/services/dailyMissions'
 import type { Sticker } from '@/types/database'
 
 export type GachaType = 'normal' | 'premium' | 'event' | 'collab'
@@ -96,6 +97,9 @@ export const gachaService = {
       sticker_id: selectedSticker.id
     })
 
+    // デイリーミッション進捗を更新
+    await dailyMissionService.updateProgress(userId, 'gacha', 1)
+
     return {
       sticker: selectedSticker,
       userSticker,
@@ -145,6 +149,9 @@ export const gachaService = {
     if (!userSticker) {
       return null
     }
+
+    // デイリーミッション進捗を更新
+    await dailyMissionService.updateProgress(userId, 'gacha', 1)
 
     return {
       sticker: selectedSticker,

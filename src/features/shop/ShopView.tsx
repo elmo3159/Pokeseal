@@ -36,39 +36,6 @@ export function ShopView({
       className="h-full flex flex-col"
       style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
     >
-      {/* ヘッダー：所持通貨 */}
-      <div
-        className="px-4 py-3 flex items-center justify-between"
-        style={{
-          background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
-        }}
-      >
-        <h1 className="text-white font-bold text-lg">ショップ</h1>
-        <div className="flex items-center gap-2">
-          {/* シルチケ */}
-          <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-1">
-            <span className="text-pink-200 text-xs">🎫</span>
-            <span className="text-white font-bold text-xs">
-              {userMonetization.tickets}
-            </span>
-          </div>
-          {/* プレシル */}
-          <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-1">
-            <span className="text-blue-200 text-xs">💎</span>
-            <span className="text-white font-bold text-xs">
-              {userMonetization.gems}
-            </span>
-          </div>
-          {/* どろっぷ */}
-          <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-1">
-            <span className="text-yellow-300 text-xs">💧</span>
-            <span className="text-white font-bold text-xs">
-              {userMonetization.stars.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* サブスク状態表示 */}
       {userMonetization.subscription !== 'none' && (
         <div

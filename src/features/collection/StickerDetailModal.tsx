@@ -2,110 +2,80 @@
 
 import React from 'react'
 import type { CollectionSticker } from './CollectionView'
-import { RankEffectOverlay } from '@/components'
-import {
-  RankLevel,
-  calculateRank,
-  getRankProgress,
-  getNextRankRequirement,
-  convertToStarPoints,
-  rankNamesKids,
-  getRankGradient
-} from '@/domain/stickerRank'
+import { RankStars } from '@/components/upgrade'
+import { UPGRADE_RANKS, RANK_NAMES, UPGRADE_REQUIREMENTS } from '@/constants/upgradeRanks'
+import type { UpgradeRank } from '@/constants/upgradeRanks'
+import { calculateStickerPoints } from '@/domain/stickerRank'
 
 interface StickerDetailModalProps {
   sticker: CollectionSticker | null
   isOpen: boolean
   onClose: () => void
-  onConvertToPoints?: (sticker: CollectionSticker) => void
+  onUpgrade?: (sticker: CollectionSticker) => void
 }
 
-// レアリティの星表示
-const RarityStars: React.FC<{ rarity: number; size?: 'sm' | 'md' | 'lg' }> = ({ rarity, size = 'md' }) => {
-  const sizes = {
-    sm: '14px',
-    md: '20px',
-    lg: '24px'
+// アップグレード進捗表示
+const UpgradeProgress: React.FC<{ quantity: number; currentUpgradeRank: UpgradeRank }> = ({ quantity, currentUpgradeRank }) => {
+  // 次のランクへのアップグレード情報を取得
+  const getNextUpgradeInfo = () => {
+    if (currentUpgradeRank === UPGRADE_RANKS.PRISM) {
+      return { canUpgrade: false, message: 'プリズムランク達成！', needed: 0, have: 0 }
+    }
+
+    // 次のランクを計算
+    const nextRank = (currentUpgradeRank + 1) as 1 | 2 | 3
+
+    // UPGRADE_REQUIREMENTSには1,2,3のみ存在（0=NORMALはアップグレード元なので含まれない）
+    const requirement = UPGRADE_REQUIREMENTS[nextRank]
+
+    if (!requirement) {
+      return { canUpgrade: false, message: '', needed: 0, have: 0 }
+    }
+
+    // 現在のランクのシールの数をチェック
+    // quantity は現在のランクのシールの数（ノーマルなら quantity がそのまま使える）
+    const canUpgrade = quantity >= requirement.count
+    const neededMore = Math.max(0, requirement.count - quantity)
+
+    return {
+      canUpgrade,
+      message: canUpgrade
+        ? `${RANK_NAMES[nextRank as UpgradeRank]}にアップグレード可能！`
+        : `${RANK_NAMES[nextRank as UpgradeRank]}まであと ${neededMore} 枚`,
+      needed: requirement.count,
+      have: quantity
+    }
+  }
+
+  const info = getNextUpgradeInfo()
+
+  if (currentUpgradeRank === UPGRADE_RANKS.PRISM) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '8px' }}>
+        <span style={{
+          fontSize: '12px',
+          fontWeight: 'bold',
+          background: 'linear-gradient(90deg, #ff6b6b, #ffe66d, #4ecdc4, #a78bfa, #ff6b9d)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}>
+          ✨ プリズムランク達成！ ✨
+        </span>
+      </div>
+    )
   }
 
   return (
-    <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            fontSize: sizes[size],
-            color: i < rarity ? '#FBBF24' : '#D1D5DB',
-          }}
-        >
-          ★
-        </span>
-      ))}
-    </div>
-  )
-}
-
-// ランクメーター（新しいドメイン関数を使用）
-const RankMeter: React.FC<{ totalAcquired: number }> = ({ totalAcquired }) => {
-  const currentRank = calculateRank(totalAcquired) as RankLevel
-  const isMax = currentRank >= 5
-  const progress = getRankProgress(totalAcquired)
-  const nextReq = getNextRankRequirement(currentRank, totalAcquired)
-  const rankGradient = getRankGradient(currentRank)
-
-  // グラデーント文字列をCSSに変換
-  const gradientMap: Record<string, string> = {
-    'from-gray-400 to-gray-500': 'linear-gradient(to right, #9CA3AF, #6B7280)',
-    'from-green-400 to-green-500': 'linear-gradient(to right, #4ADE80, #22C55E)',
-    'from-blue-400 to-blue-500': 'linear-gradient(to right, #60A5FA, #3B82F6)',
-    'from-purple-400 to-purple-500': 'linear-gradient(to right, #C084FC, #A855F7)',
-    'from-yellow-400 via-orange-400 to-pink-400': 'linear-gradient(to right, #FBBF24, #FB923C, #F472B6)',
-  }
-  const bgGradient = gradientMap[rankGradient] || 'linear-gradient(to right, #9CA3AF, #6B7280)'
-
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED' }}>ランク</span>
-        <span
-          style={{
-            paddingLeft: '12px',
-            paddingRight: '12px',
-            paddingTop: '4px',
-            paddingBottom: '4px',
-            borderRadius: '9999px',
-            fontWeight: 'bold',
-            fontSize: '14px',
-            background: bgGradient,
-            color: currentRank >= 4 ? '#000' : '#fff',
-          }}
-        >
-          {rankNamesKids[currentRank]}
-        </span>
-      </div>
-      <div style={{ height: '12px', background: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden' }}>
-        <div
-          style={{
-            height: '100%',
-            borderRadius: '9999px',
-            background: bgGradient,
-            transition: 'all 0.5s',
-            width: `${progress}%`,
-          }}
-        />
-      </div>
-      {!isMax && nextReq !== null && (
-        <p style={{ fontSize: '12px', color: '#8B5CF6', marginTop: '4px', textAlign: 'center' }}>
-          つぎのランクまであと {nextReq} まい
-        </p>
-      )}
-      {isMax && (
-        <div style={{ textAlign: 'center', marginTop: '4px' }}>
-          <span style={{ fontSize: '12px', color: '#EC4899', fontWeight: 'bold' }}>
-            🎉 ランクMAXたっせい！ 🎉
-          </span>
-        </div>
-      )}
+    <div style={{ marginTop: '8px' }}>
+      <p style={{
+        fontSize: '12px',
+        textAlign: 'center',
+        color: info.canUpgrade ? '#22C55E' : '#8B5CF6',
+        fontWeight: info.canUpgrade ? 'bold' : 'normal'
+      }}>
+        {info.message}
+      </p>
     </div>
   )
 }
@@ -141,17 +111,28 @@ const TypeBadge: React.FC<{ type: 'normal' | 'puffy' | 'sparkle' }> = ({ type })
   )
 }
 
-// シールプレビュー（ランクエフェクト対応）
+// シールプレビュー（シンプル版 - バッジなし）
 const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => {
-  const { type, imageUrl, owned, totalAcquired } = sticker
-
-  // ランクを計算
-  const actualRank = (totalAcquired ? calculateRank(totalAcquired) : 1) as RankLevel
+  const { type, imageUrl, owned, upgradeRank = 0 } = sticker
 
   // ぷっくりシール用のシャドウ
   const puffyShadow = type === 'puffy' ? '0 8px 24px rgba(107, 63, 160, 0.3)' : undefined
 
-  const previewContent = (
+  // アップグレードランクに応じたボーダー色
+  const getBorderColor = () => {
+    switch (upgradeRank) {
+      case UPGRADE_RANKS.SILVER:
+        return '#C0C0C0'
+      case UPGRADE_RANKS.GOLD:
+        return '#FFD700'
+      case UPGRADE_RANKS.PRISM:
+        return '#A78BFA'
+      default:
+        return '#D8B4FE'
+    }
+  }
+
+  return (
     <div
       style={{
         position: 'relative',
@@ -162,7 +143,7 @@ const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) =
         borderRadius: '16px',
         overflow: 'hidden',
         background: owned ? '#FFFFFF' : '#E5E7EB',
-        border: owned ? '4px solid #D8B4FE' : '4px solid #D1D5DB',
+        border: owned ? `4px solid ${getBorderColor()}` : '4px solid #D1D5DB',
         boxShadow: puffyShadow,
       }}
     >
@@ -228,38 +209,21 @@ const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) =
       )}
     </div>
   )
-
-  // 所持している場合はランクエフェクトを適用
-  if (owned && actualRank > 0) {
-    return (
-      <RankEffectOverlay rank={actualRank} size="lg" showBadge={false}>
-        {previewContent}
-      </RankEffectOverlay>
-    )
-  }
-
-  return previewContent
 }
 
 export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
   sticker,
   isOpen,
   onClose,
-  onConvertToPoints
+  onUpgrade
 }) => {
   if (!isOpen || !sticker) return null
 
-  const handleOpenConvert = () => {
-    if (onConvertToPoints && sticker.owned && sticker.quantity > 0) {
-      onConvertToPoints(sticker)
+  const handleOpenUpgrade = () => {
+    if (onUpgrade && sticker.owned) {
+      onUpgrade(sticker)
     }
   }
-
-  // スターポイント計算（レアリティに基づく - ドメイン関数を使用）
-  const pointsPerSticker = convertToStarPoints(sticker.rarity as 1|2|3|4|5, 1)
-
-  // 累計獲得数（totalAcquiredがない場合はquantityをフォールバック）
-  const totalAcquired = sticker.totalAcquired || sticker.quantity || 1
 
   return (
     <div style={{
@@ -323,7 +287,13 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
         </button>
 
         {/* ヘッダー背景 */}
-        <div style={{ height: '96px', background: 'linear-gradient(to right, #C084FC, #F472B6)' }} />
+        <div style={{
+          height: '96px',
+          backgroundImage: 'url(/images/Header_UI.png)',
+          backgroundSize: '100% auto',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+        }} />
 
         {/* コンテンツ */}
         <div style={{ paddingLeft: '24px', paddingRight: '24px', paddingBottom: '24px', marginTop: '-64px' }}>
@@ -341,22 +311,56 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
           </p>
 
           {/* レアリティと種類 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <RarityStars rarity={sticker.rarity} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px' }}>
+            <RankStars
+              baseRarity={sticker.rarity}
+              upgradeRank={(sticker.upgradeRank ?? 0) as UpgradeRank}
+              size="md"
+              showAnimation={false}
+            />
             <TypeBadge type={sticker.type} />
+          </div>
+
+          {/* レートポイント */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            marginBottom: '16px',
+            padding: '8px 16px',
+            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+            borderRadius: '20px',
+            border: '2px solid #F59E0B',
+            width: 'fit-content',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            <span style={{ fontSize: '16px' }}>💰</span>
+            <span style={{
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: '#B45309',
+            }}>
+              {calculateStickerPoints(sticker.rarity, sticker.upgradeRank ?? 0)} pt
+            </span>
+            <span style={{ fontSize: '11px', color: '#92400E' }}>（こうかんレート）</span>
           </div>
 
           {sticker.owned ? (
             <>
               {/* 所持情報 */}
               <div style={{ background: '#FAF5FF', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED' }}>もっている枚数</span>
                   <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#9333EA' }}>{sticker.quantity} 枚</span>
                 </div>
 
-                {/* ランクメーター */}
-                <RankMeter totalAcquired={totalAcquired} />
+                {/* アップグレード進捗表示 */}
+                <UpgradeProgress
+                  quantity={sticker.quantity}
+                  currentUpgradeRank={(sticker.upgradeRank ?? 0) as UpgradeRank}
+                />
               </div>
 
               {/* 初入手日 */}
@@ -366,34 +370,37 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
                 </p>
               )}
 
-              {/* スターポイント変換ボタン */}
-              {sticker.quantity > 0 && onConvertToPoints && (
-                <div style={{ borderTop: '1px solid #E9D5FF', paddingTop: '16px' }}>
+              
+              {/* アップグレードボタン */}
+              {onUpgrade && (
+                <div style={{ marginBottom: '12px' }}>
                   <button
-                    onClick={handleOpenConvert}
+                    onClick={handleOpenUpgrade}
                     style={{
                       width: '100%',
                       paddingTop: '12px',
                       paddingBottom: '12px',
                       borderRadius: '12px',
-                      background: 'linear-gradient(to right, #FBBF24, #FB923C)',
+                      background: 'linear-gradient(135deg, #8B5A3C 0%, #D4A574 50%, #8B5A3C 100%)',
                       color: 'white',
                       fontWeight: 'bold',
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      boxShadow: '0 4px 12px rgba(139, 90, 60, 0.3)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      border: 'none',
+                      border: '2px solid #5C3D2E',
                       cursor: 'pointer',
+                      fontSize: '16px',
                     }}
                   >
-                    <span>⭐</span>
-                    <span>ポイントにかえる</span>
-                    <span style={{ fontSize: '12px', opacity: 0.8 }}>（1枚 {pointsPerSticker} SP〜）</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="#FFD700" stroke="#DAA520" strokeWidth="1"/>
+                    </svg>
+                    <span>アップグレード</span>
                   </button>
-                  <p style={{ fontSize: '12px', textAlign: 'center', color: '#A78BFA', marginTop: '8px' }}>
-                    ※ランクは下がりません
+                  <p style={{ fontSize: '11px', textAlign: 'center', color: '#A67C52', marginTop: '6px' }}>
+                    同じシールを合成してランクアップ！
                   </p>
                 </div>
               )}

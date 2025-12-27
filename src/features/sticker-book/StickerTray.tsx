@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { StickerCard } from '@/components/ui/Card'
 
 // シールの型定義
@@ -13,6 +13,7 @@ export interface Sticker {
   series?: string
   gachaWeight?: number // ガチャ排出重み（低いほどレア）
   baseRate?: number    // 交換レート基準値
+  upgradeRank?: number // アップグレードランク（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
 }
 
 interface StickerTrayProps {
@@ -30,6 +31,11 @@ const COLLAPSED_HEIGHT = 130 // コンパクト表示（画像のみ）の高さ
 const EXPANDED_HEIGHT_VH = 75 // 画面の75%
 const DEFAULT_EXPANDED_HEIGHT = 500 // SSR時のデフォルト値
 
+// パフォーマンス設定
+const INITIAL_DISPLAY_COUNT = 40 // 初期表示数
+const LOAD_MORE_COUNT = 40 // 追加読み込み数
+const COLLAPSED_DISPLAY_COUNT = 20 // 縮小時の表示数
+
 export function StickerTray({
   stickers,
   onStickerSelect,
@@ -39,6 +45,9 @@ export function StickerTray({
   const [rarityFilter, setRarityFilter] = useState<RarityFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // パフォーマンス改善: 表示数の制限
+  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT)
 
   // ドラッグ関連の状態
   const [isDragging, setIsDragging] = useState(false)
@@ -70,11 +79,32 @@ export function StickerTray({
   }, [])
 
   // フィルタリング
-  const filteredStickers = stickers.filter((sticker) => {
-    if (rarityFilter !== 'all' && sticker.rarity !== rarityFilter) return false
-    if (typeFilter !== 'all' && sticker.type !== typeFilter) return false
-    return true
-  })
+  const filteredStickers = useMemo(() => {
+    return stickers.filter((sticker) => {
+      if (rarityFilter !== 'all' && sticker.rarity !== rarityFilter) return false
+      if (typeFilter !== 'all' && sticker.type !== typeFilter) return false
+      return true
+    })
+  }, [stickers, rarityFilter, typeFilter])
+
+  // 表示するシール（パフォーマンス改善のため件数制限）
+  const displayedStickers = useMemo(() => {
+    const limit = isExpanded ? displayCount : COLLAPSED_DISPLAY_COUNT
+    return filteredStickers.slice(0, limit)
+  }, [filteredStickers, displayCount, isExpanded])
+
+  // さらに読み込めるか
+  const hasMore = displayCount < filteredStickers.length
+
+  // もっと読み込む
+  const handleLoadMore = useCallback(() => {
+    setDisplayCount(prev => Math.min(prev + LOAD_MORE_COUNT, filteredStickers.length))
+  }, [filteredStickers.length])
+
+  // フィルター変更時に表示数をリセット
+  useEffect(() => {
+    setDisplayCount(INITIAL_DISPLAY_COUNT)
+  }, [rarityFilter, typeFilter])
 
   // シール選択時にトレイを閉じる
   const handleStickerClick = (sticker: Sticker) => {
@@ -315,10 +345,11 @@ export function StickerTray({
         {/* シール一覧 */}
         <div
           ref={scrollRef}
-          className="px-4 pb-2 overflow-auto"
+          className="px-4 overflow-auto"
           style={{
             height: isExpanded ? 'calc(100% - 100px)' : 'calc(100% - 50px)',
             scrollbarWidth: 'thin',
+            paddingBottom: isExpanded ? '80px' : '8px',
           }}
         >
           {filteredStickers.length === 0 ? (
@@ -334,7 +365,7 @@ export function StickerTray({
           ) : isExpanded ? (
             // 展開時: グリッド表示
             <>
-              {/* 展開時の操作ヒント */}
+              {/* 展開時の操作ヒント + 件数表示 */}
               <div
                 className="flex items-center justify-center gap-2 pb-3 mb-2 border-b border-purple-200/30"
                 style={{
@@ -343,11 +374,13 @@ export function StickerTray({
                 }}
               >
                 <span className="text-lg">👇</span>
-                <span className="text-sm font-medium">はりたいシールをおしてね</span>
+                <span className="text-sm font-medium">
+                  はりたいシールをおしてね ({displayedStickers.length}/{filteredStickers.length}件)
+                </span>
                 <span className="text-lg">👇</span>
               </div>
               <div className="grid grid-cols-4 gap-3">
-              {filteredStickers.map((sticker) => (
+              {displayedStickers.map((sticker) => (
                 <div key={sticker.id} className="flex justify-center">
                   <StickerCard
                     imageUrl={sticker.imageUrl}
@@ -356,10 +389,28 @@ export function StickerTray({
                     onClick={() => handleStickerClick(sticker)}
                     selected={selectedStickerId === sticker.id}
                     size="sm"
+                    upgradeRank={sticker.upgradeRank}
                   />
                 </div>
               ))}
               </div>
+              {/* もっと読み込むボタン */}
+              {hasMore && (
+                <div className="flex justify-center py-4">
+                  <button
+                    onClick={handleLoadMore}
+                    className="px-6 py-2 rounded-full text-sm font-medium transition-all"
+                    style={{
+                      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                      background: 'linear-gradient(135deg, #A78BFA 0%, #F472B6 100%)',
+                      color: 'white',
+                      boxShadow: '0 4px 12px rgba(167, 139, 250, 0.3)',
+                    }}
+                  >
+                    もっとみる (+{Math.min(LOAD_MORE_COUNT, filteredStickers.length - displayCount)})
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             // 縮小時: 横スクロール（コンパクト表示）
@@ -369,7 +420,7 @@ export function StickerTray({
                 scrollSnapType: 'x mandatory',
               }}
             >
-              {filteredStickers.map((sticker) => (
+              {displayedStickers.map((sticker) => (
                 <div
                   key={sticker.id}
                   className="flex-shrink-0"
@@ -383,6 +434,7 @@ export function StickerTray({
                     selected={selectedStickerId === sticker.id}
                     size="xs"
                     compact={true}
+                    upgradeRank={sticker.upgradeRank}
                   />
                 </div>
               ))}

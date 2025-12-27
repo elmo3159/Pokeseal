@@ -38,26 +38,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        console.log('[AuthProvider] Initializing authentication...')
-        console.log('[AuthProvider] Calling ensureAuthenticated...')
         const authenticatedUser = await authService.ensureAuthenticated()
-        console.log('[AuthProvider] ensureAuthenticated returned:', authenticatedUser)
         setUser(authenticatedUser)
         if (authenticatedUser) {
-          console.log('[AuthProvider] User authenticated:', {
-            id: authenticatedUser.id,
-            userCode: authenticatedUser.userCode,
-            isAnonymous: authenticatedUser.isAnonymous,
-            displayName: authenticatedUser.profile?.display_name
-          })
           // 連携状態を取得
           await updateLinkedProviders()
         }
       } catch (error) {
         console.error('[AuthProvider] Auth initialization error:', error)
-        console.error('[AuthProvider] Error details:', JSON.stringify(error, null, 2))
       } finally {
-        console.log('[AuthProvider] Setting isLoading to false')
         setIsLoading(false)
       }
     }
@@ -66,7 +55,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // 認証状態の変更を監視
     const unsubscribe = authService.onAuthStateChange(async (newUser) => {
-      console.log('[AuthProvider] Auth state changed:', newUser?.userCode)
       setUser(newUser)
       if (newUser) {
         await updateLinkedProviders()

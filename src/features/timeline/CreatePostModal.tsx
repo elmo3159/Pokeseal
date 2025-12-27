@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { PlacedSticker } from '@/features/sticker-book'
 import { PlacedDecoItem } from '@/domain/decoItems'
 import { PostPageData } from './PostCard'
+import { StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
 
 // 投稿する対象のページ
 export interface StickerBookPage {
@@ -57,9 +60,9 @@ const PagePreviewMini: React.FC<{
         overflow: 'hidden',
         transition: 'all 0.2s',
         background: 'white',
-        boxShadow: isSelected ? '0 0 0 4px #8B5CF6, 0 0 0 6px white' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+        boxShadow: isSelected ? '0 0 0 4px #B8956B, 0 0 0 6px white' : '0 1px 3px rgba(0, 0, 0, 0.1)',
         transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-        border: isSelected ? 'none' : '2px solid #F3E8FF',
+        border: isSelected ? 'none' : '2px solid #E8D5C4',
         aspectRatio: '3/4',
         minHeight: '100px',
         cursor: 'pointer',
@@ -76,7 +79,7 @@ const PagePreviewMini: React.FC<{
                 position: 'absolute',
                 width: '33.33%',
                 height: '25%',
-                border: '1px solid #DDD6FE',
+                border: '1px solid #C4A484',
                 left: `${col * 33.33}%`,
                 top: `${row * 25}%`,
               }}
@@ -89,6 +92,7 @@ const PagePreviewMini: React.FC<{
       {page.placedStickers && page.placedStickers.length > 0 && (
         page.placedStickers.map((sticker) => {
           const stickerSize = 60 * (sticker.scale || 1) * previewScale
+          const upgradeRank = (sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
           return (
             <div
               key={sticker.id}
@@ -101,14 +105,17 @@ const PagePreviewMini: React.FC<{
                 width: `${stickerSize}px`,
                 height: `${stickerSize}px`,
                 zIndex: 40 + (sticker.zIndex || 1),
+                overflow: 'visible',
               }}
             >
-              <img
-                src={sticker.sticker.imageUrl}
-                alt={sticker.sticker.name}
-                style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
-                draggable={false}
-              />
+              <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                <img
+                  src={sticker.sticker.imageUrl}
+                  alt={sticker.sticker.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
+                  draggable={false}
+                />
+              </StickerAura>
             </div>
           )
         })
@@ -153,28 +160,28 @@ const PagePreviewMini: React.FC<{
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom right, #FDF8F5, #F5EDE6)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ fontSize: '24px', marginBottom: '4px' }}>📖</span>
-            <span style={{ fontSize: '10px', color: '#A78BFA' }}>空のページ</span>
+            <span style={{ fontSize: '10px', color: '#A67C52' }}>空のページ</span>
           </div>
         )
       )}
 
       {/* 選択マーク */}
       {isSelected && (
-        <div style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', background: '#8B5CF6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
+        <div style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', background: '#B8956B', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
           <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
         </div>
       )}
 
       {/* ページ番号 */}
-      <div style={{ position: 'absolute', bottom: '2px', left: '2px', paddingLeft: '4px', paddingRight: '4px', paddingTop: '2px', paddingBottom: '2px', background: 'rgba(0, 0, 0, 0.5)', borderRadius: '4px', color: 'white', fontSize: '10px' }}>
+      <div style={{ position: 'absolute', bottom: '2px', left: '2px', paddingLeft: '4px', paddingRight: '4px', paddingTop: '2px', paddingBottom: '2px', background: 'rgba(139, 90, 43, 0.8)', borderRadius: '4px', color: 'white', fontSize: '10px' }}>
         {page.pageNumber}
       </div>
 
       {/* シール数バッジ */}
       {page.placedStickers && page.placedStickers.length > 0 && (
-        <div style={{ position: 'absolute', top: '4px', left: '4px', paddingLeft: '6px', paddingRight: '6px', paddingTop: '2px', paddingBottom: '2px', background: '#EC4899', borderRadius: '9999px', color: 'white', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
+        <div style={{ position: 'absolute', top: '4px', left: '4px', paddingLeft: '6px', paddingRight: '6px', paddingTop: '2px', paddingBottom: '2px', background: '#C4956A', borderRadius: '9999px', color: 'white', fontSize: '10px', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}>
           {page.placedStickers.length}枚
         </div>
       )}
@@ -191,7 +198,7 @@ const PagePreviewLarge: React.FC<{
   const baseStickerSize = 60
 
   return (
-    <div style={{ aspectRatio: '4/3', borderRadius: '12px', overflow: 'hidden', background: 'white', border: '1px solid #F3E8FF', boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.06)' }}>
+    <div style={{ aspectRatio: '4/3', borderRadius: '12px', overflow: 'hidden', background: 'white', border: '2px solid #D4C4B0', boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.06)' }}>
       {/* グリッド線 */}
       <div style={{ position: 'relative', width: '100%', height: '100%' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.1, pointerEvents: 'none' }}>
@@ -203,7 +210,7 @@ const PagePreviewLarge: React.FC<{
                   position: 'absolute',
                   width: '25%',
                   height: '25%',
-                  border: '1px solid #DDD6FE',
+                  border: '1px solid #C4A484',
                   left: `${col * 25}%`,
                   top: `${row * 25}%`,
                 }}
@@ -216,6 +223,7 @@ const PagePreviewLarge: React.FC<{
         {page.placedStickers && page.placedStickers.length > 0 && (
           page.placedStickers.map((sticker) => {
             const stickerSize = baseStickerSize * (sticker.scale || 1)
+            const upgradeRank = (sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
             return (
               <div
                 key={sticker.id}
@@ -228,14 +236,17 @@ const PagePreviewLarge: React.FC<{
                   width: `${stickerSize}px`,
                   height: `${stickerSize}px`,
                   zIndex: 40 + (sticker.zIndex || 1),
+                  overflow: 'visible',
                 }}
               >
-                <img
-                  src={sticker.sticker.imageUrl}
-                  alt={sticker.sticker.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 3px rgba(0,0,0,0.07)) drop-shadow(0 2px 2px rgba(0,0,0,0.06))' }}
-                  draggable={false}
-                />
+                <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                  <img
+                    src={sticker.sticker.imageUrl}
+                    alt={sticker.sticker.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 3px rgba(0,0,0,0.07)) drop-shadow(0 2px 2px rgba(0,0,0,0.06))' }}
+                    draggable={false}
+                  />
+                </StickerAura>
               </div>
             )
           })
@@ -280,10 +291,10 @@ const PagePreviewLarge: React.FC<{
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
-            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to bottom right, #FAF5FF, #FCE7F3)' }}>
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to bottom right, #FDF8F5, #F5EDE6)' }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '48px', marginBottom: '8px' }}>📖</div>
-                <p style={{ color: '#A78BFA', fontSize: '14px' }}>シールを貼ってね！</p>
+                <p style={{ color: '#A67C52', fontSize: '14px' }}>シールを貼ってね！</p>
               </div>
             </div>
           )
@@ -311,8 +322,8 @@ const HashtagChip: React.FC<{
         fontSize: '14px',
         fontWeight: 500,
         transition: 'all 0.2s',
-        background: isSelected ? '#8B5CF6' : '#F3E8FF',
-        color: isSelected ? 'white' : '#7C3AED',
+        background: isSelected ? '#B8956B' : 'rgba(184, 149, 107, 0.15)',
+        color: isSelected ? 'white' : '#8B5A2B',
         border: 'none',
         cursor: 'pointer',
       }}
@@ -328,12 +339,28 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
   onClose,
   onSubmit
 }) => {
+  const [mounted, setMounted] = useState(false)
   const [step, setStep] = useState<'select' | 'edit'>('select')
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
   const [caption, setCaption] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [customTag, setCustomTag] = useState('')
   const [visibility, setVisibility] = useState<'public' | 'friends'>('public')
+
+  // クライアントサイドでマウント
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // モーダルが開いたときにスクロールを無効化
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
 
   // 選択中のページを取得
   const selectedPage = pages.find(p => p.id === selectedPageId)
@@ -407,9 +434,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     }
   }
 
-  if (!isOpen) return null
+  if (!mounted || !isOpen) return null
 
-  return (
+  const modalContent = (
     <div
       style={{
         position: 'fixed',
@@ -417,14 +444,14 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 50,
+        zIndex: 100000, // ImageEnlargeModalより高く設定
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
       }}
     >
-      {/* 背景オーバーレイ */}
+      {/* 背景オーバーレイ - 完全にクリックをブロック */}
       <div
         style={{
           position: 'absolute',
@@ -436,6 +463,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           backdropFilter: 'blur(4px)',
         }}
         onClick={handleClose}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       />
 
       {/* モーダル本体 */}
@@ -450,6 +479,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           overflow: 'hidden',
           fontFamily: "'M PLUS Rounded 1c', sans-serif",
         }}
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       >
         {/* ヘッダー */}
         <header style={{
@@ -458,21 +490,27 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           justifyContent: 'space-between',
           paddingLeft: '16px',
           paddingRight: '16px',
-          paddingTop: '12px',
-          paddingBottom: '12px',
-          borderBottom: '1px solid #F3F4F6',
-          background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)',
+          paddingTop: '10px',
+          paddingBottom: '14px',
+          backgroundImage: 'url(/images/Header_UI.png)',
+          backgroundSize: '100% 100%',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+          minHeight: '52px',
         }}>
           {step === 'edit' ? (
             <button
               onClick={handleBack}
               style={{
-                color: '#9333EA',
-                fontWeight: 500,
-                background: 'transparent',
+                color: '#FFFFFF',
+                fontWeight: 600,
+                background: 'rgba(255, 255, 255, 0.3)',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '14px',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                textShadow: '0 1px 2px rgba(157, 76, 108, 0.5)',
               }}
             >
               ← もどる
@@ -481,7 +519,12 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             <div style={{ width: '64px' }} />
           )}
 
-          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#7C3AED' }}>
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#FFFFFF',
+            textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)',
+          }}>
             {step === 'select' ? '📖 ページをえらぶ' : '✏️ とうこうする'}
           </h2>
 
@@ -494,12 +537,13 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: '50%',
-              background: 'transparent',
+              background: 'rgba(255, 255, 255, 0.8)',
               border: 'none',
               cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
             }}
           >
-            <span style={{ color: '#9CA3AF' }}>✕</span>
+            <span style={{ color: '#9D4C6C', fontWeight: 'bold' }}>✕</span>
           </button>
         </header>
 
@@ -508,14 +552,14 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
           {step === 'select' ? (
             // ページ選択ステップ
             <div>
-              <p style={{ fontSize: '14px', color: '#A78BFA', marginBottom: '16px', textAlign: 'center' }}>
+              <p style={{ fontSize: '14px', color: '#A67C52', marginBottom: '16px', textAlign: 'center' }}>
                 タイムラインに投稿したいページを選んでね！
               </p>
 
               {/* シールがあるページを優先表示 */}
               {pagesWithStickers.length > 0 && (
                 <div style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#9333EA', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#8B5A2B', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span>✨</span>
                     <span>シールが貼られたページ</span>
                   </h3>
@@ -535,7 +579,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               {/* 空のページ */}
               {emptyPages.length > 0 && (
                 <div>
-                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#A78BFA', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#A67C52', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span>📄</span>
                     <span>空のページ</span>
                   </h3>
@@ -555,10 +599,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
               {pages.length === 0 && (
                 <div style={{ textAlign: 'center', paddingTop: '32px', paddingBottom: '32px' }}>
                   <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
-                  <p style={{ color: '#A78BFA', fontSize: '14px' }}>
+                  <p style={{ color: '#8B5A2B', fontSize: '14px' }}>
                     まだページがありません
                   </p>
-                  <p style={{ color: '#C4B5FD', fontSize: '12px', marginTop: '4px' }}>
+                  <p style={{ color: '#A67C52', fontSize: '12px', marginTop: '4px' }}>
                     シールを貼ってから投稿しよう！
                   </p>
                 </div>
@@ -574,7 +618,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
               {/* キャプション入力 */}
               <div>
-                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#8B5A2B', marginBottom: '8px', display: 'block' }}>
                   💬 キャプション
                 </label>
                 <textarea
@@ -584,7 +628,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: '2px solid #E9D5FF',
+                    border: '2px solid #D4C4B0',
                     borderRadius: '12px',
                     fontSize: '14px',
                     resize: 'none',
@@ -593,14 +637,14 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                   rows={3}
                   maxLength={200}
                 />
-                <p style={{ fontSize: '12px', color: '#C4B5FD', textAlign: 'right', marginTop: '4px' }}>
+                <p style={{ fontSize: '12px', color: '#A67C52', textAlign: 'right', marginTop: '4px' }}>
                   {caption.length}/200
                 </p>
               </div>
 
               {/* ハッシュタグ選択 */}
               <div>
-                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#8B5A2B', marginBottom: '8px', display: 'block' }}>
                   🏷️ ハッシュタグ
                 </label>
 
@@ -619,7 +663,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                           paddingRight: '8px',
                           paddingTop: '4px',
                           paddingBottom: '4px',
-                          background: '#8B5CF6',
+                          background: '#B8956B',
                           color: 'white',
                           borderRadius: '9999px',
                           fontSize: '12px',
@@ -662,7 +706,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       paddingRight: '12px',
                       paddingTop: '8px',
                       paddingBottom: '8px',
-                      border: '2px solid #E9D5FF',
+                      border: '2px solid #D4C4B0',
                       borderRadius: '9999px',
                       fontSize: '14px',
                       outline: 'none',
@@ -678,8 +722,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       paddingRight: '16px',
                       paddingTop: '8px',
                       paddingBottom: '8px',
-                      background: '#F3E8FF',
-                      color: '#9333EA',
+                      background: 'rgba(184, 149, 107, 0.15)',
+                      color: '#8B5A2B',
                       borderRadius: '9999px',
                       fontSize: '14px',
                       fontWeight: 500,
@@ -695,7 +739,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
 
               {/* 公開範囲 */}
               <div>
-                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#7C3AED', marginBottom: '8px', display: 'block' }}>
+                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#8B5A2B', marginBottom: '8px', display: 'block' }}>
                   👀 だれに見せる？
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -713,9 +757,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       paddingBottom: '12px',
                       borderRadius: '12px',
                       transition: 'all 0.2s',
-                      background: visibility === 'public' ? '#8B5CF6' : 'white',
-                      color: visibility === 'public' ? 'white' : '#9333EA',
-                      border: visibility === 'public' ? '2px solid #8B5CF6' : '2px solid #E9D5FF',
+                      background: visibility === 'public' ? '#B8956B' : 'white',
+                      color: visibility === 'public' ? 'white' : '#8B5A2B',
+                      border: visibility === 'public' ? '2px solid #B8956B' : '2px solid #D4C4B0',
                       cursor: 'pointer',
                     }}
                   >
@@ -736,9 +780,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                       paddingBottom: '12px',
                       borderRadius: '12px',
                       transition: 'all 0.2s',
-                      background: visibility === 'friends' ? '#8B5CF6' : 'white',
-                      color: visibility === 'friends' ? 'white' : '#9333EA',
-                      border: visibility === 'friends' ? '2px solid #8B5CF6' : '2px solid #E9D5FF',
+                      background: visibility === 'friends' ? '#B8956B' : 'white',
+                      color: visibility === 'friends' ? 'white' : '#8B5A2B',
+                      border: visibility === 'friends' ? '2px solid #B8956B' : '2px solid #D4C4B0',
                       cursor: 'pointer',
                     }}
                   >
@@ -754,8 +798,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         {/* フッター */}
         <footer style={{
           padding: '16px',
-          borderTop: '1px solid #F3F4F6',
-          background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)',
+          borderTop: '2px solid #D4C4B0',
+          background: 'linear-gradient(to right, #FDF8F5, #F5EDE6)',
         }}>
           {step === 'select' ? (
             <button
@@ -769,9 +813,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 fontWeight: 'bold',
                 fontSize: '18px',
                 transition: 'all 0.2s',
-                background: selectedPageId ? 'linear-gradient(to right, #8B5CF6, #EC4899)' : '#E5E7EB',
+                background: selectedPageId ? 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)' : '#E5E7EB',
                 color: selectedPageId ? 'white' : '#9CA3AF',
-                boxShadow: selectedPageId ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : 'none',
+                boxShadow: selectedPageId ? '0 4px 15px rgba(184, 149, 107, 0.4)' : 'none',
                 border: 'none',
                 cursor: selectedPageId ? 'pointer' : 'not-allowed',
               }}
@@ -788,9 +832,9 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
                 borderRadius: '16px',
                 fontWeight: 'bold',
                 fontSize: '18px',
-                background: 'linear-gradient(to right, #8B5CF6, #EC4899)',
+                background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
                 color: 'white',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                boxShadow: '0 4px 15px rgba(184, 149, 107, 0.4)',
                 transition: 'all 0.2s',
                 border: 'none',
                 cursor: 'pointer',
@@ -803,6 +847,8 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
 
 export default CreatePostModal

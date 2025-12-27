@@ -1,6 +1,8 @@
 // 交換サービス - Supabase Realtime連携
 import { getSupabase } from '@/services/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { dailyMissionService } from '@/services/dailyMissions'
+import { notificationService } from '@/services/notifications'
 
 // 交換セッションの型
 export interface Trade {
@@ -106,15 +108,16 @@ export const tradeService = {
       return 0
     }
 
-    const count = data?.length || 0
-    if (count > 0) {
-      console.log(`[TradeService] Cleaned up ${count} old matching trades`)
-    }
-    return count
+    return data?.length || 0
   },
 
   // マッチング待機中の交換を検索（最近10分以内のみ）
   async findWaitingTrades(userId: string): Promise<Trade[]> {
+    // 空のuserIdの場合は即座に空配列を返す（UUID parse errorを防ぐ）
+    if (!userId || userId.trim() === '') {
+      return []
+    }
+
     const supabase = getSupabase()
 
     // まず古い交換をクリーンアップ
@@ -124,8 +127,7 @@ export const tradeService = {
     const { data, error } = await (supabase.rpc as any)('find_waiting_trades', { p_user_id: userId })
 
     if (error) {
-      // RPC関数が存在しない場合や認証エラーの場合は警告として処理
-      console.warn('[TradeService] Could not find waiting trades (RPC may not exist or permission denied):', error.message || error)
+      // RPC関数が存在しない場合は無視（正常なケース）
       return []
     }
 
@@ -135,7 +137,6 @@ export const tradeService = {
       trade.created_at > tenMinutesAgo
     )
 
-    console.log(`[TradeService] Found ${recentTrades.length} recent waiting trades (filtered from ${data?.length || 0})`)
     return recentTrades
   },
 
@@ -151,7 +152,36 @@ export const tradeService = {
       return { success: false, error: error.message }
     }
 
-    return data as { success: boolean; error?: string }
+    const result = data as { success: boolean; error?: string }
+
+    // 参加成功時、交換を作成したユーザーに通知
+    if (result.success) {
+      try {
+        // 交換情報を取得して通知
+        const trade = await this.getTrade(tradeId)
+        if (trade && trade.user1_id !== userId) {
+          // 参加者の名前を取得
+          const { data: joinerProfile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', userId)
+            .single()
+
+          const joinerName = joinerProfile?.display_name || 'だれか'
+
+          // user1に通知（交換作成者）
+          await notificationService.sendTradeRequestNotification(
+            trade.user1_id,
+            joinerName,
+            tradeId
+          )
+        }
+      } catch {
+        // 通知送信失敗は無視（交換自体は成功している）
+      }
+    }
+
+    return result
   },
 
   // 交換セッションを取得
@@ -295,7 +325,32 @@ export const tradeService = {
       return false
     }
 
-    return data?.success ?? false
+    const success = data?.success ?? false
+
+    // 交換成功時、両方のユーザーに通知
+    if (success) {
+      try {
+        const trade = await this.getTrade(tradeId)
+        if (trade && trade.user1 && trade.user2) {
+          // User1に通知
+          await notificationService.sendTradeAcceptedNotification(
+            trade.user1_id,
+            trade.user2.display_name || 'だれか',
+            tradeId
+          )
+          // User2に通知
+          await notificationService.sendTradeAcceptedNotification(
+            trade.user2_id!,
+            trade.user1.display_name || 'だれか',
+            tradeId
+          )
+        }
+      } catch {
+        // 通知送信失敗は無視（交換自体は成功している）
+      }
+    }
+
+    return success
   },
 
   // ============================================
@@ -326,6 +381,9 @@ export const tradeService = {
       console.error('[TradeService] Add item error:', error)
       return null
     }
+
+    // デイリーミッション進捗を更新（新規アイテム追加時）
+    await dailyMissionService.updateProgress(userId, 'trade', 1)
 
     return {
       ...data,
@@ -470,7 +528,6 @@ export const tradeService = {
           filter: `id=eq.${tradeId}`
         },
         (payload) => {
-          console.log('[TradeService] Trade update:', payload)
           if (payload.new) {
             onTradeUpdate(payload.new as Trade)
           }
@@ -487,7 +544,6 @@ export const tradeService = {
           filter: `trade_id=eq.${tradeId}`
         },
         (payload) => {
-          console.log('[TradeService] Item update:', payload)
           const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE'
           const item = (eventType === 'DELETE' ? payload.old : payload.new) as TradeItem
           onItemUpdate(item, eventType)
@@ -505,7 +561,6 @@ export const tradeService = {
           filter: `trade_id=eq.${tradeId}`
         },
         (payload) => {
-          console.log('[TradeService] New message:', payload)
           if (payload.new) {
             onMessage(payload.new as TradeMessage)
           }
@@ -535,7 +590,6 @@ export const tradeService = {
           filter: `status=eq.matching`
         },
         (payload) => {
-          console.log('[TradeService] New matching trade:', payload)
           const trade = payload.new as Trade
           // 自分の交換は無視
           if (trade.user1_id !== userId) {

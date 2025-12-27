@@ -4,9 +4,11 @@
  * 認証ユーザーとSupabaseを連携
  * - コレクションデータをSupabaseから読み込み
  * - ローカルフォーマットに変換
+ * - 通貨データの同期
  */
 
 import { stickerService } from '@/services/stickers/stickerService'
+import { currencyService, type LocalCurrencyData } from '@/services/profile'
 import { SavedCollectionItem } from './persistence'
 import type { Sticker } from '@/types/database'
 
@@ -14,24 +16,26 @@ import type { Sticker } from '@/types/database'
 // userId: Supabase認証ユーザーのUUID
 export async function loadCollectionFromSupabase(userId: string): Promise<SavedCollectionItem[]> {
   if (!userId) {
-    console.error('[SupabaseSync] No user ID provided')
     return []
   }
-
-  console.log(`[SupabaseSync] Loading collection for user: ${userId}`)
 
   try {
     const userStickers = await stickerService.getUserStickers(userId)
 
-    // UserStickerWithDetails → SavedCollectionItem に変換
-    const collection: SavedCollectionItem[] = userStickers.map(us => ({
-      stickerId: us.sticker_id,
-      quantity: us.quantity || 0,
-      totalAcquired: us.total_acquired || 0,
-      firstAcquiredAt: us.first_acquired_at || null,
-    }))
+    // 各ランクを別エントリとして返す（集約しない）
+    // これにより、ノーマル5枚、シルバー1枚のように別々に表示できる
+    const collection: SavedCollectionItem[] = userStickers.map(us => {
+      const upgradeRank = (us as { upgrade_rank?: number }).upgrade_rank ?? 0
+      return {
+        // 複合ID: stickerId:upgradeRank（同じシールでもランクごとに区別）
+        stickerId: `${us.sticker_id}:${upgradeRank}`,
+        quantity: us.quantity || 0,
+        totalAcquired: us.total_acquired || 0,
+        firstAcquiredAt: us.first_acquired_at || null,
+        upgradeRank: upgradeRank,
+      }
+    })
 
-    console.log(`[SupabaseSync] Loaded ${collection.length} stickers for user`)
     return collection
   } catch (error) {
     console.error('[SupabaseSync] Failed to load collection:', error)
@@ -41,17 +45,13 @@ export async function loadCollectionFromSupabase(userId: string): Promise<SavedC
 
 // 注: この関数は廃止予定。代わりに loadCollectionFromSupabase(userId) を直接使用してください
 export async function loadCurrentUserCollectionFromSupabase(): Promise<SavedCollectionItem[]> {
-  console.warn('[SupabaseSync] loadCurrentUserCollectionFromSupabase is deprecated. Use loadCollectionFromSupabase(userId) instead.')
   return []
 }
 
 // Supabaseから全シールマスターデータを読み込み
 export async function loadAllStickersFromSupabase(): Promise<Sticker[]> {
-  console.log('[SupabaseSync] Loading all stickers from Supabase...')
-
   try {
     const stickers = await stickerService.getAllStickers()
-    console.log(`[SupabaseSync] Loaded ${stickers.length} stickers`)
     return stickers
   } catch (error) {
     console.error('[SupabaseSync] Failed to load stickers:', error)
@@ -63,7 +63,6 @@ export async function loadAllStickersFromSupabase(): Promise<Sticker[]> {
 // userId: Supabase認証ユーザーのUUID
 export async function addStickerToSupabase(userId: string, stickerId: string): Promise<boolean> {
   if (!userId) {
-    console.error('[SupabaseSync] No user ID provided')
     return false
   }
 
@@ -127,4 +126,172 @@ export function getDataSource(): DataSource {
   }
 
   return 'localStorage'
+}
+
+// =============================================
+// 通貨同期システム
+// =============================================
+
+// Supabaseから通貨を読み込み
+// userId: Supabase認証ユーザーのUUID
+export async function loadCurrencyFromSupabase(userId: string): Promise<LocalCurrencyData | null> {
+  if (!userId) {
+    return null
+  }
+
+  try {
+    return await currencyService.getCurrencyLocal(userId)
+  } catch (error) {
+    console.error('[SupabaseSync] Failed to load currency:', error)
+    return null
+  }
+}
+
+// Supabaseに通貨を保存
+// userId: Supabase認証ユーザーのUUID
+export async function saveCurrencyToSupabase(
+  userId: string,
+  currency: Partial<LocalCurrencyData>
+): Promise<boolean> {
+  if (!userId) {
+    return false
+  }
+
+  try {
+    return await currencyService.setCurrencyLocal(userId, currency)
+  } catch (error) {
+    console.error('[SupabaseSync] Failed to save currency:', error)
+    return false
+  }
+}
+
+// ガチャ消費時の通貨同期
+// チケット不足時はどろっぷで代替可能か確認
+export async function deductGachaCurrency(
+  userId: string,
+  ticketCost: number,
+  dropCost: number,
+  useDrops: boolean = false
+): Promise<{
+  success: boolean
+  usedCurrency: 'tickets' | 'drops'
+  amountUsed: number
+  canUseDropsInstead: boolean
+  dropsRequired: number
+  newBalance: LocalCurrencyData | null
+}> {
+  if (!userId) {
+    return {
+      success: false,
+      usedCurrency: 'tickets',
+      amountUsed: 0,
+      canUseDropsInstead: false,
+      dropsRequired: dropCost,
+      newBalance: null,
+    }
+  }
+
+  try {
+    const result = await currencyService.deductForGacha(userId, ticketCost, dropCost, useDrops)
+
+    // 新しい残高を取得
+    let newBalance: LocalCurrencyData | null = null
+    if (result.success) {
+      newBalance = await currencyService.getCurrencyLocal(userId)
+    }
+
+    return {
+      ...result,
+      newBalance,
+    }
+  } catch (error) {
+    console.error('[SupabaseSync] Failed to deduct gacha currency:', error)
+    return {
+      success: false,
+      usedCurrency: 'tickets',
+      amountUsed: 0,
+      canUseDropsInstead: false,
+      dropsRequired: dropCost,
+      newBalance: null,
+    }
+  }
+}
+
+// プレミアムガチャ用の通貨消費
+export async function deductPremiumGachaCurrency(
+  userId: string,
+  gemCost: number,
+  dropCost: number,
+  useDrops: boolean = false
+): Promise<{
+  success: boolean
+  usedCurrency: 'gems' | 'drops'
+  amountUsed: number
+  canUseDropsInstead: boolean
+  dropsRequired: number
+  newBalance: LocalCurrencyData | null
+}> {
+  if (!userId) {
+    return {
+      success: false,
+      usedCurrency: 'gems',
+      amountUsed: 0,
+      canUseDropsInstead: false,
+      dropsRequired: dropCost,
+      newBalance: null,
+    }
+  }
+
+  try {
+    const result = await currencyService.deductGemsForGacha(userId, gemCost, dropCost, useDrops)
+
+    // 新しい残高を取得
+    let newBalance: LocalCurrencyData | null = null
+    if (result.success) {
+      newBalance = await currencyService.getCurrencyLocal(userId)
+    }
+
+    return {
+      ...result,
+      newBalance,
+    }
+  } catch (error) {
+    console.error('[SupabaseSync] Failed to deduct premium gacha currency:', error)
+    return {
+      success: false,
+      usedCurrency: 'gems',
+      amountUsed: 0,
+      canUseDropsInstead: false,
+      dropsRequired: dropCost,
+      newBalance: null,
+    }
+  }
+}
+
+// デイリーボーナス付与
+export async function grantDailyBonusToSupabase(
+  userId: string,
+  ticketAmount: number,
+  dropAmount: number
+): Promise<{
+  success: boolean
+  newBalance: LocalCurrencyData | null
+}> {
+  if (!userId) {
+    return { success: false, newBalance: null }
+  }
+
+  try {
+    const result = await currencyService.grantDailyBonus(userId, ticketAmount, dropAmount)
+
+    if (result.success) {
+      const newBalance = await currencyService.getCurrencyLocal(userId)
+      return { success: true, newBalance }
+    }
+
+    return { success: false, newBalance: null }
+  } catch (error) {
+    console.error('[SupabaseSync] Failed to grant daily bonus:', error)
+    return { success: false, newBalance: null }
+  }
 }

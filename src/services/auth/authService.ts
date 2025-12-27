@@ -57,36 +57,20 @@ export const authService = {
   // 現在のユーザー取得（プロフィール付き）
   // getSession() を使用してローカルストレージから高速に取得
   async getCurrentUser(): Promise<AuthUser | null> {
-    console.log('[Auth] getCurrentUser called')
     const supabase = getSupabase()
-    console.log('[Auth] supabase client obtained')
 
     try {
-      // getSession() はローカルストレージから取得するため高速
-      // autoRefreshToken: true の場合、内部処理を信頼してタイムアウトなしで待つ
-      console.log('[Auth] Calling supabase.auth.getSession()...')
-      console.log('[Auth] supabase.auth exists:', !!supabase.auth)
-      console.log('[Auth] supabase.auth.getSession exists:', typeof supabase.auth.getSession)
-
-      const startTime = Date.now()
-
       // タイムアウトなしでgetSessionを実行（Supabaseの内部処理を信頼）
       const result = await supabase.auth.getSession()
-      const endTime = Date.now()
-      console.log('[Auth] getSession completed in', endTime - startTime, 'ms')
 
       const session = result.data.session
       const sessionError = result.error
 
-      console.log('[Auth] getSession result - session:', session ? 'exists' : 'null', 'error:', sessionError)
-
       if (sessionError || !session?.user) {
-        console.log('[Auth] No session found')
         return null
       }
 
       // セッションが見つかった場合、プロフィール取得
-      console.log('[Auth] Session found, fetching profile...')
       const user = session.user
 
       const { data: profile } = await supabase
@@ -98,7 +82,6 @@ export const authService = {
       const isAnonymous = user.app_metadata?.provider === 'anonymous' ||
                           user.is_anonymous === true
 
-      console.log('[Auth] getCurrentUser success, userCode:', profile?.user_code)
       return {
         id: user.id,
         email: user.email,
@@ -257,20 +240,14 @@ export const authService = {
 
   // 認証を保証（未認証なら匿名ログイン）
   async ensureAuthenticated(): Promise<AuthUser | null> {
-    console.log('[Auth] ensureAuthenticated called')
     // まず既存のセッションを確認
-    console.log('[Auth] Checking for existing user...')
     const currentUser = await this.getCurrentUser()
-    console.log('[Auth] getCurrentUser result:', currentUser)
     if (currentUser) {
-      console.log('[Auth] Existing user found:', currentUser.userCode)
       return currentUser
     }
 
     // 未認証なら匿名ログイン
-    console.log('[Auth] No session, signing in anonymously...')
     const result = await this.signInAnonymously()
-    console.log('[Auth] signInAnonymously result:', result)
     if (result.success && result.data) {
       return result.data
     }
@@ -516,26 +493,21 @@ export const authService = {
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
     const supabase = getSupabase()
 
-    console.log('[Auth] Setting up onAuthStateChange listener')
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } } } | null) => {
-        console.log('[Auth] onAuthStateChange callback triggered, event:', _event)
-
         if (session?.user) {
           const isAnonymous = session.user.app_metadata?.provider === 'anonymous' ||
                               session.user.is_anonymous === true
 
-          console.log('[Auth] Session user found, fetching profile asynchronously...')
-
           // プロフィール情報を非同期で取得（コールバックをブロックしない）
-          supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-            .then(({ data: profile }) => {
-              console.log('[Auth] Profile fetched, calling callback with full user data')
+          ;(async () => {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single()
+
               callback({
                 id: session.user.id,
                 email: session.user.email,
@@ -543,8 +515,7 @@ export const authService = {
                 isAnonymous,
                 profile
               })
-            })
-            .catch((error) => {
+            } catch (error) {
               console.error('[Auth] Failed to fetch profile:', error)
               // プロフィール取得失敗時もコールバックを呼ぶ（プロフィールなし）
               callback({
@@ -554,16 +525,15 @@ export const authService = {
                 isAnonymous,
                 profile: null
               })
-            })
+            }
+          })()
         } else {
-          console.log('[Auth] No session user, calling callback with null')
           callback(null)
         }
       }
     )
 
     return () => {
-      console.log('[Auth] Unsubscribing from onAuthStateChange')
       subscription.unsubscribe()
     }
   },

@@ -8,6 +8,8 @@ import type { PlacedSticker } from './StickerPlacement'
 import type { Sticker } from './StickerTray'
 import type { PlacedDecoItem } from '@/domain/decoItems'
 import { playSoundIfEnabled } from '@/utils'
+import { StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
 
 // Dynamic import for SSR compatibility
 const HTMLFlipBook = dynamic(() => import('react-pageflip').then(mod => mod.default), {
@@ -53,6 +55,8 @@ interface BookViewProps {
   placedDecoItems?: PlacedDecoItem[] // 配置済みデコアイテム
   editingDecoItemId?: string | null // 編集中のデコアイテムID（非表示にする）
   onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void // デコアイテム長押し時のコールバック
+  // 表示スケール（小さい本用、デフォルト: 1）
+  displayScale?: number
 }
 
 // 外部からBookViewを制御するためのハンドル
@@ -63,6 +67,7 @@ export interface BookViewHandle {
   totalPages: number
   isOnCover: boolean
   isOnBackCover: boolean
+  getBookContainer: () => HTMLDivElement | null
 }
 
 // ページコンポーネント - forwardRefで作成（react-pageflip必須）
@@ -78,9 +83,10 @@ interface PageProps {
   editingDecoItemId?: string | null
   onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
   hideHints?: boolean // ヒント文を非表示にする
+  displayScale?: number // 表示スケール（小さい本用）
 }
 
-const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookTheme, coverDesign, pageStickers, editingStickerId, onStickerLongPress, pageDecoItems, editingDecoItemId, onDecoItemLongPress, hideHints }, ref) => {
+const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookTheme, coverDesign, pageStickers, editingStickerId, onStickerLongPress, pageDecoItems, editingDecoItemId, onDecoItemLongPress, hideHints, displayScale }, ref) => {
   // ハードページを使用（シールが3D変形に正しく追従するため）
   // ソフトページはcanvasレンダリングを使用し、DOM要素が追従しない問題がある
   return (
@@ -101,6 +107,7 @@ const Page = forwardRef<HTMLDivElement, PageProps>(({ page, pageNumber, bookThem
         editingDecoItemId={editingDecoItemId}
         onDecoItemLongPress={onDecoItemLongPress}
         hideHints={hideHints}
+        displayScale={displayScale}
       />
     </div>
   )
@@ -688,6 +695,7 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
   placedDecoItems = [],
   editingDecoItemId = null,
   onDecoItemLongPress,
+  displayScale = 1,
 }, ref) => {
   // 表紙デザインを取得
   const coverDesign = coverDesignId ? getCoverDesignById(coverDesignId) : undefined
@@ -776,6 +784,7 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
     totalPages: pages.length,
     isOnCover,
     isOnBackCover,
+    getBookContainer: () => bookContainerRef.current,
   }), [flipNext, flipPrev, currentPage, pages.length, isOnCover, isOnBackCover])
 
   // 表紙スタイル生成
@@ -980,6 +989,7 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
                 editingDecoItemId={editingDecoItemId}
                 onDecoItemLongPress={onDecoItemLongPress}
                 hideHints={hideHints}
+                displayScale={displayScale}
               />
             ))}
           </HTMLFlipBook>
@@ -1112,32 +1122,25 @@ export interface PageStickersProps {
   stickers: PlacedSticker[]
   editingStickerId?: string | null
   onLongPress?: (sticker: PlacedSticker) => void
+  displayScale?: number // 表示スケール（小さい本用）
 }
 
-export function PageStickers({ stickers, editingStickerId, onLongPress }: PageStickersProps) {
-  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null)
-
-  const handlePointerDown = (sticker: PlacedSticker) => {
-    longPressTimerRef.current = setTimeout(() => {
-      onLongPress?.(sticker)
-    }, 500)
-  }
-
-  const handlePointerUp = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
+export function PageStickers({ stickers, editingStickerId, onLongPress, displayScale = 1 }: PageStickersProps) {
+  // タップ即座に反応するためのハンドラ
+  const handleTap = (sticker: PlacedSticker) => {
+    onLongPress?.(sticker)
   }
 
   return (
     <div
       className="absolute inset-0 pointer-events-none"
       style={{
-        zIndex: 40, // SwipeZone(z-30)より上に配置してシールがポインターイベントを直接受け取れるようにする
         // 3D変形を継承してページと一緒にめくれるように
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
+        // オーラエフェクトがはみ出せるように
+        overflow: 'visible',
+        // コンテナにz-indexを設定しない（個々のアイテムのz-indexで順序を決定）
       }}
     >
       {stickers.map((sticker) => {
@@ -1146,7 +1149,7 @@ export function PageStickers({ stickers, editingStickerId, onLongPress }: PageSt
           return null
         }
 
-        const stickerSize = 60 * sticker.scale
+        const stickerSize = 60 * sticker.scale * displayScale
         const x = sticker.x * 100
         const y = sticker.y * 100
         const imageUrl = sticker.sticker.imageUrl
@@ -1182,50 +1185,56 @@ export function PageStickers({ stickers, editingStickerId, onLongPress }: PageSt
               top: `${y}%`,
               width: `${stickerSize}px`,
               height: `${stickerSize}px`,
-              zIndex: sticker.zIndex ?? 0,
+              zIndex: 40 + (sticker.zIndex ?? 0), // 基準40 + アイテムのz-index
               // 3D変形継承
               transformStyle: 'preserve-3d',
               backfaceVisibility: 'hidden',
+              // オーラがはみ出せるように
+              overflow: 'visible',
               ...getPuffyStyle(),
             }}
             onPointerDown={(e) => {
               e.stopPropagation()
               e.preventDefault()
-              // ポインターをキャプチャして、要素外に移動してもイベントを受け取れるようにする
-              // 合成イベント（SwipeZoneからのディスパッチ）の場合はsetPointerCaptureが失敗する可能性があるためtry-catch
+              // ポインターをキャプチャして確実にイベントを受け取る
               try {
                 ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
               } catch {
                 // 合成イベントの場合は無視
               }
-              handlePointerDown(sticker)
+              // 即座にタップ処理を実行（遅延なし）
+              handleTap(sticker)
             }}
             onPointerUp={(e) => {
               e.stopPropagation()
               try {
                 ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
               } catch {}
-              handlePointerUp()
             }}
             onPointerCancel={(e) => {
               try {
                 ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
               } catch {}
-              handlePointerUp()
             }}
           >
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={sticker.sticker.name}
-                className="w-full h-full object-contain"
-                draggable={false}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-3xl">
-                🌟
-              </div>
-            )}
+            {/* アップグレードランクに応じたオーラエフェクト */}
+            <StickerAura
+              upgradeRank={(sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank}
+              style={{ width: '100%', height: '100%' }}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={sticker.sticker.name}
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl">
+                  🌟
+                </div>
+              )}
+            </StickerAura>
             {/* キラキラシールのエフェクト */}
             {sticker.sticker.type === 'sparkle' && (
               <div
@@ -1251,19 +1260,9 @@ interface PageDecosProps {
 }
 
 function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps) {
-  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null)
-
-  const handlePointerDown = (decoItem: PlacedDecoItem) => {
-    longPressTimerRef.current = setTimeout(() => {
-      onLongPress?.(decoItem)
-    }, 500)
-  }
-
-  const handlePointerUp = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
+  // タップ即座に反応するためのハンドラ
+  const handleTap = (decoItem: PlacedDecoItem) => {
+    onLongPress?.(decoItem)
   }
 
   return (
@@ -1272,7 +1271,7 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
       style={{
         // 3D変形時にシールが親要素の境界でクリップされないように
         backfaceVisibility: 'hidden',
-        zIndex: 50, // シールやコンテンツより上に配置
+        // コンテナにz-indexを設定しない（個々のアイテムのz-indexで順序を決定）
       }}
     >
       {decoItems.map((deco, idx) => {
@@ -1307,7 +1306,7 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
               width: decoWidth,
               height: decoHeight,
               transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
-              zIndex: 50 + (deco.zIndex ?? 1), // 確実に上に配置
+              zIndex: 40 + (deco.zIndex ?? 0), // 基準40 + アイテムのz-index
               cursor: 'pointer',
               touchAction: 'none', // タッチスクロール防止（クラスから移動）
             }}
@@ -1317,32 +1316,19 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
               try {
                 e.currentTarget.setPointerCapture(e.pointerId)
               } catch {}
-              handlePointerDown(deco)
+              // 即座にタップ処理を実行（遅延なし）
+              handleTap(deco)
             }}
             onPointerUp={(e) => {
               e.stopPropagation()
               try {
                 e.currentTarget.releasePointerCapture(e.pointerId)
               } catch {}
-              handlePointerUp()
             }}
             onPointerCancel={(e) => {
               try {
                 e.currentTarget.releasePointerCapture(e.pointerId)
               } catch {}
-              handlePointerUp()
-            }}
-            // タッチイベントのフォールバック（モバイル互換性向上）
-            onTouchStart={(e) => {
-              e.stopPropagation()
-              handlePointerDown(deco)
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation()
-              handlePointerUp()
-            }}
-            onTouchCancel={() => {
-              handlePointerUp()
             }}
           >
             {deco.decoItem.imageUrl ? (
@@ -1371,6 +1357,219 @@ function PageDecos({ decoItems, editingDecoItemId, onLongPress }: PageDecosProps
   )
 }
 
+// 統合ページアイテム表示コンポーネント（シール・デコをz-index順にソートして描画）
+interface PageItemsProps {
+  stickers: PlacedSticker[]
+  decoItems: PlacedDecoItem[]
+  editingStickerId?: string | null
+  editingDecoItemId?: string | null
+  onStickerLongPress?: (sticker: PlacedSticker) => void
+  onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
+  displayScale?: number
+}
+
+type PageItemUnion =
+  | { type: 'sticker'; item: PlacedSticker; zIndex: number }
+  | { type: 'deco'; item: PlacedDecoItem; zIndex: number }
+
+function PageItems({
+  stickers,
+  decoItems,
+  editingStickerId,
+  editingDecoItemId,
+  onStickerLongPress,
+  onDecoItemLongPress,
+  displayScale = 1,
+}: PageItemsProps) {
+  // シールとデコを統合してz-indexでソート
+  const allItems: PageItemUnion[] = useMemo(() => {
+    const stickerItems: PageItemUnion[] = stickers
+      .filter(s => s.id !== editingStickerId)
+      .map(s => ({ type: 'sticker' as const, item: s, zIndex: s.zIndex ?? 0 }))
+
+    const decoItemsList: PageItemUnion[] = decoItems
+      .filter(d => d.id !== editingDecoItemId)
+      .map(d => ({ type: 'deco' as const, item: d, zIndex: d.zIndex ?? 0 }))
+
+    // z-indexでソート（小さい順 = 後ろから描画）
+    return [...stickerItems, ...decoItemsList].sort((a, b) => a.zIndex - b.zIndex)
+  }, [stickers, decoItems, editingStickerId, editingDecoItemId])
+
+  const handleStickerTap = (sticker: PlacedSticker) => {
+    onStickerLongPress?.(sticker)
+  }
+
+  const handleDecoTap = (decoItem: PlacedDecoItem) => {
+    onDecoItemLongPress?.(decoItem)
+  }
+
+  // レア度に応じた光彩（シール用）
+  const getRarityGlow = () => 'none'
+
+  // ぷっくりシールの立体感
+  const getPuffyStyle = (sticker: PlacedSticker) => {
+    if (sticker.sticker.type === 'puffy') {
+      return {
+        boxShadow: `0 4px 8px rgba(0,0,0,0.3), inset 0 -3px 6px rgba(0,0,0,0.15), inset 0 3px 6px rgba(255,255,255,0.4), ${getRarityGlow()}`,
+        transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg) scale(1.02)`,
+      }
+    }
+    return {
+      boxShadow: getRarityGlow(),
+      transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
+    }
+  }
+
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        // 3D変形を継承してページと一緒にめくれるように
+        transformStyle: 'preserve-3d',
+        backfaceVisibility: 'hidden',
+        // オーラエフェクトがはみ出せるように
+        overflow: 'visible',
+      }}
+    >
+      {allItems.map((entry) => {
+        if (entry.type === 'sticker') {
+          const sticker = entry.item
+          const stickerSize = 60 * sticker.scale * displayScale
+          const x = sticker.x * 100
+          const y = sticker.y * 100
+          const imageUrl = sticker.sticker.imageUrl
+
+          return (
+            <div
+              key={`sticker-${sticker.id}`}
+              data-sticker-id={sticker.id}
+              className="absolute pointer-events-auto cursor-pointer transition-transform duration-150 active:scale-105"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                width: `${stickerSize}px`,
+                height: `${stickerSize}px`,
+                zIndex: 40 + (sticker.zIndex ?? 0),
+                transformStyle: 'preserve-3d',
+                backfaceVisibility: 'hidden',
+                overflow: 'visible',
+                ...getPuffyStyle(sticker),
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                try {
+                  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                } catch {}
+                handleStickerTap(sticker)
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation()
+                try {
+                  ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+                } catch {}
+              }}
+              onPointerCancel={(e) => {
+                try {
+                  ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+                } catch {}
+              }}
+            >
+              <StickerAura
+                upgradeRank={(sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank}
+                style={{ width: '100%', height: '100%' }}
+              >
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={sticker.sticker.name}
+                    className="w-full h-full object-contain"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-3xl">
+                    🌟
+                  </div>
+                )}
+              </StickerAura>
+              {sticker.sticker.type === 'sparkle' && (
+                <div
+                  className="absolute inset-0 rounded-full pointer-events-none"
+                  style={{
+                    background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%)',
+                    animation: 'shimmer 2s ease-in-out infinite',
+                  }}
+                />
+              )}
+            </div>
+          )
+        } else {
+          const deco = entry.item
+          const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
+          const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+
+          return (
+            <div
+              key={`deco-${deco.id}`}
+              data-deco-id={deco.id}
+              className="absolute select-none pointer-events-auto"
+              style={{
+                left: `${deco.x * 100}%`,
+                top: `${deco.y * 100}%`,
+                width: decoWidth,
+                height: decoHeight,
+                transform: `translate(-50%, -50%) rotate(${deco.rotation}deg)`,
+                zIndex: 40 + (deco.zIndex ?? 0),
+                cursor: 'pointer',
+                touchAction: 'none',
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                } catch {}
+                handleDecoTap(deco)
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation()
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                } catch {}
+              }}
+              onPointerCancel={(e) => {
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                } catch {}
+              }}
+            >
+              {deco.decoItem.imageUrl ? (
+                <img
+                  src={deco.decoItem.imageUrl}
+                  alt={deco.decoItem.name}
+                  className="w-full h-full object-fill pointer-events-none select-none"
+                  draggable={false}
+                  style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
+                />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center bg-pink-100 rounded text-2xl pointer-events-none"
+                >
+                  {deco.decoItem.type === 'tape' && '📏'}
+                  {deco.decoItem.type === 'lace' && '🎀'}
+                  {deco.decoItem.type === 'stamp' && '🔖'}
+                  {deco.decoItem.type === 'glitter' && '✨'}
+                  {deco.decoItem.type === 'frame' && '🖼️'}
+                </div>
+              )}
+            </div>
+          )
+        }
+      })}
+    </div>
+  )
+}
+
 // ページコンテンツコンポーネント
 interface PageContentProps {
   page: BookPage
@@ -1384,9 +1583,10 @@ interface PageContentProps {
   editingDecoItemId?: string | null
   onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
   hideHints?: boolean // ヒント文を非表示にする
+  displayScale?: number // 表示スケール（小さい本用）
 }
 
-function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false }: PageContentProps) {
+function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false, displayScale = 1 }: PageContentProps) {
   // 表紙のスタイルを生成 - パステルカラー
   const getCoverStyle = (): React.CSSProperties => {
     if (!bookTheme) {
@@ -1651,6 +1851,7 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
         pageDecoItems={pageDecoItems}
         editingDecoItemId={editingDecoItemId}
         onDecoItemLongPress={onDecoItemLongPress}
+        displayScale={displayScale}
       />
     )
   }
@@ -1667,6 +1868,7 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
       editingDecoItemId={editingDecoItemId}
       onDecoItemLongPress={onDecoItemLongPress}
       hideHints={hideHints}
+      displayScale={displayScale}
     />
   )
 }
@@ -1681,10 +1883,11 @@ interface LeftPageProps {
   pageDecoItems?: PlacedDecoItem[]
   editingDecoItemId?: string | null
   onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
+  displayScale?: number
 }
 
 // 左ページコンポーネント（装飾・テーマ表示用）- パステルカラー
-function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress }: LeftPageProps) {
+function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, displayScale = 1 }: LeftPageProps) {
   const theme = page.theme || {}
   const bgColor = theme.backgroundColor || '#FEFBFF'
   const pattern = theme.pattern || 'dots'
@@ -1775,28 +1978,20 @@ function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onSti
         </>
       )}
 
-      {/* 見開き表示の装飾 - シンプルなデザイン */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-        <div className="text-3xl opacity-15">✨</div>
-      </div>
-
       {/* ページコンテンツ */}
       <div className="relative z-10 w-full h-full">
         {page.content}
       </div>
 
-      {/* ページ内シール表示 - ページと一緒にめくれる */}
-      <PageStickers
+      {/* ページ内シール・デコアイテム表示（z-index順にソート） */}
+      <PageItems
         stickers={pageStickers}
-        editingStickerId={editingStickerId}
-        onLongPress={onStickerLongPress}
-      />
-
-      {/* ページ内デコアイテム表示 - ページと一緒にめくれる */}
-      <PageDecos
         decoItems={pageDecoItems}
+        editingStickerId={editingStickerId}
         editingDecoItemId={editingDecoItemId}
-        onLongPress={onDecoItemLongPress}
+        onStickerLongPress={onStickerLongPress}
+        onDecoItemLongPress={onDecoItemLongPress}
+        displayScale={displayScale}
       />
     </div>
   )
@@ -1813,10 +2008,11 @@ interface RightPageProps {
   editingDecoItemId?: string | null
   onDecoItemLongPress?: (decoItem: PlacedDecoItem) => void
   hideHints?: boolean // ヒント文を非表示にする
+  displayScale?: number // 表示スケール（小さい本用）
 }
 
 // 右ページコンポーネント（シール貼り付けメインスペース）- パステルカラー
-function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false }: RightPageProps) {
+function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false, displayScale = 1 }: RightPageProps) {
   return (
     <div
       className="w-full h-full p-4 relative"
@@ -1840,55 +2036,20 @@ function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onSt
         {pageNumber}
       </div>
 
-      {/* グリッドライン（ドット柄）- パステル */}
-      <div
-        className="absolute inset-4 opacity-10"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(167, 139, 250, 0.4) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
-        }}
-      />
-
-      {/* シール配置ガイド - パステル */}
-      <div
-        className="absolute inset-6 border-2 border-dashed rounded-xl pointer-events-none"
-        style={{
-          borderColor: 'rgba(167, 139, 250, 0.12)',
-        }}
-      />
-
       {/* ページコンテンツ */}
       <div className="relative z-10 w-full h-full">
-        {page.content || (!hideHints && (
-          <div className="flex items-center justify-center h-full text-center">
-            <div>
-              <div className="text-3xl mb-2 opacity-30">✨</div>
-              <p
-                className="text-sm"
-                style={{
-                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                  color: '#A78BFA',
-                }}
-              >
-                シールをはってね！
-              </p>
-            </div>
-          </div>
-        ))}
+        {page.content}
       </div>
 
-      {/* ページ内シール表示 - ページと一緒にめくれる */}
-      <PageStickers
+      {/* ページ内シール・デコアイテム表示（z-index順にソート） */}
+      <PageItems
         stickers={pageStickers}
-        editingStickerId={editingStickerId}
-        onLongPress={onStickerLongPress}
-      />
-
-      {/* ページ内デコアイテム表示 - ページと一緒にめくれる */}
-      <PageDecos
         decoItems={pageDecoItems}
+        editingStickerId={editingStickerId}
         editingDecoItemId={editingDecoItemId}
-        onLongPress={onDecoItemLongPress}
+        onStickerLongPress={onStickerLongPress}
+        onDecoItemLongPress={onDecoItemLongPress}
+        displayScale={displayScale}
       />
     </div>
   )

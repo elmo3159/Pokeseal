@@ -262,3 +262,11 @@ export const StickerBookIcon: React.FC<{ size?: number; color?: string }> = ({ s
     <circle cx="16" cy="14" r="1.5" fill="#22C55E" stroke="#16A34A" strokeWidth="0.75"/>
   </svg>
 )
+
+// 閉じるアイコン
+export const CloseIcon: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = '#8B5A2B' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M6 6L18 18" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    <path d="M18 6L6 18" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+)

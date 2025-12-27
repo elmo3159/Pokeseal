@@ -1,20 +1,46 @@
 'use client'
 
-import React, { useState, useMemo, memo } from 'react'
-import { RankEffectOverlay, FloatingTooltip } from '@/components'
-import {
-  RankLevel,
-  calculateRank,
-  getRankProgress,
-  getNextRankRequirement,
-  rankNamesKids
-} from '@/domain/stickerRank'
+import React, { useState, useMemo, memo, useEffect, useCallback, useRef } from 'react'
+import { Virtuoso } from 'react-virtuoso'
+import { FloatingTooltip } from '@/components'
+import { RankStars, StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, UPGRADE_REQUIREMENTS, RANK_NAMES, formatNameWithRank } from '@/constants/upgradeRanks'
+import type { UpgradeRank } from '@/constants/upgradeRanks'
 import { SearchFilterPanel } from '@/features/search'
 import {
   StickerSearchFilter,
   defaultSearchFilter,
   filterStickers
 } from '@/domain/stickerTags'
+
+// 画面幅に応じたグリッド列数を計算するカスタムフック
+const useResponsiveColumns = () => {
+  const [columns, setColumns] = useState(4)
+
+  useEffect(() => {
+    const updateColumns = () => {
+      const width = window.innerWidth
+      // モバイル (〜480px): 4列
+      // タブレット (481px〜768px): 5列
+      // PC (769px〜): 6列以上
+      if (width <= 480) {
+        setColumns(4)
+      } else if (width <= 768) {
+        setColumns(5)
+      } else if (width <= 1024) {
+        setColumns(6)
+      } else {
+        setColumns(Math.min(8, Math.floor(width / 120)))
+      }
+    }
+
+    updateColumns()
+    window.addEventListener('resize', updateColumns)
+    return () => window.removeEventListener('resize', updateColumns)
+  }, [])
+
+  return columns
+}
 
 /**
  * CollectionView - Container Query Units (cqw, cqh) を使用したレスポンシブ設計
@@ -39,47 +65,58 @@ export interface CollectionSticker {
   totalAcquired: number
   baseRate?: number
   firstAcquiredAt?: string
+  upgradeRank?: number // アップグレードランク（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
+  effectiveRarity?: number // 実効レアリティ（rarity + アップグレードボーナス）フィルタリング用
 }
 
-// レアリティの星表示 - cqmin単位でレスポンシブ
-const RarityStars: React.FC<{ rarity: number }> = ({ rarity }) => {
-  return (
-    <div style={{ display: 'flex', gap: '0.5cqw' }}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            fontSize: '3cqw',
-            color: i < rarity ? '#FACC15' : '#D1D5DB',
-          }}
-        >
-          ★
-        </span>
-      ))}
-    </div>
-  )
-}
+// RarityStarsは削除 - 常にRankStarsを使用
 
-// ランク進捗バー - cqw単位でレスポンシブ
-const RankProgressBar: React.FC<{ totalAcquired: number }> = ({ totalAcquired }) => {
-  const progress = getRankProgress(totalAcquired)
-  const currentRank = calculateRank(totalAcquired) as RankLevel
-  const nextReq = getNextRankRequirement(currentRank, totalAcquired)
-
-  if (currentRank >= 5) {
+// アップグレード進捗バー - vw単位でレスポンシブ
+const UpgradeProgressBar: React.FC<{ quantity: number; upgradeRank: UpgradeRank }> = ({ quantity, upgradeRank }) => {
+  // プリズムランクは最高なので進捗不要
+  if (upgradeRank === UPGRADE_RANKS.PRISM) {
     return (
       <div style={{ textAlign: 'center' }}>
-        <span style={{ fontSize: '3cqw', color: '#EC4899', fontWeight: 'bold' }}>
-          {rankNamesKids[5]}
+        <span style={{
+          fontSize: 'clamp(6px, 1.8vw, 9px)',
+          fontWeight: 'bold',
+          background: 'linear-gradient(90deg, #ff6b6b, #ffe66d, #4ecdc4, #a78bfa)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}>
+          MAX
+        </span>
+      </div>
+    )
+  }
+
+  // 次のランクへの必要枚数を取得
+  const nextRank = (upgradeRank + 1) as 1 | 2 | 3
+  const requirement = UPGRADE_REQUIREMENTS[nextRank]
+  const needed = requirement.count
+  const progress = Math.min((quantity / needed) * 100, 100)
+  const canUpgrade = quantity >= needed
+  const neededMore = Math.max(0, needed - quantity)
+
+  if (canUpgrade) {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <span style={{
+          fontSize: 'clamp(6px, 1.8vw, 9px)',
+          color: '#22C55E',
+          fontWeight: 'bold'
+        }}>
+          ↑{RANK_NAMES[nextRank]}可能
         </span>
       </div>
     )
   }
 
   return (
-    <div style={{ width: '100%' }}>
+    <div style={{ width: '100%', padding: '0 2px', minWidth: 0 }}>
       <div style={{
-        height: '1.5cqw',
+        height: 'clamp(2px, 0.8vw, 4px)',
         background: '#E5E7EB',
         borderRadius: '9999px',
         overflow: 'hidden'
@@ -94,36 +131,36 @@ const RankProgressBar: React.FC<{ totalAcquired: number }> = ({ totalAcquired })
         />
       </div>
       <p style={{
-        fontSize: '2.5cqw',
+        fontSize: 'clamp(6px, 1.6vw, 8px)',
         color: '#A78BFA',
         textAlign: 'center',
-        marginTop: '0.5cqw'
+        marginTop: '1px',
+        margin: 0,
       }}>
-        つぎまであと{nextReq}まい
+        {RANK_NAMES[nextRank]}まであと{neededMore}まい
       </p>
     </div>
   )
 }
 
-// シールタイプアイコン
+// シールタイプアイコン - vw単位でレスポンシブ
 const TypeIcon: React.FC<{ type: 'normal' | 'puffy' | 'sparkle' }> = ({ type }) => {
   const icons = {
     normal: '📄',
     puffy: '🫧',
     sparkle: '✨'
   }
-  return <span style={{ fontSize: '3.5cqw' }}>{icons[type]}</span>
+  return <span style={{ fontSize: 'clamp(12px, 3.5vw, 18px)' }}>{icons[type]}</span>
 }
 
-// 個別シールカード - Container Query対応
+// 個別シールカード - vw単位でレスポンシブ
 interface StickerCardProps {
   sticker: CollectionSticker
   onClick: (sticker: CollectionSticker) => void
 }
 
 const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
-  const { owned, type, name, quantity, rank, imageUrl, totalAcquired } = sticker
-  const actualRank = (totalAcquired ? calculateRank(totalAcquired) : rank) as RankLevel
+  const { owned, type, name, quantity, imageUrl, upgradeRank = 0 } = sticker
 
   const cardContent = (
     <button
@@ -131,48 +168,51 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
       style={{
         position: 'relative',
         width: '100%',
+        minWidth: 0, // グリッドアイテムの縮小を許可
         aspectRatio: '1/1',
-        borderRadius: '4cqw',
+        borderRadius: 'clamp(6px, 2vw, 12px)',
         overflow: 'hidden',
         transition: 'all 0.2s',
         background: owned ? 'rgba(255, 255, 255, 0.7)' : 'rgba(229, 231, 235, 0.5)',
         border: owned ? '1px solid rgba(196, 181, 253, 0.5)' : '1px solid rgba(209, 213, 219, 0.5)',
         boxShadow: type === 'puffy'
-          ? '0 2cqw 4cqw rgba(0, 0, 0, 0.1)'
-          : '0 0.5cqw 2cqw rgba(139, 92, 246, 0.1)',
+          ? '0 4px 8px rgba(0, 0, 0, 0.1)'
+          : '0 2px 4px rgba(139, 92, 246, 0.1)',
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         cursor: 'pointer',
         padding: 0,
       }}
     >
-      {/* シール画像エリア */}
-      <div style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: owned ? 1 : 0.3,
-        filter: owned ? 'none' : 'grayscale(100%)',
-      }}>
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={name}
-            loading="lazy"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              padding: '2cqw'
-            }}
-          />
-        ) : (
-          <div style={{ fontSize: '8cqw' }}>
-            {type === 'sparkle' ? '✨' : type === 'puffy' ? '🌟' : '⭐'}
-          </div>
-        )}
-      </div>
+      {/* シール画像エリア - アップグレードランクに基づくオーラ */}
+      <StickerAura upgradeRank={upgradeRank as UpgradeRank}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: owned ? 1 : 0.3,
+          filter: owned ? 'none' : 'grayscale(100%)',
+        }}>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={name}
+              loading="lazy"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                padding: '4%'
+              }}
+            />
+          ) : (
+            <div style={{ fontSize: 'clamp(16px, 5vw, 24px)' }}>
+              {type === 'sparkle' ? '✨' : type === 'puffy' ? '🌟' : '⭐'}
+            </div>
+          )}
+        </div>
+      </StickerAura>
 
       {/* 未所持オーバーレイ */}
       {!owned && (
@@ -186,7 +226,7 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
           alignItems: 'center',
           justifyContent: 'center',
         }}>
-          <span style={{ fontSize: '7cqw' }}>❓</span>
+          <span style={{ fontSize: 'clamp(14px, 4.5vw, 22px)' }}>❓</span>
         </div>
       )}
 
@@ -194,15 +234,15 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
       {owned && quantity > 1 && (
         <div style={{
           position: 'absolute',
-          bottom: '1cqw',
-          left: '1cqw',
+          bottom: '2%',
+          left: '2%',
           background: '#7C3AED',
           color: 'white',
-          fontSize: '3cqw',
-          paddingLeft: '1.5cqw',
-          paddingRight: '1.5cqw',
-          paddingTop: '0.5cqw',
-          paddingBottom: '0.5cqw',
+          fontSize: 'clamp(8px, 2.2vw, 11px)',
+          paddingLeft: '1vw',
+          paddingRight: '1vw',
+          paddingTop: '0.5vw',
+          paddingBottom: '0.5vw',
           borderRadius: '9999px',
           fontWeight: 'bold',
           zIndex: 10,
@@ -235,51 +275,51 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
     </button>
   )
 
-  if (owned && actualRank > 0) {
-    return (
-      <RankEffectOverlay rank={actualRank} size="sm">
-        {cardContent}
-      </RankEffectOverlay>
-    )
-  }
-
   return cardContent
 })
 
-// シール名表示 - Container Query対応
+// シール名表示 - vw単位でレスポンシブ
 const StickerLabel: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => {
+  const upgradeRank = sticker.upgradeRank ?? 0
+
   return (
-    <div style={{ marginTop: '1cqw', textAlign: 'center' }}>
+    <div style={{ marginTop: '2px', textAlign: 'center', minWidth: 0, overflow: 'hidden' }}>
       <p style={{
-        fontSize: '3cqw',
+        fontSize: 'clamp(8px, 2.2vw, 11px)',
         fontWeight: 500,
         color: '#6B21A8',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        paddingLeft: '1cqw',
-        paddingRight: '1cqw',
+        padding: '0 2px',
+        lineHeight: 1.2,
+        margin: 0,
       }}>
-        {sticker.owned ? sticker.name : '???'}
+        {sticker.owned ? formatNameWithRank(sticker.name, upgradeRank as UpgradeRank) : '???'}
       </p>
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '1cqw',
-        marginBottom: '1cqw'
+        gap: '1px',
+        marginBottom: '2px'
       }}>
-        <RarityStars rarity={sticker.rarity} />
-        <TypeIcon type={sticker.type} />
+        {/* 常にSVGベースのRankStarsを使用 */}
+        <RankStars
+          baseRarity={sticker.rarity}
+          upgradeRank={(upgradeRank ?? 0) as UpgradeRank}
+          size="sm"
+          showAnimation={false}
+        />
       </div>
-      {sticker.owned && sticker.totalAcquired > 0 && (
-        <RankProgressBar totalAcquired={sticker.totalAcquired} />
+      {sticker.owned && (
+        <UpgradeProgressBar quantity={sticker.quantity} upgradeRank={upgradeRank as UpgradeRank} />
       )}
     </div>
   )
 }
 
-// コレクション統計 - Container Query対応
+// コレクション統計 - vw単位でレスポンシブ
 interface CollectionStatsProps {
   total: number
   owned: number
@@ -291,14 +331,16 @@ const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
   return (
     <div
       style={{
-        background: 'linear-gradient(to right, rgba(139, 92, 246, 0.9), rgba(236, 72, 153, 0.9))',
-        backdropFilter: 'blur(12px)',
-        borderRadius: '4cqw',
-        padding: '4cqw',
-        marginBottom: '4cqw',
-        color: 'white',
-        boxShadow: '0 1cqw 4cqw rgba(139, 92, 246, 0.3)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
+        background: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 'clamp(10px, 3vw, 16px)',
+        padding: 'clamp(10px, 3vw, 16px)',
+        marginBottom: 'clamp(8px, 2vw, 12px)',
+        border: '3px solid #B8956B',
+        boxShadow: `
+          0 0 6px 1px rgba(184, 149, 107, 0.4),
+          0 0 12px 3px rgba(184, 149, 107, 0.2),
+          inset 0 0 8px rgba(184, 149, 107, 0.1)
+        `,
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
       }}
     >
@@ -306,35 +348,47 @@ const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '2cqw'
+        marginBottom: 'clamp(4px, 1.5vw, 8px)'
       }}>
-        <h3 style={{ fontWeight: 'bold', fontSize: '4.5cqw' }}>コレクション</h3>
-        <span style={{ fontSize: '6cqw', fontWeight: 'bold' }}>{percentage}%</span>
+        <h3 style={{ fontWeight: 'bold', fontSize: 'clamp(14px, 3.5vw, 18px)', color: '#8B5A2B' }}>
+          📚 コレクション
+        </h3>
+        <span style={{
+          fontSize: 'clamp(16px, 4.5vw, 22px)',
+          fontWeight: 'bold',
+          color: '#D4A574',
+          textShadow: '0 1px 2px rgba(139, 90, 43, 0.2)'
+        }}>
+          {percentage}%
+        </span>
       </div>
       <div style={{
-        height: '3cqw',
-        background: 'rgba(255, 255, 255, 0.3)',
+        height: 'clamp(8px, 2.5vw, 12px)',
+        background: 'linear-gradient(to bottom, #E8DDD4, #F5EDE6)',
         borderRadius: '9999px',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        border: '2px solid #C4A484',
+        boxShadow: 'inset 0 2px 4px rgba(139, 90, 43, 0.15)'
       }}>
         <div
           style={{
             height: '100%',
-            background: 'white',
+            background: 'linear-gradient(to right, #E8B88A, #D4A574, #C4956A)',
             borderRadius: '9999px',
             transition: 'all 0.5s',
             width: `${percentage}%`,
+            boxShadow: '0 0 8px rgba(212, 165, 116, 0.6)'
           }}
         />
       </div>
-      <p style={{ fontSize: '3.5cqw', marginTop: '2cqw', color: 'rgba(255, 255, 255, 0.8)' }}>
+      <p style={{ fontSize: 'clamp(10px, 2.5vw, 14px)', marginTop: 'clamp(4px, 1.5vw, 8px)', color: '#A67C52' }}>
         {owned} / {total} シール
       </p>
     </div>
   )
 }
 
-// メインのCollectionView - Container Query対応
+// メインのCollectionView - vw単位でレスポンシブ
 interface CollectionViewProps {
   stickers: CollectionSticker[]
   onStickerClick?: (sticker: CollectionSticker) => void
@@ -345,6 +399,8 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
   onStickerClick
 }) => {
   const [filter, setFilter] = useState<StickerSearchFilter>(defaultSearchFilter)
+  const columns = useResponsiveColumns()
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const filteredStickers = useMemo(() => {
     return filterStickers(stickers, filter)
@@ -355,28 +411,84 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
     owned: stickers.filter(s => s.owned).length
   }), [stickers])
 
-  const handleStickerClick = (sticker: CollectionSticker) => {
+  const handleStickerClick = useCallback((sticker: CollectionSticker) => {
     onStickerClick?.(sticker)
-  }
+  }, [onStickerClick])
+
+  // シールを行ごとにグループ化（仮想スクロール用）
+  const rows = useMemo(() => {
+    const result: CollectionSticker[][] = []
+    for (let i = 0; i < filteredStickers.length; i += columns) {
+      result.push(filteredStickers.slice(i, i + columns))
+    }
+    return result
+  }, [filteredStickers, columns])
+
+  // 行のレンダリング
+  const rowContent = useCallback((index: number) => {
+    const rowStickers = rows[index]
+    if (!rowStickers) return null
+
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gap: 'clamp(4px, 1.5vw, 8px)',
+          width: '100%',
+          paddingBottom: 'clamp(4px, 1.5vw, 8px)',
+        }}
+      >
+        {rowStickers.map((sticker) => (
+          <div key={sticker.id} style={{ minWidth: 0, overflow: 'hidden' }}>
+            <FloatingTooltip
+              content={
+                <div>
+                  <div style={{ fontWeight: 'bold' }}>{formatNameWithRank(sticker.name, (sticker.upgradeRank ?? 0) as UpgradeRank)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>レア度:</span>
+                    <RankStars
+                      baseRarity={sticker.rarity}
+                      upgradeRank={(sticker.upgradeRank ?? 0) as UpgradeRank}
+                      size="sm"
+                      showAnimation={false}
+                    />
+                  </div>
+                  {sticker.owned && (
+                    <div>所持数: {sticker.quantity}枚</div>
+                  )}
+                </div>
+              }
+              placement="top"
+              disabled={!sticker.owned}
+            >
+              <StickerCard sticker={sticker} onClick={handleStickerClick} />
+            </FloatingTooltip>
+            <StickerLabel sticker={sticker} />
+          </div>
+        ))}
+      </div>
+    )
+  }, [rows, columns, handleStickerClick])
 
   return (
     <div
       style={{
-        // Container Query 設定 - このコンテナ内で cqw/cqh が有効
-        containerType: 'size',
-        containerName: 'collection-view',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
-        overflowX: 'hidden',
+        overflow: 'hidden',
       }}
     >
       {/* ヘッダー統計 */}
       <CollectionStats total={stats.total} owned={stats.owned} />
 
       {/* 検索フィルターパネル */}
-      <div style={{ marginBottom: '4cqw' }}>
+      <div style={{ marginBottom: 'clamp(6px, 2vw, 12px)' }}>
         <SearchFilterPanel
           filter={filter}
           onFilterChange={setFilter}
@@ -384,60 +496,65 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
         />
       </div>
 
-      {/* シールグリッド - Container Query ベースのレスポンシブ */}
+      {/* シールグリッド - ふわふわフレーム付きコンテナ */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
-        paddingBottom: '4cqw',
-        overflowX: 'hidden'
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        minWidth: 0,
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '3cqw',
-        }}>
-          {filteredStickers.map((sticker) => (
-            <div key={sticker.id}>
-              <FloatingTooltip
-                content={
-                  <div>
-                    <div style={{ fontWeight: 'bold' }}>{sticker.name}</div>
-                    <div>レア度: {'★'.repeat(sticker.rarity)}</div>
-                    {sticker.owned && (
-                      <div>所持数: {sticker.quantity}枚</div>
-                    )}
-                  </div>
-                }
-                placement="top"
-                disabled={!sticker.owned}
-              >
-                <StickerCard sticker={sticker} onClick={handleStickerClick} />
-              </FloatingTooltip>
-              <StickerLabel sticker={sticker} />
+        {/* ふわふわフレーム - ぼかし付き実線（太め） */}
+        <div
+          ref={containerRef}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            width: '100%',
+            maxWidth: '100%',
+            background: 'rgba(255, 255, 255, 0.95)',
+            borderRadius: 'clamp(10px, 3vw, 16px)',
+            border: '3px solid #B8956B',
+            boxShadow: `
+              0 0 8px 2px rgba(184, 149, 107, 0.5),
+              0 0 16px 4px rgba(184, 149, 107, 0.3),
+              inset 0 0 10px rgba(184, 149, 107, 0.15)
+            `,
+            padding: 'clamp(6px, 2vw, 10px)',
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          {rows.length > 0 ? (
+            <Virtuoso
+              style={{
+                height: '100%',
+                width: '100%',
+              }}
+              totalCount={rows.length}
+              itemContent={rowContent}
+              overscan={300} // 画面外300pxまで先読み
+              increaseViewportBy={{ top: 200, bottom: 200 }}
+            />
+          ) : (
+            /* 結果なし */
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingTop: 'clamp(24px, 8vw, 48px)',
+              paddingBottom: 'clamp(24px, 8vw, 48px)',
+              color: '#A78BFA',
+            }}>
+              <span style={{ fontSize: 'clamp(20px, 6vw, 32px)', marginBottom: 'clamp(6px, 1.5vw, 10px)' }}>🔍</span>
+              <p style={{ fontSize: 'clamp(12px, 2.5vw, 16px)' }}>みつかりませんでした</p>
             </div>
-          ))}
+          )}
         </div>
-
-        {/* 結果なし */}
-        {filteredStickers.length === 0 && (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingTop: '12cqw',
-            paddingBottom: '12cqw',
-            color: '#A78BFA',
-            background: 'rgba(255, 255, 255, 0.5)',
-            backdropFilter: 'blur(4px)',
-            borderRadius: '4cqw',
-            marginLeft: '4cqw',
-            marginRight: '4cqw',
-          }}>
-            <span style={{ fontSize: '8cqw', marginBottom: '2cqw' }}>🔍</span>
-            <p style={{ fontSize: '3.5cqw' }}>みつかりませんでした</p>
-          </div>
-        )}
       </div>
     </div>
   )

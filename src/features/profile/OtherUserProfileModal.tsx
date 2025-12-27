@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserStats } from './ProfileView'
 import { BookView, BookPage, PlacedSticker } from '@/features/sticker-book'
+import type { PlacedDecoItem } from '@/domain/decoItems'
 
 // 他ユーザーのプロフィール情報
 export interface OtherUserProfile {
@@ -39,9 +40,11 @@ interface OtherUserProfileModalProps {
   // 新しいprops: フルBookView表示用
   bookPages?: BookPage[]
   bookStickers?: PlacedSticker[]
+  bookDecoItems?: PlacedDecoItem[]
   coverDesignId?: string // ユーザーの表紙デザインID
   onFollowToggle: (userId: string, isFollowing: boolean) => void
   onViewStickerBook: (userId: string, pageId?: string) => void
+  onInviteToTrade?: (userId: string, userName: string) => void // 交換に誘うコールバック
   onReport: (userId: string) => void
   onBlock: (userId: string) => void
 }
@@ -207,6 +210,14 @@ const PagePreviewCard: React.FC<{
   </button>
 )
 
+// 交換アイコン
+const TradeIcon: React.FC = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+    <path d="M7 16V4M7 4L3 8M7 4L11 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M17 8V20M17 20L21 16M17 20L13 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
 export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
   isOpen,
   onClose,
@@ -214,9 +225,11 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
   stickerBookPages,
   bookPages,
   bookStickers = [],
+  bookDecoItems = [],
   coverDesignId,
   onFollowToggle,
   onViewStickerBook,
+  onInviteToTrade,
   onReport,
   onBlock,
 }) => {
@@ -270,9 +283,13 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
             {/* ヘッダー */}
             <div
               style={{
-                padding: '16px 20px',
-                background: 'linear-gradient(135deg, #A78BFA 0%, #EC4899 100%)',
+                padding: '12px 20px 16px',
+                backgroundImage: 'url(/images/Header_UI.png)',
+                backgroundSize: '100% 100%',
+                backgroundPosition: 'center top',
+                backgroundRepeat: 'no-repeat',
                 position: 'relative',
+                minHeight: '52px',
               }}
             >
               {/* 戻るボタン */}
@@ -280,20 +297,23 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                 onClick={onClose}
                 style={{
                   position: 'absolute',
-                  top: '12px',
+                  top: '8px',
                   left: '12px',
-                  width: '40px',
-                  height: '40px',
+                  width: '36px',
+                  height: '36px',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.8)',
                   border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 }}
               >
-                <BackIcon />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 18L9 12L15 6" stroke="#9D4C6C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </button>
 
               {/* メニューボタン */}
@@ -301,20 +321,25 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                 onClick={() => setShowMenu(!showMenu)}
                 style={{
                   position: 'absolute',
-                  top: '12px',
+                  top: '8px',
                   right: '12px',
-                  width: '40px',
-                  height: '40px',
+                  width: '36px',
+                  height: '36px',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.8)',
                   border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 }}
               >
-                <MoreIcon />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="6" r="2" fill="#9D4C6C"/>
+                  <circle cx="12" cy="12" r="2" fill="#9D4C6C"/>
+                  <circle cx="12" cy="18" r="2" fill="#9D4C6C"/>
+                </svg>
               </button>
 
               {/* メニュードロップダウン */}
@@ -482,28 +507,57 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                 </div>
               )}
 
-              {/* フォローボタン */}
-              <button
-                onClick={() => onFollowToggle(user.id, !user.isFollowing)}
-                style={{
-                  width: '100%',
-                  padding: '14px 24px',
-                  borderRadius: '9999px',
-                  border: user.isFollowing ? '2px solid #A78BFA' : 'none',
-                  background: user.isFollowing
-                    ? 'transparent'
-                    : 'linear-gradient(135deg, #A78BFA 0%, #EC4899 100%)',
-                  color: user.isFollowing ? '#7C3AED' : 'white',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  marginBottom: '20px',
-                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                  boxShadow: user.isFollowing ? 'none' : '0 4px 12px rgba(167, 139, 250, 0.4)',
-                }}
-              >
-                {user.isFollowing ? 'フォロー中' : 'フォローする'}
-              </button>
+              {/* アクションボタン */}
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                {/* フォローボタン */}
+                <button
+                  onClick={() => onFollowToggle(user.id, !user.isFollowing)}
+                  style={{
+                    flex: 1,
+                    padding: '14px 24px',
+                    borderRadius: '9999px',
+                    border: user.isFollowing ? '2px solid #A78BFA' : 'none',
+                    background: user.isFollowing
+                      ? 'transparent'
+                      : 'linear-gradient(135deg, #A78BFA 0%, #EC4899 100%)',
+                    color: user.isFollowing ? '#7C3AED' : 'white',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                    boxShadow: user.isFollowing ? 'none' : '0 4px 12px rgba(167, 139, 250, 0.4)',
+                  }}
+                >
+                  {user.isFollowing ? 'フォロー中' : 'フォローする'}
+                </button>
+
+                {/* 交換に誘うボタン */}
+                {onInviteToTrade && (
+                  <button
+                    onClick={() => onInviteToTrade(user.id, user.name)}
+                    style={{
+                      flex: 1,
+                      padding: '14px 24px',
+                      borderRadius: '9999px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
+                      color: 'white',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                      boxShadow: '0 4px 12px rgba(196, 149, 106, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <TradeIcon />
+                    こうかんにさそう
+                  </button>
+                )}
+              </div>
 
               {/* 統計情報 */}
               <div
@@ -615,11 +669,13 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                         <BookView
                           pages={bookPages}
                           placedStickers={bookStickers}
+                          placedDecoItems={bookDecoItems}
                           width={175}
                           height={262}
                           renderNavigation={true}
                           coverDesignId={coverDesignId}
                           hideHints={true}
+                          displayScale={0.55}
                         />
                       </div>
                     </div>

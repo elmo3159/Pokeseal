@@ -6,6 +6,7 @@ import {
   defaultSearchFilter
 } from '@/domain/stickerTags'
 import { ALL_STICKERS } from '@/data/stickerMasterData'
+import { UPGRADE_RANKS, RANK_NAMES } from '@/constants/upgradeRanks'
 
 /**
  * SearchFilterPanel - Container Query Units (cqw, cqh) を使用したレスポンシブ設計
@@ -47,6 +48,56 @@ function getAllCharacterInfos(): CharacterInfo[] {
   }
 
   return Array.from(charactersMap.values()).sort((a, b) => b.rarity - a.rarity)
+}
+
+// ランク色取得
+const getRankColor = (rank: number): { bg: string; text: string; border: string } => {
+  switch (rank) {
+    case UPGRADE_RANKS.SILVER:
+      return { bg: 'rgba(192, 192, 192, 0.9)', text: '#5A5A5A', border: 'rgba(150, 150, 150, 0.5)' }
+    case UPGRADE_RANKS.GOLD:
+      return { bg: 'rgba(255, 215, 0, 0.9)', text: '#8B6914', border: 'rgba(200, 170, 0, 0.5)' }
+    case UPGRADE_RANKS.PRISM:
+      return { bg: 'linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #9b59b6)', text: '#fff', border: 'rgba(255, 100, 200, 0.5)' }
+    default:
+      return { bg: 'rgba(139, 90, 60, 0.3)', text: '#5C3D2E', border: 'rgba(139, 90, 60, 0.3)' }
+  }
+}
+
+// ランクボタン - Container Query対応
+const UpgradeRankButton: React.FC<{
+  rank: number
+  isSelected: boolean
+  onToggle: () => void
+}> = ({ rank, isSelected, onToggle }) => {
+  const colors = getRankColor(rank)
+  const rankName = RANK_NAMES[rank as keyof typeof RANK_NAMES]
+
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        minWidth: '18cqw',
+        height: '10cqw',
+        paddingLeft: '2cqw',
+        paddingRight: '2cqw',
+        borderRadius: '3cqw',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        fontSize: '2.8cqw',
+        transition: 'all 0.2s',
+        background: isSelected ? colors.bg : 'rgba(255, 255, 255, 0.7)',
+        color: isSelected ? colors.text : '#888',
+        boxShadow: isSelected ? '0 0.5cqw 2cqw rgba(0, 0, 0, 0.15)' : 'none',
+        border: isSelected ? `1px solid ${colors.border}` : '1px solid rgba(200, 200, 200, 0.3)',
+        cursor: 'pointer',
+      }}
+    >
+      {rankName}
+    </button>
+  )
 }
 
 // レア度ボタン - Container Query対応
@@ -324,6 +375,13 @@ export const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     updateFilter({ rarities: newRarities })
   }
 
+  const toggleUpgradeRank = (rank: number) => {
+    const newRanks = filter.upgradeRanks.includes(rank)
+      ? filter.upgradeRanks.filter(r => r !== rank)
+      : [...filter.upgradeRanks, rank]
+    updateFilter({ upgradeRanks: newRanks })
+  }
+
   const handleCharacterSelect = (character: string | null) => {
     updateFilter({ series: character })
   }
@@ -336,6 +394,7 @@ export const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     (filter.query ? 1 : 0) +
     (filter.series ? 1 : 0) +
     filter.rarities.length +
+    filter.upgradeRanks.length +
     (filter.ownedOnly ? 1 : 0)
 
   const selectedCharacterName = filter.series || 'すべて'
@@ -509,6 +568,28 @@ export const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
                     rarity={rarity}
                     isSelected={filter.rarities.includes(rarity)}
                     onToggle={() => toggleRarity(rarity)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* アップグレードランク */}
+            <div style={{ marginBottom: '4cqw' }}>
+              <h4 style={{
+                fontSize: '3cqw',
+                fontWeight: 'bold',
+                color: '#7C3AED',
+                marginBottom: '2cqw'
+              }}>
+                💎 ランク
+              </h4>
+              <div style={{ display: 'flex', gap: '2cqw', flexWrap: 'wrap' }}>
+                {[UPGRADE_RANKS.NORMAL, UPGRADE_RANKS.SILVER, UPGRADE_RANKS.GOLD, UPGRADE_RANKS.PRISM].map(rank => (
+                  <UpgradeRankButton
+                    key={rank}
+                    rank={rank}
+                    isSelected={filter.upgradeRanks.includes(rank)}
+                    onToggle={() => toggleUpgradeRank(rank)}
                   />
                 ))}
               </div>

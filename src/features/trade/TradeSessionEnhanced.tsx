@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PlacedSticker } from '../sticker-book/StickerPlacement'
 import type { BookPage } from '../sticker-book/BookView'
+import { RankStars } from '@/components/upgrade'
+import type { UpgradeRank } from '@/constants/upgradeRanks'
 
 // ============================================
 // 型定義
@@ -146,11 +148,14 @@ const MiniStickerCard: React.FC<{
           ⭐
         </div>
       )}
-      {/* レア度 */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/30 text-center">
-        <span className="text-[6px] text-yellow-300">
-          {'★'.repeat(rarity)}
-        </span>
+      {/* レア度 - SVGベースのRankStars */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/30 flex justify-center py-0.5">
+        <RankStars
+          baseRarity={rarity}
+          upgradeRank={0 as UpgradeRank}
+          size="sm"
+          showAnimation={false}
+        />
       </div>
       {/* 選択マーク */}
       {selected && (

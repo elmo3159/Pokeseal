@@ -230,7 +230,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 60,
+        zIndex: 1000,
         display: 'flex',
         flexDirection: 'column',
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
@@ -247,16 +247,39 @@ export const CommentModal: React.FC<CommentModalProps> = ({
       />
 
       {/* モーダル本体（下からスライド） */}
-      <div style={{ background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{ background: 'white', borderTopLeftRadius: '24px', borderTopRightRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* ヘッダー */}
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', borderBottom: '1px solid #F3F4F6', position: 'relative', background: 'linear-gradient(to right, #FAF5FF, #FCE7F3)' }}>
+        <header style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+          paddingTop: '10px',
+          paddingBottom: '14px',
+          position: 'relative',
+          backgroundImage: 'url(/images/Header_UI.png)',
+          backgroundSize: '100% 100%',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+          minHeight: '52px',
+        }}>
           {/* ドラッグハンドル */}
-          <div style={{ position: 'absolute', top: '6px', left: '50%', transform: 'translateX(-50%)', width: '40px', height: '4px', background: '#D1D5DB', borderRadius: '9999px' }} />
+          <div style={{ position: 'absolute', top: '4px', left: '50%', transform: 'translateX(-50%)', width: '40px', height: '4px', background: 'rgba(255, 255, 255, 0.6)', borderRadius: '9999px' }} />
 
-          <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#7C3AED', marginTop: '8px' }}>
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#FFFFFF',
+            marginTop: '4px',
+            textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)',
+          }}>
             💬 コメント
             {comments.length > 0 && (
-              <span style={{ color: '#A78BFA', fontWeight: 'normal', marginLeft: '4px' }}>
+              <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 'normal', marginLeft: '4px' }}>
                 ({comments.length})
               </span>
             )}
@@ -264,9 +287,23 @@ export const CommentModal: React.FC<CommentModalProps> = ({
 
           <button
             onClick={onClose}
-            style={{ position: 'absolute', right: '16px', top: '12px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            style={{
+              position: 'absolute',
+              right: '16px',
+              top: '10px',
+              width: '32px',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.8)',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+            }}
           >
-            <span style={{ color: '#9CA3AF' }}>✕</span>
+            <span style={{ color: '#9D4C6C', fontWeight: 'bold' }}>✕</span>
           </button>
         </header>
 

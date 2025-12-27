@@ -12,33 +12,544 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      admin_actions: {
+        Row: {
+          action_type: string
+          admin_id: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          reason: string | null
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action_type: string
+          admin_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          reason?: string | null
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action_type?: string
+          admin_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          reason?: string | null
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_actions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_gifts: {
+        Row: {
+          admin_id: string | null
+          created_at: string | null
+          currency_amount: number | null
+          currency_type: string | null
+          gift_type: string
+          id: string
+          item_amount: number | null
+          item_id: string | null
+          reason: string
+          sticker_id: string | null
+          sticker_rank: number | null
+          target_type: string
+          target_user_id: string | null
+        }
+        Insert: {
+          admin_id?: string | null
+          created_at?: string | null
+          currency_amount?: number | null
+          currency_type?: string | null
+          gift_type: string
+          id?: string
+          item_amount?: number | null
+          item_id?: string | null
+          reason: string
+          sticker_id?: string | null
+          sticker_rank?: number | null
+          target_type: string
+          target_user_id?: string | null
+        }
+        Update: {
+          admin_id?: string | null
+          created_at?: string | null
+          currency_amount?: number | null
+          currency_type?: string | null
+          gift_type?: string
+          id?: string
+          item_amount?: number | null
+          item_id?: string | null
+          reason?: string
+          sticker_id?: string | null
+          sticker_rank?: number | null
+          target_type?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_gifts_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_gifts_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          is_active: boolean | null
+          permissions: Json | null
+          role: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          is_active?: boolean | null
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          permissions?: Json | null
+          role?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_users_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          id?: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          action_label: string | null
+          action_url: string | null
+          admin_id: string | null
+          announcement_type: string
+          content: string
+          created_at: string | null
+          ends_at: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          is_pinned: boolean | null
+          starts_at: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          action_label?: string | null
+          action_url?: string | null
+          admin_id?: string | null
+          announcement_type?: string
+          content: string
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_pinned?: boolean | null
+          starts_at?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          action_label?: string | null
+          action_url?: string | null
+          admin_id?: string | null
+          announcement_type?: string
+          content?: string
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          is_pinned?: boolean | null
+          starts_at?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      async_trade_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message_type: string
+          sender_id: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string
+          sender_id: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message_type?: string
+          sender_id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "async_trade_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "expired_async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      async_trade_offers: {
+        Row: {
+          created_at: string | null
+          id: string
+          session_id: string
+          user_id: string
+          user_sticker_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          session_id: string
+          user_id: string
+          user_sticker_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          session_id?: string
+          user_id?: string
+          user_sticker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "async_trade_offers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_offers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "expired_async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_offers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_offers_user_sticker_id_fkey"
+            columns: ["user_sticker_id"]
+            isOneToOne: false
+            referencedRelation: "user_stickers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      async_trade_requests: {
+        Row: {
+          created_at: string | null
+          id: string
+          requester_id: string
+          session_id: string
+          target_user_sticker_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          requester_id: string
+          session_id: string
+          target_user_sticker_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          requester_id?: string
+          session_id?: string
+          target_user_sticker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "async_trade_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_requests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_requests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "expired_async_trade_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_requests_target_user_sticker_id_fkey"
+            columns: ["target_user_sticker_id"]
+            isOneToOne: false
+            referencedRelation: "user_stickers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      async_trade_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          requester_confirmed: boolean | null
+          requester_confirmed_at: string | null
+          requester_id: string
+          responder_confirmed: boolean | null
+          responder_confirmed_at: string | null
+          responder_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          requester_confirmed?: boolean | null
+          requester_confirmed_at?: string | null
+          requester_id: string
+          responder_confirmed?: boolean | null
+          responder_confirmed_at?: string | null
+          responder_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          requester_confirmed?: boolean | null
+          requester_confirmed_at?: string | null
+          requester_id?: string
+          responder_confirmed?: boolean | null
+          responder_confirmed_at?: string | null
+          responder_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "async_trade_sessions_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_sessions_responder_id_fkey"
+            columns: ["responder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collection_rewards: {
+        Row: {
+          badge_description: string
+          badge_icon: string | null
+          badge_title: string
+          completion_percentage: number
+          created_at: string | null
+          id: string
+          reward_amount: number
+          reward_type: string
+          sort_order: number
+        }
+        Insert: {
+          badge_description: string
+          badge_icon?: string | null
+          badge_title: string
+          completion_percentage: number
+          created_at?: string | null
+          id: string
+          reward_amount: number
+          reward_type: string
+          sort_order: number
+        }
+        Update: {
+          badge_description?: string
+          badge_icon?: string | null
+          badge_title?: string
+          completion_percentage?: number
+          created_at?: string | null
+          id?: string
+          reward_amount?: number
+          reward_type?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      daily_missions: {
+        Row: {
+          created_at: string | null
+          description: string
+          difficulty: string
+          goal: number
+          id: string
+          is_active: boolean
+          reward_amount: number
+          reward_type: string
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          difficulty?: string
+          goal: number
+          id: string
+          is_active?: boolean
+          reward_amount: number
+          reward_type: string
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          difficulty?: string
+          goal?: number
+          id?: string
+          is_active?: boolean
+          reward_amount?: number
+          reward_type?: string
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       deco_items: {
         Row: {
           base_height: number
@@ -138,6 +649,69 @@ export type Database = {
           },
         ]
       }
+      device_tokens: {
+        Row: {
+          created_at: string | null
+          id: string
+          platform: string
+          token: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      follows: {
+        Row: {
+          created_at: string | null
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follows_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follows_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friendships: {
         Row: {
           created_at: string | null
@@ -212,6 +786,56 @@ export type Database = {
           },
           {
             foreignKeyName: "gacha_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      login_bonus_history: {
+        Row: {
+          claimed: boolean
+          claimed_at: string | null
+          consecutive_days: number
+          created_at: string | null
+          id: string
+          login_date: string
+          reward_amount: number
+          reward_day: number
+          reward_description: string | null
+          reward_type: string
+          user_id: string
+        }
+        Insert: {
+          claimed?: boolean
+          claimed_at?: string | null
+          consecutive_days: number
+          created_at?: string | null
+          id?: string
+          login_date?: string
+          reward_amount: number
+          reward_day: number
+          reward_description?: string | null
+          reward_type: string
+          user_id: string
+        }
+        Update: {
+          claimed?: boolean
+          claimed_at?: string | null
+          consecutive_days?: number
+          created_at?: string | null
+          id?: string
+          login_date?: string
+          reward_amount?: number
+          reward_day?: number
+          reward_description?: string | null
+          reward_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "login_bonus_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -296,9 +920,121 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          contests: boolean | null
+          created_at: string | null
+          friend_requests: boolean | null
+          id: string
+          new_stickers: boolean | null
+          trade_requests: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          contests?: boolean | null
+          created_at?: string | null
+          friend_requests?: boolean | null
+          id?: string
+          new_stickers?: boolean | null
+          trade_requests?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          contests?: boolean | null
+          created_at?: string | null
+          friend_requests?: boolean | null
+          id?: string
+          new_stickers?: boolean | null
+          trade_requests?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          body: string
+          created_at: string | null
+          data: Json | null
+          id: string
+          push_sent: boolean | null
+          read: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          push_sent?: boolean | null
+          read?: boolean | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          push_sent?: boolean | null
+          read?: boolean | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      post_comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          post_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          post_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          post_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           caption: string | null
+          comment_count: number | null
           created_at: string | null
           hashtags: string[] | null
           id: string
@@ -311,6 +1047,7 @@ export type Database = {
         }
         Insert: {
           caption?: string | null
+          comment_count?: number | null
           created_at?: string | null
           hashtags?: string[] | null
           id?: string
@@ -323,6 +1060,7 @@ export type Database = {
         }
         Update: {
           caption?: string | null
+          comment_count?: number | null
           created_at?: string | null
           hashtags?: string[] | null
           id?: string
@@ -356,10 +1094,17 @@ export type Database = {
           bio: string | null
           created_at: string | null
           display_name: string | null
+          drops: number | null
           id: string
+          is_suspended: boolean | null
+          last_seen_at: string | null
+          preshiru: number | null
           selected_charm_id: string | null
           selected_theme_id: string | null
+          silchike: number | null
           star_points: number | null
+          suspended_until: string | null
+          suspension_reason: string | null
           total_exp: number | null
           total_stickers: number | null
           total_trades: number | null
@@ -373,10 +1118,17 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           display_name?: string | null
+          drops?: number | null
           id?: string
+          is_suspended?: boolean | null
+          last_seen_at?: string | null
+          preshiru?: number | null
           selected_charm_id?: string | null
           selected_theme_id?: string | null
+          silchike?: number | null
           star_points?: number | null
+          suspended_until?: string | null
+          suspension_reason?: string | null
           total_exp?: number | null
           total_stickers?: number | null
           total_trades?: number | null
@@ -390,10 +1142,17 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           display_name?: string | null
+          drops?: number | null
           id?: string
+          is_suspended?: boolean | null
+          last_seen_at?: string | null
+          preshiru?: number | null
           selected_charm_id?: string | null
           selected_theme_id?: string | null
+          silchike?: number | null
           star_points?: number | null
+          suspended_until?: string | null
+          suspension_reason?: string | null
           total_exp?: number | null
           total_stickers?: number | null
           total_trades?: number | null
@@ -445,39 +1204,61 @@ export type Database = {
       }
       reports: {
         Row: {
+          action_taken: string | null
+          admin_id: string | null
+          admin_notes: string | null
           category: string
           created_at: string | null
           description: string | null
           id: string
+          priority: string | null
           reporter_id: string
+          resolved_at: string | null
           status: string
           target_id: string
           target_type: string
           updated_at: string | null
         }
         Insert: {
+          action_taken?: string | null
+          admin_id?: string | null
+          admin_notes?: string | null
           category: string
           created_at?: string | null
           description?: string | null
           id?: string
+          priority?: string | null
           reporter_id: string
+          resolved_at?: string | null
           status?: string
           target_id: string
           target_type: string
           updated_at?: string | null
         }
         Update: {
+          action_taken?: string | null
+          admin_id?: string | null
+          admin_notes?: string | null
           category?: string
           created_at?: string | null
           description?: string | null
           id?: string
+          priority?: string | null
           reporter_id?: string
+          resolved_at?: string | null
           status?: string
           target_id?: string
           target_type?: string
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reports_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reports_reporter_id_fkey"
             columns: ["reporter_id"]
@@ -623,6 +1404,44 @@ export type Database = {
           },
         ]
       }
+      sticker_upgrade_history: {
+        Row: {
+          consumed_quantity: number
+          from_rank: number
+          id: string
+          sticker_id: string
+          to_rank: number
+          upgraded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          consumed_quantity: number
+          from_rank: number
+          id?: string
+          sticker_id: string
+          to_rank: number
+          upgraded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          consumed_quantity?: number
+          from_rank?: number
+          id?: string
+          sticker_id?: string
+          to_rank?: number
+          upgraded_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sticker_upgrade_history_sticker_id_fkey"
+            columns: ["sticker_id"]
+            isOneToOne: false
+            referencedRelation: "stickers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stickers: {
         Row: {
           base_rate: number | null
@@ -635,6 +1454,7 @@ export type Database = {
           name: string
           rarity: number
           series: string | null
+          sticker_type: string | null
           type: string
           updated_at: string | null
         }
@@ -649,6 +1469,7 @@ export type Database = {
           name: string
           rarity: number
           series?: string | null
+          sticker_type?: string | null
           type: string
           updated_at?: string | null
         }
@@ -663,6 +1484,7 @@ export type Database = {
           name?: string
           rarity?: number
           series?: string | null
+          sticker_type?: string | null
           type?: string
           updated_at?: string | null
         }
@@ -912,6 +1734,220 @@ export type Database = {
           },
         ]
       }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string | null
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_collection_rewards: {
+        Row: {
+          claimed_at: string | null
+          created_at: string | null
+          id: string
+          reward_id: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reward_id: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reward_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_collection_rewards_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "collection_rewards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_collection_rewards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_daily_missions: {
+        Row: {
+          claimed: boolean
+          completed_at: string | null
+          created_at: string | null
+          date: string
+          id: string
+          is_completed: boolean
+          mission_id: string
+          progress: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed?: boolean
+          completed_at?: string | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_completed?: boolean
+          mission_id: string
+          progress?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed?: boolean
+          completed_at?: string | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_completed?: boolean
+          mission_id?: string
+          progress?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_daily_missions_mission_id_fkey"
+            columns: ["mission_id"]
+            isOneToOne: false
+            referencedRelation: "daily_missions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_daily_missions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_progress: {
+        Row: {
+          badges: Json | null
+          created_at: string | null
+          exp: number
+          level: number
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          badges?: Json | null
+          created_at?: string | null
+          exp?: number
+          level?: number
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          badges?: Json | null
+          created_at?: string | null
+          exp?: number
+          level?: number
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sticker_achievements: {
+        Row: {
+          created_at: string | null
+          first_gold_at: string | null
+          first_prism_at: string | null
+          first_silver_at: string | null
+          id: string
+          max_upgrade_rank: number | null
+          sticker_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          first_gold_at?: string | null
+          first_prism_at?: string | null
+          first_silver_at?: string | null
+          id?: string
+          max_upgrade_rank?: number | null
+          sticker_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          first_gold_at?: string | null
+          first_prism_at?: string | null
+          first_silver_at?: string | null
+          id?: string
+          max_upgrade_rank?: number | null
+          sticker_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_sticker_achievements_sticker_id_fkey"
+            columns: ["sticker_id"]
+            isOneToOne: false
+            referencedRelation: "stickers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_stickers: {
         Row: {
           created_at: string | null
@@ -922,6 +1958,8 @@ export type Database = {
           sticker_id: string
           total_acquired: number | null
           updated_at: string | null
+          upgrade_rank: number | null
+          upgraded_at: string | null
           user_id: string
         }
         Insert: {
@@ -933,6 +1971,8 @@ export type Database = {
           sticker_id: string
           total_acquired?: number | null
           updated_at?: string | null
+          upgrade_rank?: number | null
+          upgraded_at?: string | null
           user_id: string
         }
         Update: {
@@ -944,6 +1984,8 @@ export type Database = {
           sticker_id?: string
           total_acquired?: number | null
           updated_at?: string | null
+          upgrade_rank?: number | null
+          upgraded_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -963,12 +2005,152 @@ export type Database = {
           },
         ]
       }
+      user_suspensions: {
+        Row: {
+          admin_id: string | null
+          created_at: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean | null
+          reason: string
+          related_report_id: string | null
+          starts_at: string | null
+          suspension_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_id?: string | null
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason: string
+          related_report_id?: string | null
+          starts_at?: string | null
+          suspension_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_id?: string | null
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason?: string
+          related_report_id?: string | null
+          starts_at?: string | null
+          suspension_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_suspensions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_suspensions_related_report_id_fkey"
+            columns: ["related_report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_suspensions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      expired_async_trade_sessions: {
+        Row: {
+          expires_at: string | null
+          id: string | null
+          requester_id: string | null
+          responder_id: string | null
+          status: string | null
+        }
+        Insert: {
+          expires_at?: string | null
+          id?: string | null
+          requester_id?: string | null
+          responder_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          expires_at?: string | null
+          id?: string | null
+          requester_id?: string | null
+          responder_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "async_trade_sessions_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "async_trade_sessions_responder_id_fkey"
+            columns: ["responder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      admin_grant_currency: {
+        Args: {
+          p_admin_id: string
+          p_amount: number
+          p_currency_type: string
+          p_reason: string
+          p_target_user_id: string
+        }
+        Returns: boolean
+      }
+      admin_grant_currency_to_all: {
+        Args: {
+          p_admin_id: string
+          p_amount: number
+          p_currency_type: string
+          p_reason: string
+        }
+        Returns: number
+      }
+      admin_grant_sticker: {
+        Args: {
+          p_admin_id: string
+          p_quantity?: number
+          p_rank?: number
+          p_reason?: string
+          p_sticker_id: string
+          p_target_user_id: string
+        }
+        Returns: boolean
+      }
+      calculate_consecutive_days: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       cleanup_my_old_trades: { Args: { p_user_id: string }; Returns: number }
+      complete_async_trade_session: {
+        Args: { p_session_id: string }
+        Returns: boolean
+      }
       deliver_mystery_posts: { Args: never; Returns: number }
       execute_trade: { Args: { p_trade_id: string }; Returns: Json }
       find_scout_matches: {
@@ -1000,7 +2182,42 @@ export type Database = {
         }
       }
       generate_unique_user_code: { Args: never; Returns: string }
+      get_collection_completion_rate: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_login_bonus_reward: {
+        Args: { day: number }
+        Returns: {
+          reward_amount: number
+          reward_description: string
+          reward_type: string
+        }[]
+      }
+      get_unclaimed_collection_rewards: {
+        Args: { p_user_id: string }
+        Returns: {
+          badge_description: string
+          badge_icon: string
+          badge_title: string
+          completion_percentage: number
+          current_completion: number
+          reward_amount: number
+          reward_id: string
+          reward_type: string
+        }[]
+      }
       increment_trade_count: { Args: { p_user_id: string }; Returns: undefined }
+      is_admin: { Args: { check_user_id: string }; Returns: boolean }
+      is_mutually_blocked: {
+        Args: { user1_id: string; user2_id: string }
+        Returns: boolean
+      }
+      is_user_blocked: {
+        Args: { checker_id: string; target_id: string }
+        Returns: boolean
+      }
+      is_user_suspended: { Args: { check_user_id: string }; Returns: boolean }
       join_trade: {
         Args: { p_trade_id: string; p_user_id: string }
         Returns: Json
@@ -1016,6 +2233,97 @@ export type Database = {
           total_trades: number
           user_code: string
         }[]
+      }
+      // 招待システム
+      get_or_create_invitation_code: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      apply_invitation: {
+        Args: { p_invitee_id: string; p_invitation_code: string }
+        Returns: Json
+      }
+      claim_inviter_reward: {
+        Args: { p_user_id: string; p_invitation_id: string }
+        Returns: Json
+      }
+      claim_invitee_reward: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_invitation_stats: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_invitation_list: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      // レビュー報酬システム
+      claim_review_reward: {
+        Args: { p_user_id: string; p_platform: string }
+        Returns: Json
+      }
+      get_review_reward_status: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      // ユーザー統計・ミッション進捗システム
+      get_user_stats: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      update_daily_mission_progress: {
+        Args: { p_user_id: string; p_mission_type: string; p_increment?: number }
+        Returns: Json
+      }
+      claim_daily_mission_reward: {
+        Args: { p_user_id: string; p_mission_id: string }
+        Returns: Json
+      }
+      get_collection_rewards_status: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      claim_collection_reward: {
+        Args: { p_user_id: string; p_reward_id: string }
+        Returns: Json
+      }
+      get_today_missions: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_or_create_user_progress: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      add_user_exp: {
+        Args: { p_user_id: string; p_exp_amount: number; p_action_type?: string }
+        Returns: Json
+      }
+      record_gacha_pull: {
+        Args: { p_user_id: string; p_pull_count?: number }
+        Returns: Json
+      }
+      record_timeline_post: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      record_reaction: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      record_sticker_book_save: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      record_trade_complete: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      record_daily_login: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
     }
     Enums: {
@@ -1145,9 +2453,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

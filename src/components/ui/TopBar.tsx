@@ -22,97 +22,77 @@ interface TopBarProps {
 
 // デコレーション付きタイトルコンポーネント
 const DecoratedTitle: React.FC<{ title: string; decoration: TitleDecoration }> = ({ title, decoration }) => {
-  // 共通のタイトルスタイル
-  const getTitleStyle = (gradientColors: string) => ({
+  // 共通のタイトルスタイル（ニット背景に映える白文字ベース）
+  const baseTitleStyle = {
     fontFamily: "'M PLUS Rounded 1c', sans-serif",
-    background: gradientColors,
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
-    letterSpacing: '0.03em',
-  })
+    letterSpacing: '0.05em',
+    color: '#FFFFFF',
+    textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)',
+  }
 
   if (decoration === 'gacha') {
     return (
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-sm">🎰</span>
-        <h1
-          className="text-base font-black"
-          style={getTitleStyle('linear-gradient(135deg, #F472B6 0%, #8B5CF6 50%, #06B6D4 100%)')}
-        >
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>🎰</span>
+        <h1 className="text-lg font-black" style={baseTitleStyle}>
           {title}
         </h1>
-        <span className="text-sm">✨</span>
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>✨</span>
       </div>
     )
   }
 
   if (decoration === 'collection') {
     return (
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-sm">📚</span>
-        <h1
-          className="text-base font-bold"
-          style={getTitleStyle('linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)')}
-        >
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>📚</span>
+        <h1 className="text-lg font-bold" style={baseTitleStyle}>
           {title}
         </h1>
-        <span className="text-sm">✨</span>
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>✨</span>
       </div>
     )
   }
 
   if (decoration === 'trade') {
     return (
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-sm">🤝</span>
-        <h1
-          className="text-base font-bold"
-          style={getTitleStyle('linear-gradient(135deg, #10B981 0%, #3B82F6 100%)')}
-        >
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>🤝</span>
+        <h1 className="text-lg font-bold" style={baseTitleStyle}>
           {title}
         </h1>
-        <span className="text-sm">💫</span>
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>💫</span>
       </div>
     )
   }
 
   if (decoration === 'timeline') {
     return (
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-sm">🕒</span>
-        <h1
-          className="text-base font-bold"
-          style={getTitleStyle('linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)')}
-        >
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>🕒</span>
+        <h1 className="text-lg font-bold" style={baseTitleStyle}>
           {title}
         </h1>
-        <span className="text-sm">📱</span>
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>📱</span>
       </div>
     )
   }
 
   if (decoration === 'profile') {
     return (
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-sm">👤</span>
-        <h1
-          className="text-base font-bold"
-          style={getTitleStyle('linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)')}
-        >
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>👤</span>
+        <h1 className="text-lg font-bold" style={baseTitleStyle}>
           {title}
         </h1>
-        <span className="text-sm">⭐</span>
+        <span className="text-base" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))' }}>⭐</span>
       </div>
     )
   }
 
   // デフォルト（none または指定なし）
   return (
-    <h1
-      className="text-base font-bold text-center"
-      style={getTitleStyle('linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)')}
-    >
+    <h1 className="text-lg font-bold text-center" style={baseTitleStyle}>
       {title}
     </h1>
   )
@@ -195,17 +175,16 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <header
-      className="fixed top-0 left-0 right-0 flex items-center justify-between px-2"
+      className="fixed top-0 left-0 right-0 flex items-center justify-between px-3"
       style={{
-        height: '36px',
-        // グラスモーフィズム - 洗練された半透明
-        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.75) 100%)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '0 1px 8px rgba(139, 92, 246, 0.08)',
+        height: '52px',
+        backgroundImage: 'url(/images/Header_UI.png)',
+        backgroundSize: '100% 100%',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
         paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: '8px', // 波状の下端部分に余白
         zIndex: 100,
-        borderBottom: '1px solid rgba(167, 139, 250, 0.15)',
       }}
     >
       {/* 左側：戻るボタンまたは空白 */}
@@ -215,8 +194,9 @@ export function TopBar({
             onClick={onBack}
             className="w-7 h-7 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90"
             style={{
-              background: 'linear-gradient(135deg, rgba(167, 139, 250, 0.2) 0%, rgba(236, 72, 153, 0.15) 100%)',
-              color: '#7C3AED',
+              background: 'rgba(255, 255, 255, 0.8)',
+              color: '#9D4C6C',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
             }}
           >
             <span className="text-sm font-bold">←</span>

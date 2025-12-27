@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { UPGRADE_RANKS, RANK_NAMES, type UpgradeRank } from '@/constants/upgradeRanks'
+import { RankStars } from '@/components/upgrade'
 
 // 交換用シール情報
 export interface TradeSticker {
@@ -10,6 +12,7 @@ export interface TradeSticker {
   rarity: 1 | 2 | 3 | 4 | 5
   type: 'normal' | 'puffy' | 'sparkle'
   rate: number // シールのレート（価値）
+  upgradeRank?: UpgradeRank // アップグレードランク
 }
 
 // 交換相手情報
@@ -53,6 +56,55 @@ const rarityColors = {
   5: 'bg-gradient-to-br from-yellow-100 to-orange-100 border-yellow-400'
 }
 
+// ランクオーラスタイルを取得
+const getRankAuraStyle = (rank: number | undefined): React.CSSProperties => {
+  if (rank === undefined || rank === UPGRADE_RANKS.NORMAL) return {}
+
+  if (rank === UPGRADE_RANKS.SILVER) {
+    return {
+      boxShadow: '0 0 8px 2px rgba(192, 192, 192, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.3)',
+    }
+  }
+  if (rank === UPGRADE_RANKS.GOLD) {
+    return {
+      boxShadow: '0 0 10px 3px rgba(255, 215, 0, 0.6), inset 0 0 6px rgba(255, 248, 220, 0.4)',
+    }
+  }
+  if (rank === UPGRADE_RANKS.PRISM) {
+    return {
+      boxShadow: '0 0 12px 4px rgba(167, 139, 250, 0.7), 0 0 20px 6px rgba(236, 72, 153, 0.4)',
+      animation: 'prism-pulse 2s ease-in-out infinite',
+    }
+  }
+  return {}
+}
+
+// ランクバッジの色を取得
+const getRankBadgeStyle = (rank: number | undefined): React.CSSProperties => {
+  if (rank === undefined || rank === UPGRADE_RANKS.NORMAL) return { display: 'none' }
+
+  if (rank === UPGRADE_RANKS.SILVER) {
+    return {
+      background: 'linear-gradient(135deg, #C0C0C0, #E8E8E8)',
+      color: '#666',
+    }
+  }
+  if (rank === UPGRADE_RANKS.GOLD) {
+    return {
+      background: 'linear-gradient(135deg, #FFD700, #FFA500)',
+      color: '#8B4513',
+    }
+  }
+  if (rank === UPGRADE_RANKS.PRISM) {
+    return {
+      background: 'linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #A78BFA)',
+      color: 'white',
+      textShadow: '0 0 2px rgba(0,0,0,0.5)',
+    }
+  }
+  return { display: 'none' }
+}
+
 // シールカードコンポーネント
 const StickerCard: React.FC<{
   sticker: TradeSticker
@@ -63,6 +115,7 @@ const StickerCard: React.FC<{
   disabled?: boolean
 }> = ({ sticker, selected, offered, onSelect, size = 'md', disabled }) => {
   const sizeClasses = size === 'sm' ? 'w-14 h-14' : 'w-16 h-16'
+  const upgradeRank = sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL
 
   return (
     <button
@@ -76,6 +129,7 @@ const StickerCard: React.FC<{
         ${offered ? 'opacity-50' : ''}
         ${disabled ? 'cursor-not-allowed' : 'hover:scale-105 active:scale-95'}
       `}
+      style={getRankAuraStyle(upgradeRank)}
     >
       {sticker.imageUrl ? (
         <img
@@ -88,10 +142,24 @@ const StickerCard: React.FC<{
           {sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'}
         </div>
       )}
-      {/* レア度表示 */}
-      <div className="absolute bottom-0 left-0 right-0 text-center bg-black/20 text-[8px] text-yellow-300">
-        {'★'.repeat(sticker.rarity)}
+      {/* レア度表示 - SVGベースのRankStars */}
+      <div className="absolute bottom-0 left-0 right-0 flex justify-center bg-black/20 py-0.5">
+        <RankStars
+          baseRarity={sticker.rarity}
+          upgradeRank={(sticker.upgradeRank ?? 0) as UpgradeRank}
+          size="sm"
+          showAnimation={false}
+        />
       </div>
+      {/* ランクバッジ */}
+      {upgradeRank > UPGRADE_RANKS.NORMAL && (
+        <div
+          className="absolute top-0 left-0 px-1 text-[7px] font-bold rounded-br-lg"
+          style={getRankBadgeStyle(upgradeRank)}
+        >
+          {RANK_NAMES[upgradeRank]?.charAt(0)}
+        </div>
+      )}
       {/* 選択マーク */}
       {selected && (
         <div className="absolute top-0 right-0 w-5 h-5 bg-pink-500 rounded-bl-lg flex items-center justify-center">
@@ -116,14 +184,28 @@ const OfferSlot: React.FC<{
     )
   }
 
+  const upgradeRank = sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL
+
   return (
     <div className="relative">
-      <div className={`w-14 h-14 rounded-xl border-2 overflow-hidden ${rarityColors[sticker.rarity]}`}>
+      <div
+        className={`w-14 h-14 rounded-xl border-2 overflow-hidden ${rarityColors[sticker.rarity]}`}
+        style={getRankAuraStyle(upgradeRank)}
+      >
         {sticker.imageUrl ? (
           <img src={sticker.imageUrl} alt={sticker.name} className="w-full h-full object-contain p-1" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-2xl">
             {sticker.type === 'sparkle' ? '✨' : '⭐'}
+          </div>
+        )}
+        {/* ランクバッジ */}
+        {upgradeRank > UPGRADE_RANKS.NORMAL && (
+          <div
+            className="absolute top-0 left-0 px-1 text-[7px] font-bold rounded-br-lg"
+            style={getRankBadgeStyle(upgradeRank)}
+          >
+            {RANK_NAMES[upgradeRank]?.charAt(0)}
           </div>
         )}
       </div>
@@ -327,7 +409,21 @@ export const TradeSession: React.FC<TradeSessionProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-purple-100 to-pink-100 flex flex-col">
+    <>
+      <style jsx global>{`
+        @keyframes prism-pulse {
+          0%, 100% {
+            box-shadow: 0 0 12px 4px rgba(167, 139, 250, 0.7), 0 0 20px 6px rgba(236, 72, 153, 0.4);
+          }
+          33% {
+            box-shadow: 0 0 12px 4px rgba(255, 107, 107, 0.7), 0 0 20px 6px rgba(255, 230, 109, 0.4);
+          }
+          66% {
+            box-shadow: 0 0 12px 4px rgba(78, 205, 196, 0.7), 0 0 20px 6px rgba(167, 139, 250, 0.4);
+          }
+        }
+      `}</style>
+      <div className="fixed inset-0 z-50 bg-gradient-to-b from-purple-100 to-pink-100 flex flex-col">
       {/* ヘッダー */}
       <div className="bg-white/80 backdrop-blur-sm px-4 py-3 flex items-center justify-between shadow-sm">
         <button
@@ -478,7 +574,8 @@ export const TradeSession: React.FC<TradeSessionProps> = ({
           {myConfirmed ? '✓ まっています...' : '🤝 こうかんOK！'}
         </button>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 

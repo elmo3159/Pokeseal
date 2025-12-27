@@ -3,7 +3,12 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "echo '[Hook] File modified - consider refreshing Unity assets'"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] File modified - consider refreshing Unity assets'"
+          }
+        ]
       }
     ]
   },

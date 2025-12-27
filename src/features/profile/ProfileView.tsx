@@ -1,6 +1,8 @@
 'use client'
 
 import React from 'react'
+import { ProgressBar } from '@/components/progress/ProgressBar'
+import { RankProgressCard, type RankCounts } from '@/components/upgrade'
 
 // ユーザー情報
 export interface UserProfile {
@@ -26,6 +28,8 @@ export interface UserStats {
   followingCount: number
   postsCount: number
   reactionsReceived: number
+  // アップグレードランク達成数
+  rankCounts?: RankCounts
 }
 
 // 実績情報
@@ -50,85 +54,10 @@ interface ProfileViewProps {
   onViewStats: () => void
   onViewFollowers: () => void
   onViewFollowing: () => void
-}
-
-// レベルプログレスバー（画像フレーム使用）- 拡大サイズ
-const LevelProgress: React.FC<{
-  level: number
-  exp: number
-  expToNextLevel: number
-}> = ({ level, exp, expToNextLevel }) => {
-  const progress = (exp / expToNextLevel) * 100
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '4px', paddingRight: '4px', paddingTop: '8px', paddingBottom: '8px' }}>
-      {/* レベルバッジ - 小さめサイズ */}
-      <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
-        <img
-          src="/images/level_badge.png"
-          alt=""
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', objectFit: 'contain' }}
-        />
-        <span
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            fontWeight: 800,
-            color: '#7C3AED',
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-            textShadow: '0 1px 2px rgba(255,255,255,0.8)',
-          }}
-        >
-          {level}
-        </span>
-      </div>
-
-      {/* プログレスバー - 横幅いっぱいに拡大 */}
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px' }}>
-          <span
-            style={{ fontWeight: 800, color: '#7C3AED', fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
-          >
-            Lv.{level}
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontWeight: 'bold', color: '#9B6FD0' }}>{exp}/{expToNextLevel}</span>
-          </div>
-        </div>
-        <div style={{ position: 'relative', height: '40px' }}>
-          {/* プログレス部分（虹色グラデーション）- 枠の中に収まるように調整 */}
-          <div
-            style={{
-              position: 'absolute',
-              borderRadius: '9999px',
-              zIndex: 0,
-              top: '12px',
-              left: '16px',
-              height: '16px',
-              width: `calc((100% - 32px) * ${progress / 100})`,
-              minWidth: progress > 0 ? '8px' : '0px',
-              background: 'linear-gradient(90deg, #FF6B9D 0%, #FFB347 20%, #FFEB3B 40%, #4ADE80 60%, #60A5FA 80%, #A78BFA 100%)',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              transition: 'width 0.3s ease-out',
-            }}
-          />
-          {/* フレーム画像（上に配置して宝石を見せる） */}
-          <img
-            src="/images/level_bar_frame.png"
-            alt=""
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', objectFit: 'fill', zIndex: 10 }}
-          />
-        </div>
-      </div>
-    </div>
-  )
+  onViewDailyMissions: () => void
+  onViewCollection: () => void
+  onOpenSearch?: () => void
+  onViewUpgradeProgress?: () => void
 }
 
 // 統計カード（画像フレーム使用）
@@ -325,6 +254,24 @@ const FollowingIcon: React.FC = () => (
   </svg>
 )
 
+// デイリーミッションアイコン
+const MissionIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="4" width="16" height="16" rx="2" fill="#F9A8D4" stroke="#EC4899" strokeWidth="1.5"/>
+    <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+// コレクションアイコン
+const CollectionIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="3" width="8" height="8" rx="1" fill="#93C5FD" stroke="#3B82F6" strokeWidth="1"/>
+    <rect x="13" y="3" width="8" height="8" rx="1" fill="#FCA5A5" stroke="#EF4444" strokeWidth="1"/>
+    <rect x="3" y="13" width="8" height="8" rx="1" fill="#FCD34D" stroke="#F59E0B" strokeWidth="1"/>
+    <rect x="13" y="13" width="8" height="8" rx="1" fill="#86EFAC" stroke="#22C55E" strokeWidth="1"/>
+  </svg>
+)
+
 // フォロー・フォロワー統計バー
 const FollowStatsBar: React.FC<{
   followersCount: number
@@ -423,12 +370,43 @@ const FollowStatsBar: React.FC<{
   )
 }
 
-// ヘッダーバー（設定ボタンのみ）
+// 検索アイコン
+const SearchIcon: React.FC = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <circle cx="10" cy="10" r="6" stroke="#EC4899" strokeWidth="2.5"/>
+    <path d="M14.5 14.5L20 20" stroke="#EC4899" strokeWidth="2.5" strokeLinecap="round"/>
+  </svg>
+)
+
+// ヘッダーバー（検索ボタン + 設定ボタン）
 const ProfileHeader: React.FC<{
   onOpenSettings: () => void
-}> = ({ onOpenSettings }) => {
+  onOpenSearch?: () => void
+}> = ({ onOpenSettings, onOpenSearch }) => {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px' }}>
+      {/* 検索ボタン */}
+      {onOpenSearch && (
+        <button
+          onClick={onOpenSearch}
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.2s',
+            background: 'linear-gradient(135deg, #FFE4F0 0%, #FFD0E8 100%)',
+            boxShadow: '0 2px 8px rgba(236, 72, 153, 0.25)',
+            border: '2px solid #FFB6D9',
+            cursor: 'pointer',
+          }}
+          title="おともだちを さがす"
+        >
+          <SearchIcon />
+        </button>
+      )}
       {/* 設定ボタン */}
       <button
         onClick={onOpenSettings}
@@ -463,6 +441,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onViewStats,
   onViewFollowers,
   onViewFollowing,
+  onViewDailyMissions,
+  onViewCollection,
+  onOpenSearch,
+  onViewUpgradeProgress,
 }) => {
   return (
     <div
@@ -485,7 +467,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* ヘッダー */}
       <div style={{ position: 'relative', zIndex: 10 }}>
-        <ProfileHeader onOpenSettings={onOpenSettings} />
+        <ProfileHeader onOpenSettings={onOpenSettings} onOpenSearch={onOpenSearch} />
       </div>
 
       {/* コンテンツ */}
@@ -499,7 +481,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           paddingLeft: '8px',
           paddingRight: '8px',
           paddingTop: 0,
-          paddingBottom: '112px',
+          paddingBottom: '16px',
         }}
       >
         {/* メインのオーバルフレーム - 大きく表示 */}
@@ -648,10 +630,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             {/* レベルセクション - 大きく */}
             <div style={{ width: '100%', paddingLeft: '16px', paddingRight: '16px', marginBottom: '8px' }}>
-              <LevelProgress
+              <ProgressBar
                 level={profile.level}
-                exp={profile.exp}
-                expToNextLevel={profile.expToNextLevel}
+                currentExp={profile.exp}
+                expForNextLevel={profile.expToNextLevel}
+                title={profile.title}
+                showTitle={false}
+                size="medium"
               />
             </div>
 
@@ -711,6 +696,46 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* フレーム外のボタン - ミッション・コレクション */}
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          width: '100%',
+          maxWidth: '460px',
+          paddingLeft: '24px',
+          paddingRight: '24px',
+          marginTop: '12px'
+        }}>
+          <PillButton
+            icon={<MissionIcon />}
+            label="ミッション"
+            frameImage="/images/pill_button_pink.png"
+            onClick={onViewDailyMissions}
+          />
+          <PillButton
+            icon={<CollectionIcon />}
+            label="コレクション"
+            frameImage="/images/pill_button_blue.png"
+            onClick={onViewCollection}
+          />
+        </div>
+
+        {/* ランクアップ進捗カード */}
+        {stats.rankCounts && (
+          <div style={{
+            width: '100%',
+            maxWidth: '460px',
+            paddingLeft: '24px',
+            paddingRight: '24px',
+            marginTop: '12px'
+          }}>
+            <RankProgressCard
+              counts={stats.rankCounts}
+              onClick={onViewUpgradeProgress}
+            />
+          </div>
+        )}
       </div>
       </div>
     </div>

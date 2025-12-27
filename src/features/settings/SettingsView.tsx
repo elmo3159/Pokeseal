@@ -21,7 +21,15 @@ import {
   Link2,
   CheckCircle,
   Copy,
+  Ban,
+  Settings2,
+  Share2,
+  Star,
+  Gift,
+  Users,
 } from 'lucide-react'
+import type { InvitationStats, InvitationRecord } from '@/services/invitation/invitationService'
+import type { ReviewRewardStatus, Platform } from '@/services/reviewReward/reviewRewardService'
 
 export interface SettingsData {
   notifications: {
@@ -29,6 +37,7 @@ export interface SettingsData {
     friendRequests: boolean
     newStickers: boolean
     contests: boolean
+    dailyBonus: boolean
   }
   privacy: {
     publicProfile: boolean
@@ -57,6 +66,26 @@ interface SettingsViewProps {
   linkedProviders?: string[]
   onLinkGoogle?: () => Promise<boolean>
   onLinkApple?: () => Promise<boolean>
+  // ユーザー検索
+  onOpenSearch?: () => void
+  // ブロック管理
+  onOpenBlockedUsers?: () => void
+  blockedUsersCount?: number
+  // 管理者機能
+  isAdmin?: boolean
+  onOpenAdminDashboard?: () => void
+  // 招待システム
+  invitationStats?: InvitationStats | null
+  invitationList?: InvitationRecord[]
+  onShareInvitation?: () => void
+  onCopyInvitationCode?: () => Promise<boolean>
+  onClaimInviterReward?: (invitationId: string) => Promise<boolean>
+  onApplyInvitationCode?: (code: string) => Promise<boolean>
+  onClaimInviteeReward?: () => Promise<boolean>
+  // レビュー報酬
+  reviewRewardStatus?: ReviewRewardStatus | null
+  currentPlatform?: Platform
+  onClaimReviewReward?: (platform: Platform) => Promise<boolean>
 }
 
 // iOS風カスタムトグルスイッチ
@@ -326,12 +355,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   linkedProviders = [],
   onLinkGoogle,
   onLinkApple,
+  onOpenSearch,
+  onOpenBlockedUsers,
+  blockedUsersCount = 0,
+  isAdmin = false,
+  onOpenAdminDashboard,
+  // 招待システム
+  invitationStats,
+  invitationList = [],
+  onShareInvitation,
+  onCopyInvitationCode,
+  onClaimInviterReward,
+  onApplyInvitationCode,
+  onClaimInviteeReward,
+  // レビュー報酬
+  reviewRewardStatus,
+  currentPlatform = 'web',
+  onClaimReviewReward,
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false)
   const [isLinkingApple, setIsLinkingApple] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [copiedInviteCode, setCopiedInviteCode] = useState(false)
+  const [showInviteCodeInput, setShowInviteCodeInput] = useState(false)
+  const [inviteCodeInput, setInviteCodeInput] = useState('')
+  const [isApplyingCode, setIsApplyingCode] = useState(false)
+  const [isClaimingReview, setIsClaimingReview] = useState(false)
+  const [claimingInvitationId, setClaimingInvitationId] = useState<string | null>(null)
 
   // ユーザーコードをコピー
   const handleCopyCode = async () => {
@@ -396,6 +448,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     })
   }
 
+  // 招待コードをコピー
+  const handleCopyInviteCode = async () => {
+    if (onCopyInvitationCode) {
+      const success = await onCopyInvitationCode()
+      if (success) {
+        setCopiedInviteCode(true)
+        setTimeout(() => setCopiedInviteCode(false), 2000)
+      }
+    }
+  }
+
+  // 招待コードを適用
+  const handleApplyInviteCode = async () => {
+    if (!onApplyInvitationCode || !inviteCodeInput.trim() || isApplyingCode) return
+    setIsApplyingCode(true)
+    try {
+      const success = await onApplyInvitationCode(inviteCodeInput.trim())
+      if (success) {
+        setShowInviteCodeInput(false)
+        setInviteCodeInput('')
+      }
+    } finally {
+      setIsApplyingCode(false)
+    }
+  }
+
+  // 招待報酬を受け取る
+  const handleClaimInviterReward = async (invitationId: string) => {
+    if (!onClaimInviterReward || claimingInvitationId) return
+    setClaimingInvitationId(invitationId)
+    try {
+      await onClaimInviterReward(invitationId)
+    } finally {
+      setClaimingInvitationId(null)
+    }
+  }
+
+  // レビュー報酬を受け取る
+  const handleClaimReviewReward = async (platform: Platform) => {
+    if (!onClaimReviewReward || isClaimingReview) return
+    setIsClaimingReview(true)
+    try {
+      await onClaimReviewReward(platform)
+    } finally {
+      setIsClaimingReview(false)
+    }
+  }
+
   return (
     <div
       className="min-h-screen pb-32 overflow-y-auto"
@@ -444,6 +544,338 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               このコードを友だちに教えて交換しよう！
             </p>
           </div>
+        )}
+
+        {/* ユーザー検索セクション */}
+        {onOpenSearch && (
+          <div className="mx-4 bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(236,72,153,0.12)] overflow-hidden">
+            <button
+              onClick={onOpenSearch}
+              className="w-full p-4 flex items-center gap-4 active:bg-pink-50 transition-colors"
+            >
+              {/* 検索アイコン */}
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, #FFE4F0 0%, #FFB6D9 100%)',
+                  boxShadow: '0 4px 12px rgba(255, 182, 217, 0.4)',
+                }}
+              >
+                🔍
+              </div>
+
+              {/* テキスト */}
+              <div className="flex-1 text-left">
+                <p className="text-[17px] font-bold text-gray-900" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
+                  おともだちを さがす
+                </p>
+                <p className="text-[13px] text-pink-400" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
+                  6桁のコードで検索できるよ
+                </p>
+              </div>
+
+              {/* 矢印 */}
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{
+                  background: 'linear-gradient(135deg, #FFB6D9 0%, #FF8DC7 100%)',
+                }}
+              >
+                <ChevronRight className="w-6 h-6 text-white" />
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ========== 招待セクション ========== */}
+        {invitationStats && (
+          <section>
+            <SectionHeader title="おともだちをしょうたい" />
+            <div className="mx-4 bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(139,92,246,0.12)] overflow-hidden">
+              {/* 招待コード表示 */}
+              <div className="p-4 border-b border-gray-100">
+                <div className="text-center mb-3">
+                  <p className="text-[15px] text-gray-700 mb-1">
+                    おともだちに教えてあげてね<span className="text-lg">🥰</span>
+                  </p>
+                  <p className="text-[28px] font-bold text-purple-600 tracking-[0.2em]">
+                    {invitationStats.invitationCode}
+                  </p>
+                </div>
+
+                {/* ボタン群 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCopyInviteCode}
+                    className={`
+                      flex-1 py-2.5 rounded-xl text-[14px] font-bold
+                      flex items-center justify-center gap-1.5
+                      transition-all active:scale-95
+                      ${copiedInviteCode
+                        ? 'bg-green-100 text-green-600'
+                        : 'bg-purple-100 text-purple-600'
+                      }
+                    `}
+                  >
+                    {copiedInviteCode ? (
+                      <><CheckCircle className="w-4 h-4" /> コピーしたよ！</>
+                    ) : (
+                      <><Copy className="w-4 h-4" /> コピー</>
+                    )}
+                  </button>
+                  {onShareInvitation && (
+                    <button
+                      onClick={onShareInvitation}
+                      className="flex-1 py-2.5 rounded-xl text-[14px] font-bold
+                        bg-gradient-to-r from-purple-500 to-pink-500 text-white
+                        flex items-center justify-center gap-1.5
+                        transition-all active:scale-95 shadow-md"
+                    >
+                      <Share2 className="w-4 h-4" /> シェアする
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 招待特典説明 */}
+              <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-pink-50">
+                <p className="text-[13px] font-bold text-purple-700 mb-2">🎁 ふたりともおとく！</p>
+                <div className="flex gap-4 text-[12px]">
+                  <div className="flex-1">
+                    <p className="text-gray-500 mb-1">あなたがもらえる</p>
+                    <p className="font-bold text-purple-600">🎫×10 💎×1</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-500 mb-1">おともだちがもらえる</p>
+                    <p className="font-bold text-pink-600">🎫×15 💎×1</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 招待状況 */}
+              <div className="px-4 py-3 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] text-gray-500">今月の招待</span>
+                  <span className="text-[14px] font-bold text-purple-600">
+                    {invitationStats.monthlyInvites} / {invitationStats.monthlyLimit}人
+                  </span>
+                </div>
+                {invitationStats.unclaimedRewards > 0 && (
+                  <div className="mt-2 px-3 py-2 bg-yellow-50 rounded-lg flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-yellow-600" />
+                    <span className="text-[13px] text-yellow-700 font-medium">
+                      {invitationStats.unclaimedRewards}件の報酬が受け取れます
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 招待された側の報酬受け取り */}
+              {invitationStats.wasInvited && !invitationStats.inviteeRewardClaimed && (
+                <div className="px-4 py-3 border-t border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50">
+                  <p className="text-[14px] text-green-700 mb-2">
+                    🎉 招待してもらったね！<br/>
+                    <span className="text-[13px]">ウェルカムプレゼントを受け取ってね💝</span>
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const success = await onClaimInviteeReward?.()
+                      if (success) {
+                        // 成功フィードバックは親コンポーネントで処理
+                      }
+                    }}
+                    className="w-full py-2.5 rounded-xl text-[14px] font-bold
+                      bg-gradient-to-r from-green-500 to-emerald-500 text-white
+                      flex items-center justify-center gap-1.5
+                      transition-all active:scale-95 shadow-md"
+                  >
+                    <Gift className="w-4 h-4" /> プレゼントを受け取る 🎫×15 💎×1
+                  </button>
+                </div>
+              )}
+
+              {/* 招待コード入力 */}
+              {!invitationStats.wasInvited && (
+                <div className="px-4 py-3 border-t border-gray-100">
+                  {!showInviteCodeInput ? (
+                    <button
+                      onClick={() => setShowInviteCodeInput(true)}
+                      className="w-full py-2.5 rounded-xl text-[14px] font-medium
+                        bg-gray-100 text-gray-600
+                        flex items-center justify-center gap-1.5
+                        transition-all active:scale-95"
+                    >
+                      招待コードを入力する
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={inviteCodeInput}
+                        onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+                        placeholder="招待コードを入力"
+                        maxLength={8}
+                        className="w-full px-4 py-2.5 rounded-xl border-2 border-purple-200
+                          text-center text-[18px] font-bold tracking-[0.2em]
+                          focus:outline-none focus:border-purple-400"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setShowInviteCodeInput(false)
+                            setInviteCodeInput('')
+                          }}
+                          className="flex-1 py-2 rounded-xl text-[14px] font-medium
+                            bg-gray-100 text-gray-600 active:scale-95 transition-all"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          onClick={handleApplyInviteCode}
+                          disabled={!inviteCodeInput.trim() || isApplyingCode}
+                          className="flex-1 py-2 rounded-xl text-[14px] font-bold
+                            bg-gradient-to-r from-purple-500 to-pink-500 text-white
+                            disabled:opacity-50 active:scale-95 transition-all"
+                        >
+                          {isApplyingCode ? '確認中...' : '適用する'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 招待リスト（未受け取り報酬がある場合のみ表示） */}
+              {invitationList.filter(i => !i.rewardClaimed).length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-100">
+                  <p className="text-[13px] text-gray-500 mb-2">報酬を受け取る</p>
+                  <div className="space-y-2">
+                    {invitationList.filter(i => !i.rewardClaimed).map((invitation) => (
+                      <div
+                        key={invitation.id}
+                        className="flex items-center justify-between p-2 bg-purple-50 rounded-xl"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-sm">
+                            👤
+                          </div>
+                          <span className="text-[14px] font-medium text-purple-700">
+                            {invitation.inviteeName || 'ユーザー'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleClaimInviterReward(invitation.id)}
+                          disabled={claimingInvitationId === invitation.id}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-bold
+                            bg-gradient-to-r from-purple-500 to-pink-500 text-white
+                            disabled:opacity-50 active:scale-95 transition-all"
+                        >
+                          {claimingInvitationId === invitation.id ? '...' : '受け取る'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <SectionFooter text="おともだちと一緒にポケシルを楽しもう！招待するとおたがいにプレゼントがもらえるよ🎁" />
+          </section>
+        )}
+
+        {/* ========== レビュー報酬セクション ========== */}
+        {reviewRewardStatus && (currentPlatform === 'ios' || currentPlatform === 'android' ||
+          reviewRewardStatus.canClaimIos || reviewRewardStatus.canClaimAndroid) && (
+          <section>
+            <SectionHeader title="アプリをおうえん" />
+            <div className="mx-4 bg-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.08),0_4px_12px_rgba(251,191,36,0.15)] overflow-hidden">
+              {/* レビュー報酬説明 */}
+              <div className="p-4">
+                <div className="text-center mb-4">
+                  <p className="text-[17px] font-bold text-gray-800 mb-1">
+                    ポケシルを楽しんでくれてありがとう！
+                  </p>
+                  <p className="text-[15px] text-gray-600">
+                    レビューで応援してくれたら<br/>
+                    すっごくうれしいな<span className="text-lg">🥺💓</span>
+                  </p>
+                </div>
+
+                {/* 報酬表示 */}
+                <div className="mb-4 p-3 bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border border-pink-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-[14px] text-gray-600">お礼に…</span>
+                    <span className="text-[16px] font-bold text-purple-600">
+                      🎫シルチケ×5
+                    </span>
+                    <span className="text-[14px] text-gray-600">プレゼントするね！</span>
+                  </div>
+                </div>
+
+                {/* ストアボタン */}
+                <div className="space-y-2">
+                  {/* iOS App Store */}
+                  {(currentPlatform === 'ios' || currentPlatform === 'web') && (
+                    <button
+                      onClick={() => handleClaimReviewReward('ios')}
+                      disabled={!reviewRewardStatus.canClaimIos || isClaimingReview}
+                      className={`
+                        w-full py-3 rounded-xl text-[15px] font-bold
+                        flex items-center justify-center gap-2
+                        transition-all active:scale-95
+                        ${reviewRewardStatus.canClaimIos
+                          ? 'bg-black text-white shadow-md'
+                          : 'bg-gray-100 text-gray-400'
+                        }
+                      `}
+                    >
+                      {/* Appleアイコン */}
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+                      </svg>
+                      {reviewRewardStatus.canClaimIos
+                        ? (isClaimingReview ? '開いてるよ...' : 'App Store で応援する')
+                        : '応援ありがとう！✨'
+                      }
+                    </button>
+                  )}
+
+                  {/* Google Play */}
+                  {(currentPlatform === 'android' || currentPlatform === 'web') && (
+                    <button
+                      onClick={() => handleClaimReviewReward('android')}
+                      disabled={!reviewRewardStatus.canClaimAndroid || isClaimingReview}
+                      className={`
+                        w-full py-3 rounded-xl text-[15px] font-bold
+                        flex items-center justify-center gap-2
+                        transition-all active:scale-95
+                        ${reviewRewardStatus.canClaimAndroid
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-400'
+                        }
+                      `}
+                    >
+                      {/* Google Playアイコン */}
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 0 1 0 1.73l-2.808 1.626L15.206 12l2.492-2.491zM5.864 2.658L16.8 9.99l-2.302 2.302-8.634-8.634z"/>
+                      </svg>
+                      {reviewRewardStatus.canClaimAndroid
+                        ? (isClaimingReview ? '開いてるよ...' : 'Google Play で応援する')
+                        : '応援ありがとう！✨'
+                      }
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 注意書き */}
+              <div className="px-4 py-2 bg-gray-50 text-center">
+                <p className="text-[11px] text-gray-400">
+                  ※ストアを開くとお礼がもらえるよ
+                </p>
+              </div>
+            </div>
+            <SectionFooter text="みんなの声がポケシルをもっと楽しくするよ！いつもありがとう💜" />
+          </section>
         )}
 
         {/* アカウント連携セクション */}
@@ -607,6 +1039,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               description="コンテストの開始・終了"
               checked={settings.notifications.contests}
               onChange={(v) => updateNotification('contests', v)}
+            />
+            <SettingsToggleItem
+              icon={<Bell className="w-4 h-4 text-white" />}
+              iconBg="bg-gradient-to-br from-green-400 to-green-500"
+              label="デイリーボーナス"
+              description="毎日7時のシルチケ配布"
+              checked={settings.notifications.dailyBonus}
+              onChange={(v) => updateNotification('dailyBonus', v)}
               isLast
             />
           </SettingsCard>
@@ -645,6 +1085,63 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </SettingsCard>
           <SectionFooter text="プライバシー設定を変更すると、他のユーザーからの見え方が変わります。" />
         </section>
+
+        {/* ブロック管理 */}
+        {onOpenBlockedUsers && (
+          <section>
+            <SectionHeader title="ブロック" />
+            <SettingsCard>
+              <button
+                onClick={onOpenBlockedUsers}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl active:bg-gray-50 transition-colors"
+              >
+                <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-red-400 to-red-500 flex items-center justify-center">
+                  <Ban className="w-4 h-4 text-white" />
+                </div>
+                <span
+                  className="flex-1 text-left text-[17px] text-gray-900"
+                  style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+                >
+                  ブロック中のユーザー
+                </span>
+                {blockedUsersCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-600 text-[13px] font-medium">
+                    {blockedUsersCount}人
+                  </span>
+                )}
+                <ChevronRight className="w-5 h-5 text-gray-300" />
+              </button>
+            </SettingsCard>
+            <SectionFooter text="ブロックしたユーザーの投稿や交換リクエストは表示されません。" />
+          </section>
+        )}
+
+        {/* 管理者機能（管理者のみ表示） */}
+        {isAdmin && onOpenAdminDashboard && (
+          <section>
+            <SectionHeader title="管理者" />
+            <SettingsCard>
+              <button
+                onClick={onOpenAdminDashboard}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl active:bg-gray-50 transition-colors"
+              >
+                <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center">
+                  <Settings2 className="w-4 h-4 text-white" />
+                </div>
+                <span
+                  className="flex-1 text-left text-[17px] text-gray-900 font-medium"
+                  style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+                >
+                  管理者ダッシュボード
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-600 text-[12px] font-bold">
+                  ADMIN
+                </span>
+                <ChevronRight className="w-5 h-5 text-gray-300" />
+              </button>
+            </SettingsCard>
+          </section>
+        )}
 
         {/* 表示設定 */}
         <section>

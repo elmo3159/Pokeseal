@@ -287,7 +287,10 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
             <div
               style={{
                 padding: '20px 24px 16px',
-                background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+                backgroundImage: 'url(/images/Header_UI.png)',
+                backgroundSize: '100% 100%',
+                backgroundPosition: 'center top',
+                backgroundRepeat: 'no-repeat',
                 position: 'relative',
               }}
             >
@@ -300,7 +303,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                       fontWeight: 'bold',
                       color: 'white',
                       fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                      textShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)',
                     }}
                   >
                     じっせき
@@ -310,6 +313,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                       fontSize: '12px',
                       color: 'rgba(255,255,255,0.9)',
                       fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                      textShadow: '0 1px 2px rgba(157, 76, 108, 0.4)',
                     }}
                   >
                     たくさんあつめてチャレンジ！
@@ -327,15 +331,16 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                   width: '32px',
                   height: '32px',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.3)',
+                  background: 'rgba(255,255,255,0.8)',
                   border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 }}
               >
-                <span style={{ color: 'white', fontSize: '18px' }}>✕</span>
+                <span style={{ color: '#9D4C6C', fontSize: '18px' }}>✕</span>
               </button>
             </div>
 

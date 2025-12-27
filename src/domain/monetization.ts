@@ -259,19 +259,64 @@ export const DEFAULT_USER_MONETIZATION: UserMonetization = {
 // ヘルパー関数
 // ======================
 
+// デイリー配布時刻（日本時間 7:00）
+export const DAILY_RESET_HOUR_JST = 7
+
 /**
- * デイリーリセットが必要かチェック
+ * 日本時間での今日の日付を取得（7時基準）
+ * 7時より前の場合は前日扱い
+ */
+export function getTodayDateJST(): string {
+  const now = new Date()
+  // JSTに変換 (UTC+9)
+  const jstOffset = 9 * 60 * 60 * 1000
+  const jstNow = new Date(now.getTime() + jstOffset)
+
+  // 7時より前なら前日扱い
+  if (jstNow.getUTCHours() < DAILY_RESET_HOUR_JST) {
+    jstNow.setUTCDate(jstNow.getUTCDate() - 1)
+  }
+
+  return jstNow.toISOString().split('T')[0]
+}
+
+/**
+ * デイリーリセットが必要かチェック（7時基準）
  */
 export function needsDailyReset(lastReset: string): boolean {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayDateJST()
   return lastReset !== today
 }
 
 /**
- * デイリーリセットを実行
+ * 次の7時までの時間（ミリ秒）を計算
+ */
+export function getMillisecondsUntilNext7AM(): number {
+  const now = new Date()
+  // JSTに変換
+  const jstOffset = 9 * 60 * 60 * 1000
+  const jstNow = new Date(now.getTime() + jstOffset)
+
+  // 次の7時を計算
+  const next7AM = new Date(jstNow)
+  next7AM.setUTCHours(DAILY_RESET_HOUR_JST, 0, 0, 0)
+
+  // 既に7時を過ぎていたら翌日の7時
+  if (jstNow.getUTCHours() >= DAILY_RESET_HOUR_JST) {
+    next7AM.setUTCDate(next7AM.getUTCDate() + 1)
+  }
+
+  // JSTからローカル時間に戻す
+  const next7AMLocal = new Date(next7AM.getTime() - jstOffset)
+
+  return next7AMLocal.getTime() - now.getTime()
+}
+
+/**
+ * デイリーリセットを実行（7時基準）
  */
 export function performDailyReset(state: UserMonetization): UserMonetization {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayDateJST()
   return {
     ...state,
     lastDailyReset: today,

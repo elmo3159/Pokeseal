@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PlacedSticker } from '@/features/sticker-book'
 import { PlacedDecoItem } from '@/domain/decoItems'
+import { StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
 
 interface ImageEnlargeModalProps {
   isOpen: boolean
@@ -154,7 +156,7 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
                       position: 'absolute',
                       width: '25%',
                       height: '16.666%',
-                      border: '1px solid #E9D5FF',
+                      border: '1px solid #C4A484',
                       left: `${col * 25}%`,
                       top: `${row * 16.666}%`,
                     }}
@@ -175,11 +177,13 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
                 zIndex: 40,
                 transformStyle: 'preserve-3d',
                 backfaceVisibility: 'hidden',
+                overflow: 'visible',
               }}
             >
               {pageData.placedStickers.map((sticker) => {
                 // BookViewと同じ計算: 60 * scale
                 const stickerSize = 60 * (sticker.scale || 1)
+                const upgradeRank = (sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
                 return (
                   <div
                     key={sticker.id}
@@ -193,19 +197,22 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
                       zIndex: 40 + (sticker.zIndex || 1),
                       transformStyle: 'preserve-3d',
                       backfaceVisibility: 'hidden',
+                      overflow: 'visible',
                     }}
                   >
-                    <img
-                      src={sticker.sticker.imageUrl}
-                      alt={sticker.sticker.name}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        filter: 'drop-shadow(0 10px 8px rgba(0,0,0,0.04)) drop-shadow(0 4px 3px rgba(0,0,0,0.1))',
-                      }}
-                      draggable={false}
-                    />
+                    <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                      <img
+                        src={sticker.sticker.imageUrl}
+                        alt={sticker.sticker.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          filter: 'drop-shadow(0 10px 8px rgba(0,0,0,0.04)) drop-shadow(0 4px 3px rgba(0,0,0,0.1))',
+                        }}
+                        draggable={false}
+                      />
+                    </StickerAura>
                   </div>
                 )
               })}

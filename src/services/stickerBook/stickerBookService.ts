@@ -1,5 +1,6 @@
 // シール帳サービス - Supabaseからシール帳データを取得
 import { getSupabase } from '@/services/supabase'
+import { dailyMissionService } from '@/services/dailyMissions'
 import type { Sticker } from '@/features/sticker-book/StickerTray'
 import type { PlacedSticker } from '@/features/sticker-book/StickerPlacement'
 import type { PlacedDecoItem, DecoItemData, DecoItemType } from '@/domain/decoItems'
@@ -37,6 +38,7 @@ interface RawPlacement {
   user_sticker: {
     id: string
     sticker_id: string
+    upgrade_rank: number  // アップグレードランク
     sticker: {
       id: string
       name: string
@@ -141,7 +143,6 @@ export const stickerBookService = {
 
     if (bookError || !book) {
       // 新規ユーザーの場合はシール帳がないのは正常
-      console.log('[StickerBookService] No sticker book found for user (will be created on first use)')
       return null
     }
 
@@ -174,6 +175,7 @@ export const stickerBookService = {
         user_sticker:user_stickers(
           id,
           sticker_id,
+          upgrade_rank,
           sticker:stickers(
             id,
             name,
@@ -223,19 +225,11 @@ export const stickerBookService = {
         `)
         .in('page_id', pageIds)
 
-      if (decoError) {
-        // deco_placements テーブルが存在しない場合はスキップ
-        console.warn('[StickerBookService] Deco placements not available:', decoError.message)
-      } else {
+      if (!decoError) {
         decoPlacements = (decoData as unknown as RawDecoPlacement[]) || []
-        console.log('[StickerBookService] Deco placements loaded:', decoPlacements.length)
-        // デバッグ: 生データを出力
-        if (decoPlacements.length > 0) {
-          console.log('[StickerBookService] Raw deco data:', JSON.stringify(decoPlacements[0], null, 2))
-        }
       }
-    } catch (err) {
-      console.warn('[StickerBookService] Deco fetch skipped:', err)
+    } catch {
+      // deco_placements テーブルが存在しない場合はスキップ
     }
 
     // 5. データを整形
@@ -286,6 +280,7 @@ export const stickerBookService = {
   convertToPlacedSticker(placement: RawPlacement, pageId: string): PlacedSticker {
     const userSticker = placement.user_sticker
     const stickerData = userSticker?.sticker
+    const upgradeRank = userSticker?.upgrade_rank ?? 0  // アップグレードランクを取得
 
     const sticker: Sticker = {
       id: stickerData?.id || 'unknown',
@@ -296,6 +291,7 @@ export const stickerBookService = {
       series: stickerData?.series || undefined,
       baseRate: stickerData?.base_rate || undefined,
       gachaWeight: stickerData?.gacha_weight || undefined,
+      upgradeRank,  // Stickerオブジェクトにも含める
     }
 
     return {
@@ -310,6 +306,7 @@ export const stickerBookService = {
       scale: Number(placement.scale),
       zIndex: placement.z_index,
       placedAt: placement.created_at,
+      upgradeRank,  // PlacedStickerにも含める
     }
   },
 
@@ -420,6 +417,13 @@ export const stickerBookService = {
   async addPlacement(input: PlacementInput): Promise<string | null> {
     const supabase = getSupabase()
 
+    // user_stickersからuserIdを取得
+    const { data: userSticker } = await supabase
+      .from('user_stickers')
+      .select('user_id')
+      .eq('id', input.userStickerId)
+      .single()
+
     const { data, error } = await supabase
       .from('sticker_placements')
       .insert({
@@ -439,7 +443,11 @@ export const stickerBookService = {
       return null
     }
 
-    console.log('[StickerBookService] Placement added:', data.id)
+    // デイリーミッション進捗を更新
+    if (userSticker?.user_id) {
+      await dailyMissionService.updateProgress(userSticker.user_id, 'place_sticker', 1)
+    }
+
     return data.id
   },
 
@@ -467,7 +475,6 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] Placement updated:', placementId)
     return true
   },
 
@@ -487,25 +494,46 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] Placement removed:', placementId)
     return true
   },
 
   /**
    * ユーザーの所持シールIDを取得（sticker_idからuser_sticker_idを取得）
+   * 複合ID（baseId:upgradeRank形式）もサポート
    */
   async getUserStickerId(userId: string, stickerId: string): Promise<string | null> {
     const supabase = getSupabase()
+
+    // 複合IDをパース（例: "いちごにゃん-bondro-1:1" → baseId: "いちごにゃん-bondro-1", upgradeRank: 1）
+    const parseCompositeId = (compositeId: string): { baseId: string; upgradeRank: number } => {
+      const lastColonIndex = compositeId.lastIndexOf(':')
+      if (lastColonIndex === -1) {
+        return { baseId: compositeId, upgradeRank: 0 }
+      }
+      const potentialRank = compositeId.substring(lastColonIndex + 1)
+      const rank = parseInt(potentialRank, 10)
+      // 数値として解析できる場合のみ複合IDとして扱う
+      if (!isNaN(rank) && potentialRank === String(rank)) {
+        return {
+          baseId: compositeId.substring(0, lastColonIndex),
+          upgradeRank: rank
+        }
+      }
+      return { baseId: compositeId, upgradeRank: 0 }
+    }
+
+    const { baseId, upgradeRank } = parseCompositeId(stickerId)
 
     const { data, error } = await supabase
       .from('user_stickers')
       .select('id')
       .eq('user_id', userId)
-      .eq('sticker_id', stickerId)
+      .eq('sticker_id', baseId)
+      .eq('upgrade_rank', upgradeRank)
       .single()
 
     if (error || !data) {
-      console.error('[StickerBookService] User sticker not found:', error)
+      // テストモードなどでユーザーがシールを所持していない場合は正常なケース
       return null
     }
 
@@ -528,7 +556,6 @@ export const stickerBookService = {
 
     if (!book) {
       // 新規ユーザーの場合はシール帳がないのは正常
-      console.log('[StickerBookService] No sticker book for page mapping (new user)')
       return new Map()
     }
 
@@ -592,7 +619,6 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] All placements cleared for user:', userId)
     return true
   },
 
@@ -603,6 +629,18 @@ export const stickerBookService = {
     if (inputs.length === 0) return []
 
     const supabase = getSupabase()
+
+    // 最初のuser_stickerからuserIdを取得（一括配置は同じユーザー）
+    let userId: string | null = null
+    if (inputs.length > 0) {
+      const { data: userSticker } = await supabase
+        .from('user_stickers')
+        .select('user_id')
+        .eq('id', inputs[0].userStickerId)
+        .single()
+
+      userId = userSticker?.user_id || null
+    }
 
     const insertData = inputs.map(input => ({
       page_id: input.pageId,
@@ -624,9 +662,12 @@ export const stickerBookService = {
       return []
     }
 
-    const ids = data.map(d => d.id)
-    console.log('[StickerBookService] Batch placements added:', ids.length)
-    return ids
+    // デイリーミッション進捗を更新（配置した数だけ）
+    if (userId && data.length > 0) {
+      await dailyMissionService.updateProgress(userId, 'place_sticker', data.length)
+    }
+
+    return data.map(d => d.id)
   },
 
   // =============================================
@@ -660,7 +701,6 @@ export const stickerBookService = {
       return null
     }
 
-    console.log('[StickerBookService] Deco placement added:', data.id)
     return data.id
   },
 
@@ -690,7 +730,6 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] Deco placement updated:', placementId)
     return true
   },
 
@@ -711,7 +750,6 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] Deco placement removed:', placementId)
     return true
   },
 
@@ -745,9 +783,7 @@ export const stickerBookService = {
       return []
     }
 
-    const ids = data.map((d: { id: string }) => d.id)
-    console.log('[StickerBookService] Batch deco placements added:', ids.length)
-    return ids
+    return data.map((d: { id: string }) => d.id)
   },
 
   /**
@@ -783,6 +819,7 @@ export const stickerBookService = {
         user_sticker:user_stickers(
           id,
           sticker_id,
+          upgrade_rank,
           sticker:stickers(
             id,
             name,
@@ -835,8 +872,8 @@ export const stickerBookService = {
       if (!decoError && decoData) {
         decoPlacements = decoData as unknown as RawDecoPlacement[]
       }
-    } catch (err) {
-      console.warn('[StickerBookService] Deco fetch skipped for page:', err)
+    } catch {
+      // deco_placements テーブルが存在しない場合はスキップ
     }
 
     // データを整形
@@ -897,7 +934,6 @@ export const stickerBookService = {
       return false
     }
 
-    console.log('[StickerBookService] All deco placements cleared for user:', userId)
     return true
   },
 }

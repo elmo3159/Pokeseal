@@ -1,5 +1,5 @@
 export { PostCard } from './PostCard'
-export type { ReactionType, Reaction, Post, PostPageData } from './PostCard'
+export type { ReactionType, Reaction, Post, PostPageData, FollowStatus } from './PostCard'
 export { TimelineView } from './TimelineView'
 export type { FeedType } from './TimelineView'
 export { CreatePostModal } from './CreatePostModal'

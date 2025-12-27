@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react'
 import { Sticker } from './StickerTray'
+import { StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
 
 // 配置されたシール情報
 export interface PlacedSticker {
@@ -16,6 +18,7 @@ export interface PlacedSticker {
   scale: number // スケール（1.0が標準）
   zIndex: number // 重なり順（大きいほど前面）
   placedAt: string
+  upgradeRank?: number // アップグレードランク（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
 }
 
 // 配置モードの状態
@@ -344,6 +347,9 @@ export const PlacedStickerView: React.FC<PlacedStickerViewProps> = ({
     }
   }
 
+  // アップグレードランクを取得（sticker本体、PlacedSticker、または sticker.sticker から）
+  const upgradeRank = (sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
+
   return (
     <div
       ref={stickerRef}
@@ -367,21 +373,23 @@ export const PlacedStickerView: React.FC<PlacedStickerViewProps> = ({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={sticker.sticker.name}
-          className={`w-full h-full object-contain ${rarityGlow}`}
-          draggable={false}
-        />
-      ) : (
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ fontSize: `${stickerSize * 0.6}px` }}
-        >
-          {icon}
-        </div>
-      )}
+      <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={sticker.sticker.name}
+            className={`w-full h-full object-contain ${rarityGlow}`}
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ fontSize: `${stickerSize * 0.6}px` }}
+          >
+            {icon}
+          </div>
+        )}
+      </StickerAura>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 // タイムラインサービス - 投稿・リアクション管理
 import { getSupabase } from '@/services/supabase'
 import type { Post, Reaction, Profile } from '@/types/database'
+import { dailyMissionService } from '@/services/dailyMissions'
 
 export type ReactionType = Reaction['type']
 export type Visibility = Post['visibility']
@@ -63,20 +64,26 @@ export const timelineService = {
   ): Promise<PostWithDetails[]> {
     const supabase = getSupabase()
 
-    // フォロー中のユーザーID取得
-    const { data: friendships } = await supabase
-      .from('friendships')
-      .select('friend_id')
-      .eq('user_id', userId)
-      .eq('status', 'accepted')
+    // フォロー中のユーザーID取得（followsテーブルを使用）
+    const { data: follows, error: followsError } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', userId)
 
-    const followingIds = friendships?.map((f: { friend_id: string }) => f.friend_id) || []
-
-    if (followingIds.length === 0) {
+    if (followsError) {
+      console.error('Get following users error:', followsError)
       return []
     }
 
-    // フォロー中ユーザーの投稿取得（friendsまたはpublic）
+    const followingIds = follows?.map((f: { following_id: string }) => f.following_id) || []
+    console.log('[Timeline] Following IDs for user', userId, ':', followingIds)
+
+    if (followingIds.length === 0) {
+      console.log('[Timeline] No following users found')
+      return []
+    }
+
+    // フォロー中ユーザーの投稿取得（publicを表示）
     const { data: posts, error } = await supabase
       .from('posts')
       .select(`
@@ -84,7 +91,7 @@ export const timelineService = {
         author:profiles(*)
       `)
       .in('user_id', followingIds)
-      .in('visibility', ['public', 'friends'])
+      .eq('visibility', 'public')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
@@ -92,6 +99,8 @@ export const timelineService = {
       console.error('Get following timeline error:', error)
       return []
     }
+
+    console.log('[Timeline] Found', posts.length, 'posts from following users')
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return Promise.all(posts.map((post: any) => this.enrichPost(post as Post & { author: Profile }, userId)))
@@ -119,16 +128,16 @@ export const timelineService = {
     if (viewerId === targetUserId) {
       // 自分の投稿はすべて表示
     } else if (viewerId) {
-      // ログイン済みユーザー: publicとfriendsを表示（フレンドかどうかで変わる）
-      const { data: friendship } = await supabase
-        .from('friendships')
-        .select('status')
-        .eq('user_id', targetUserId)
-        .eq('friend_id', viewerId)
-        .eq('status', 'accepted')
+      // ログイン済みユーザー: フォロー関係をチェック（followsテーブルを使用）
+      // 相互フォローの場合、friends投稿も表示
+      const { data: mutualFollow } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', viewerId)
+        .eq('following_id', targetUserId)
         .single()
 
-      if (friendship) {
+      if (mutualFollow) {
         query = query.in('visibility', ['public', 'friends'])
       } else {
         query = query.eq('visibility', 'public')
@@ -177,17 +186,17 @@ export const timelineService = {
       })
     }
 
-    // フォロー状態確認
+    // フォロー状態確認（followsテーブルを使用）
     let isFollowing = false
     if (viewerId && viewerId !== post.user_id) {
-      const { data: friendship } = await supabase
-        .from('friendships')
-        .select('status')
-        .eq('user_id', viewerId)
-        .eq('friend_id', post.user_id)
+      const { data: followRecord } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', viewerId)
+        .eq('following_id', post.user_id)
         .single()
 
-      isFollowing = friendship?.status === 'accepted' || friendship?.status === 'pending'
+      isFollowing = !!followRecord
     }
 
     return {
@@ -284,6 +293,11 @@ export const timelineService = {
         return null
       }
 
+      // デイリーミッション進捗を更新（いいね追加時のみ）
+      if (type === 'like') {
+        await dailyMissionService.updateProgress(userId, 'like', 1)
+      }
+
       return { added: true }
     }
   },
@@ -340,6 +354,158 @@ export const timelineService = {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return Promise.all(posts.map((post: any) => this.enrichPost(post as Post & { author: Profile }, userId)))
+  },
+
+  // いいねした投稿を取得
+  async getLikedPosts(
+    userId: string,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<PostWithDetails[]> {
+    const supabase = getSupabase()
+
+    // ユーザーがいいねしたpost_idを取得
+    const { data: likedReactions, error: reactionsError } = await supabase
+      .from('reactions')
+      .select('post_id')
+      .eq('user_id', userId)
+      .eq('type', 'like')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (reactionsError || !likedReactions || likedReactions.length === 0) {
+      return []
+    }
+
+    const postIds = likedReactions.map((r: { post_id: string }) => r.post_id)
+
+    // 投稿詳細を取得
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        author:profiles(*)
+      `)
+      .in('id', postIds)
+      .eq('visibility', 'public')
+
+    if (error || !posts) {
+      console.error('Get liked posts error:', error)
+      return []
+    }
+
+    // いいねした順序を維持
+    const postsMap = new Map(posts.map((p: Post & { author: Profile }) => [p.id, p]))
+    const orderedPosts = postIds
+      .map((id: string) => postsMap.get(id))
+      .filter((p): p is Post & { author: Profile } => p !== undefined)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return Promise.all(orderedPosts.map((post: any) => this.enrichPost(post as Post & { author: Profile }, userId)))
+  },
+
+  // コメント追加
+  async addComment(
+    postId: string,
+    userId: string,
+    content: string
+  ): Promise<{ id: string; content: string; created_at: string } | null> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase
+      .from('post_comments')
+      .insert({
+        post_id: postId,
+        user_id: userId,
+        content
+      })
+      .select('id, content, created_at')
+      .single()
+
+    if (error) {
+      console.error('Add comment error:', error)
+      return null
+    }
+
+    // デイリーミッション進捗を更新
+    await dailyMissionService.updateProgress(userId, 'comment', 1)
+
+    return {
+      id: data.id,
+      content: data.content,
+      created_at: data.created_at || new Date().toISOString()
+    }
+  },
+
+  // コメント一覧取得
+  async getComments(
+    postId: string,
+    limit: number = 50
+  ): Promise<{
+    id: string
+    content: string
+    created_at: string
+    user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+  }[]> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase
+      .from('post_comments')
+      .select(`
+        id,
+        content,
+        created_at,
+        user:profiles(id, username, display_name, avatar_url)
+      `)
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+      .limit(limit)
+
+    if (error || !data) {
+      console.error('Get comments error:', error)
+      return []
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return data.map((c: any) => ({
+      id: c.id,
+      content: c.content,
+      created_at: c.created_at,
+      user: c.user
+    }))
+  },
+
+  // コメント削除
+  async deleteComment(commentId: string, userId: string): Promise<boolean> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase
+      .from('post_comments')
+      .delete()
+      .eq('id', commentId)
+      .eq('user_id', userId)
+
+    return !error
+  },
+
+  // 投稿のいいね数・コメント数を取得
+  async getPostCounts(postId: string): Promise<{ likeCount: number; commentCount: number }> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase
+      .from('posts')
+      .select('like_count, comment_count')
+      .eq('id', postId)
+      .single()
+
+    if (error || !data) {
+      return { likeCount: 0, commentCount: 0 }
+    }
+
+    return {
+      likeCount: data.like_count || 0,
+      commentCount: data.comment_count || 0
+    }
   }
 }
 

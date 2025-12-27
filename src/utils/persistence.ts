@@ -46,6 +46,7 @@ export interface SavedCollectionItem {
   quantity: number
   totalAcquired: number
   firstAcquiredAt: string | null
+  upgradeRank?: number  // アップグレードランク: 0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム
 }
 
 // 保存するユーザーデータの型

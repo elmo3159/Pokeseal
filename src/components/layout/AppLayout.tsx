@@ -45,18 +45,35 @@ export function AppLayout({
   }
 
   // タブごとの背景画像を設定
-  const getTabBackgroundImage = () => {
-    if (backgroundImage) return backgroundImage
-    if (activeTab === 'home') return '/images/Home_Button/Home_background.png'
-    if (activeTab === 'profile') return '/images/bg_profile.png'
-    if (activeTab === 'gacha') return '/images/Gacha_Tab/Gacha_background2.png'
-    return null
+  const getTabBackgroundImage = (): { url: string | null; repeat: boolean } => {
+    if (backgroundImage) return { url: backgroundImage, repeat: false }
+    if (activeTab === 'home') return { url: '/images/Home_Button/Home_background.png', repeat: false }
+    if (activeTab === 'profile') return { url: '/images/bg_profile.png', repeat: false }
+    if (activeTab === 'gacha') return { url: '/images/Gacha_Tab/Gacha_background2.png', repeat: false }
+    // コレクションタブ - パターン背景（タイル状に繰り返し）
+    if (activeTab === 'collection') return {
+      url: '/images/bg_collection_pattern.gif',
+      repeat: true
+    }
+    // 交換タブ - パターン背景（タイル状に繰り返し）
+    if (activeTab === 'trade') return {
+      url: '/images/bg_trade_pattern.gif',
+      repeat: true
+    }
+    // タイムラインタブ - パターン背景（タイル状に繰り返し）
+    if (activeTab === 'timeline') return {
+      url: '/images/bg_timeline_pattern.gif',
+      repeat: true
+    }
+    return { url: null, repeat: false }
   }
-  const effectiveBackgroundImage = getTabBackgroundImage()
+  const backgroundConfig = getTabBackgroundImage()
+  const effectiveBackgroundImage = backgroundConfig.url
+  const isRepeatingPattern = backgroundConfig.repeat
 
 
-  // トップバーの高さ（表示時）
-  const topBarHeight = showTopBar ? 52 : 0
+  // トップバーの高さ（表示時）- Header_UI.png対応
+  const topBarHeight = showTopBar ? 56 : 0
   // タブバーの高さ（表示時）
   const tabBarHeight = showTabBar ? 90 : 0
 
@@ -89,6 +106,15 @@ export function AppLayout({
         bottom: '0',
       }
     }
+    // コレクションタブ（タブバーの近くまで表示を広げる）
+    if (activeTab === 'collection') {
+      return {
+        top: `${topBarHeight}px`,
+        left: '16px',
+        right: '16px',
+        bottom: `${tabBarHeight + 5}px`, // タブバーに近づける
+      }
+    }
     // その他のタブ
     return {
       top: `${topBarHeight}px`,
@@ -107,9 +133,13 @@ export function AppLayout({
         backgroundImage: effectiveBackgroundImage
           ? `url(${effectiveBackgroundImage})`
           : 'linear-gradient(180deg, #FDF2F8 0%, #F5F3FF 50%, #FDF2F8 100%)',
-        backgroundSize: effectiveBackgroundImage ? 'cover' : 'auto',
+        backgroundSize: effectiveBackgroundImage
+          ? (isRepeatingPattern ? 'auto' : 'cover')
+          : 'auto',
         backgroundPosition: effectiveBackgroundImage ? 'center' : 'initial',
-        backgroundRepeat: effectiveBackgroundImage ? 'no-repeat' : 'initial',
+        backgroundRepeat: effectiveBackgroundImage
+          ? (isRepeatingPattern ? 'repeat' : 'no-repeat')
+          : 'initial',
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
       }}
     >

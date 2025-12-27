@@ -152,11 +152,14 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                background: 'linear-gradient(135deg, #A78BFA 0%, #EC4899 100%)',
+                backgroundImage: 'url(/images/Header_UI.png)',
+                backgroundSize: '100% 100%',
+                backgroundPosition: 'center top',
+                backgroundRepeat: 'no-repeat',
                 flexShrink: 0,
               }}
             >
-              <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'white', textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)' }}>
                 {showStickerPicker ? 'アイコンをえらぼう' : 'プロフィールへんしゅう'}
               </h2>
               <button
@@ -172,13 +175,14 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   width: '32px',
                   height: '32px',
                   borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.8)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'white',
+                  color: '#9D4C6C',
                   border: 'none',
                   cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                 }}
               >
                 {showStickerPicker ? '←' : '✕'}

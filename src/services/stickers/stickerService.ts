@@ -15,18 +15,65 @@ export const stickerService = {
   async getAllStickers(): Promise<Sticker[]> {
     const supabase = getSupabase()
 
-    const { data, error } = await supabase
-      .from('stickers')
-      .select('*')
-      .order('rarity', { ascending: false })
-      .order('name')
+    // Supabaseのデフォルト制限は1000件なので、ページネーションで全件取得
+    const allStickers: Sticker[] = []
+    const pageSize = 1000
+    let offset = 0
+    let hasMore = true
 
-    if (error) {
-      console.error('Get all stickers error:', error)
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('stickers')
+        .select('*')
+        .range(offset, offset + pageSize - 1)
+        .order('id')
+
+      if (error) {
+        console.error('Get all stickers error:', error)
+        break
+      }
+
+      if (data && data.length > 0) {
+        allStickers.push(...data)
+        offset += data.length
+        hasMore = data.length === pageSize
+      } else {
+        hasMore = false
+      }
+    }
+
+    if (allStickers.length === 0) {
       return []
     }
 
-    return data || []
+    const data = allStickers
+
+    // 自然順ソート（キャラクター名 + 番号順）
+    const sortedData = [...(data || [])].sort((a, b) => {
+      // 名前から番号を抽出（「キャラ名 #1」または「キャラ名 1」形式に対応）
+      const extractNumber = (name: string): { base: string; num: number } => {
+        // #付きパターン: 「いちごにゃん #1」
+        const hashMatch = name.match(/^(.+?)\s*#(\d+)$/)
+        if (hashMatch) {
+          return { base: hashMatch[1].trim(), num: parseInt(hashMatch[2], 10) }
+        }
+        // スペース+数字パターン: 「ウールン 1」
+        const spaceMatch = name.match(/^(.+?)\s+(\d+)$/)
+        if (spaceMatch) {
+          return { base: spaceMatch[1].trim(), num: parseInt(spaceMatch[2], 10) }
+        }
+        return { base: name, num: 0 }
+      }
+      const aInfo = extractNumber(a.name)
+      const bInfo = extractNumber(b.name)
+      // まずキャラクター名でソート
+      const baseCompare = aInfo.base.localeCompare(bInfo.base, 'ja')
+      if (baseCompare !== 0) return baseCompare
+      // 同じキャラクターなら番号でソート
+      return aInfo.num - bInfo.num
+    })
+
+    return sortedData
   },
 
   // シリーズ一覧取得
@@ -73,19 +120,22 @@ export const stickerService = {
   },
 
   // シールをユーザーに付与（ガチャ結果など）
+  // 新しく取得したシールは常にノーマルランク(upgrade_rank=0)として追加
   async addStickerToUser(userId: string, stickerId: string): Promise<UserStickerWithDetails | null> {
     const supabase = getSupabase()
 
-    // 既存のシール確認
+    // 既存のノーマルランク(upgrade_rank=0)のシールを確認
+    // シルバー以上のランクのシールには追加しない
     const { data: existing } = await supabase
       .from('user_stickers')
       .select('*')
       .eq('user_id', userId)
       .eq('sticker_id', stickerId)
+      .eq('upgrade_rank', 0)  // ノーマルランクのみ
       .single()
 
     if (existing) {
-      // 既存シールの数量と累計を増加
+      // 既存ノーマルシールの数量と累計を増加
       const newTotalAcquired = (existing.total_acquired || 0) + 1
       const newRank = calculateRank(newTotalAcquired)
 
@@ -114,7 +164,7 @@ export const stickerService = {
         sticker: updated.sticker as unknown as Sticker
       }
     } else {
-      // 新規シール追加
+      // 新規ノーマルシール追加（upgrade_rank=0）
       const { data: created, error } = await supabase
         .from('user_stickers')
         .insert({
@@ -123,6 +173,7 @@ export const stickerService = {
           quantity: 1,
           total_acquired: 1,
           rank: 1,
+          upgrade_rank: 0,  // 明示的にノーマルランクを指定
           first_acquired_at: new Date().toISOString()
         })
         .select(`
@@ -132,7 +183,13 @@ export const stickerService = {
         .single()
 
       if (error) {
-        console.error('Create user sticker error:', error)
+        console.error('Create user sticker error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          full: JSON.stringify(error, null, 2)
+        })
         return null
       }
 

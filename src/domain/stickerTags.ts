@@ -59,16 +59,18 @@ export interface StickerSearchFilter {
   tags: ThemeTag[] // テーマタグフィルター（複数選択可）
   types: ('normal' | 'puffy' | 'sparkle')[] // シールタイプフィルター
   ownedOnly: boolean // 所持のみ表示
+  upgradeRanks: number[] // アップグレードランクフィルター（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
 }
 
-// デフォルトのフィルター
+// デフォルトのフィルター（持っているシールのみ表示がデフォルト）
 export const defaultSearchFilter: StickerSearchFilter = {
   query: '',
   series: null,
   rarities: [],
   tags: [],
   types: [],
-  ownedOnly: false,
+  ownedOnly: true, // デフォルトで所持シールのみ表示
+  upgradeRanks: [],
 }
 
 // シリーズ一覧（仮）
@@ -120,6 +122,8 @@ export interface FilterableSticker {
   type: 'normal' | 'puffy' | 'sparkle'
   owned?: boolean
   character?: string // キャラクター名（フィルタリング用）
+  upgradeRank?: number // アップグレードランク（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
+  effectiveRarity?: number // 実効レアリティ（rarity + アップグレードボーナス）フィルタリング用
 }
 
 export function filterStickers<T extends FilterableSticker>(
@@ -144,14 +148,25 @@ export function filterStickers<T extends FilterableSticker>(
       }
     }
 
-    // レア度フィルター
-    if (filter.rarities.length > 0 && !filter.rarities.includes(sticker.rarity)) {
-      return false
+    // レア度フィルター（effectiveRarityを優先、なければrarityを使用）
+    if (filter.rarities.length > 0) {
+      const stickerRarity = sticker.effectiveRarity ?? sticker.rarity
+      if (!filter.rarities.includes(stickerRarity)) {
+        return false
+      }
     }
 
     // 所持フィルター
     if (filter.ownedOnly && sticker.owned === false) {
       return false
+    }
+
+    // アップグレードランクフィルター
+    if (filter.upgradeRanks.length > 0) {
+      const stickerRank = sticker.upgradeRank ?? 0
+      if (!filter.upgradeRanks.includes(stickerRank)) {
+        return false
+      }
     }
 
     return true

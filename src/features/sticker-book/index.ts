@@ -26,4 +26,5 @@ export {
 export { DecoDrawer } from './DecoDrawer'
 export { LayerControlPanel } from './LayerControlPanel'
 export type { LayerItem } from './LayerControlPanel'
+export { BookShareModal } from './BookShareModal'
 // CoverDesign は @/domain/theme からエクスポートされています

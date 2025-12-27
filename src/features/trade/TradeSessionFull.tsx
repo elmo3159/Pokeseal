@@ -26,6 +26,9 @@ import {
   ArrowBothIcon,
   HandshakeIcon,
 } from '@/components/icons/TradeIcons'
+import { RankStars, StickerAura } from '@/components/upgrade'
+import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
+import { calculateStickerPoints } from '@/domain/stickerRank'
 
 // react-pageflip用のスタイルをインポート
 import '../sticker-book/book.css'
@@ -168,8 +171,10 @@ interface TradeSessionFullProps {
   myCoverDesignId?: string     // 自分のシール帳のカバーデザインID
   partnerCoverDesignId?: string // 相手のシール帳のカバーデザインID
   onTradeComplete: (myOffers: string[], partnerOffers: string[]) => void
-  onCancel: () => void
+  onBack: () => void           // 戻る（交渉を維持したまま画面を閉じる）
+  onEndNegotiation?: () => void // 交渉終了（交渉をキャンセルする）
   onFollowPartner?: (partnerId: string) => void
+  isFriend?: boolean           // 相互フォロー状態
   // Supabase連携用
   supabaseMessages?: SupabaseTradeMessage[]
   onSendStamp?: (stampId: string) => Promise<void>
@@ -587,21 +592,29 @@ const CompactWishlist: React.FC<{
   myWants: PlacedSticker[]
   partnerWants: PlacedSticker[]
   onRemoveMyWant: (id: string) => void
-  onRemovePartnerWant: (id: string) => void
   myConfirmed: boolean
   partnerConfirmed: boolean
   canConfirm: boolean
   onConfirm: () => void
-}> = ({ myWants, partnerWants, onRemoveMyWant, onRemovePartnerWant, myConfirmed, partnerConfirmed, canConfirm, onConfirm }) => {
-  // レート計算（★の数 × 10pt）
-  const myRate = myWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
-  const partnerRate = partnerWants.reduce((sum, s) => sum + s.sticker.rarity * 10, 0)
-  const rateDiff = partnerRate - myRate
-  const isBalanced = Math.abs(rateDiff) <= 20
-  const isLosingTrade = rateDiff > 20 // 自分が損する交換
+}> = ({ myWants, partnerWants, onRemoveMyWant, myConfirmed, partnerConfirmed, canConfirm, onConfirm }) => {
+  // レート計算（ベースレアリティ × アップグレードランク でポイント計算）
+  const getPoints = (s: PlacedSticker): number => {
+    const upgradeRank = (s.upgradeRank ?? s.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
+    return calculateStickerPoints(s.sticker.rarity, upgradeRank)
+  }
 
-  // 高レートシール（★4以上）があるかチェック
-  const hasHighRarityOffer = partnerWants.some(s => s.sticker.rarity >= 4)
+  const myRate = myWants.reduce((sum, s) => sum + getPoints(s), 0)
+  const partnerRate = partnerWants.reduce((sum, s) => sum + getPoints(s), 0)
+  const rateDiff = partnerRate - myRate
+
+  // 差が20%以内ならバランスが取れていると判断
+  const avgRate = (myRate + partnerRate) / 2
+  const percentDiff = avgRate > 0 ? Math.abs(rateDiff) / avgRate * 100 : 0
+  const isBalanced = percentDiff <= 20
+  const isLosingTrade = rateDiff > 0 && percentDiff > 20 // 自分が損する交換
+
+  // 高レートシール（200pt以上 = Gold★3相当以上）があるかチェック
+  const hasHighRarityOffer = partnerWants.some(s => getPoints(s) >= 200)
 
   return (
     <div className="relative">
@@ -629,26 +642,36 @@ const CompactWishlist: React.FC<{
               {/* シール部分（3x2グリッド） */}
               <div className="grid grid-cols-3 gap-0.5 flex-1">
                 {myWants.length > 0 ? (
-                  myWants.slice(0, 6).map((s) => (
-                    <div key={s.id} className="relative flex flex-col items-center">
-                      <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
-                        s.sticker.rarity >= 4 ? 'border-yellow-400' : 'border-purple-300'
-                      }`}>
-                        {s.sticker.imageUrl && (
-                          <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                        )}
+                  myWants.slice(0, 6).map((s) => {
+                    const stickerUpgradeRank = (s.upgradeRank ?? s.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
+                    return (
+                      <div key={s.id} className="relative flex flex-col items-center">
+                        <StickerAura upgradeRank={stickerUpgradeRank} style={{ width: 24, height: 24 }}>
+                          <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
+                            s.sticker.rarity >= 4 ? 'border-yellow-400' : 'border-purple-300'
+                          }`}>
+                            {s.sticker.imageUrl && (
+                              <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                            )}
+                          </div>
+                        </StickerAura>
+                        <div className="mt-0.5">
+                          <RankStars
+                            baseRarity={s.sticker.rarity}
+                            upgradeRank={stickerUpgradeRank}
+                            size="sm"
+                            showAnimation={false}
+                          />
+                        </div>
+                        <button
+                          onClick={() => onRemoveMyWant(s.id)}
+                          className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-white text-[6px] flex items-center justify-center shadow z-50"
+                        >
+                          ×
+                        </button>
                       </div>
-                      <span className="text-[8px] text-yellow-500 leading-none mt-0.5">
-                        {'★'.repeat(Math.min(s.sticker.rarity, 5))}
-                      </span>
-                      <button
-                        onClick={() => onRemoveMyWant(s.id)}
-                        className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-white text-[6px] flex items-center justify-center shadow"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : (
                   <span className="text-[8px] text-purple-400 col-span-3">タップでえらぶ</span>
                 )}
@@ -674,26 +697,31 @@ const CompactWishlist: React.FC<{
               {/* シール部分（3x2グリッド） */}
               <div className="grid grid-cols-3 gap-0.5 flex-1">
                 {partnerWants.length > 0 ? (
-                  partnerWants.slice(0, 6).map((s) => (
-                    <div key={s.id} className="relative flex flex-col items-center">
-                      <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
-                        s.sticker.rarity >= 4 ? 'border-red-400' : 'border-pink-300'
-                      }`}>
-                        {s.sticker.imageUrl && (
-                          <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
-                        )}
+                  partnerWants.slice(0, 6).map((s) => {
+                    const stickerUpgradeRank = (s.upgradeRank ?? s.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
+                    return (
+                      <div key={s.id} className="relative flex flex-col items-center">
+                        <StickerAura upgradeRank={stickerUpgradeRank} style={{ width: 24, height: 24 }}>
+                          <div className={`w-6 h-6 rounded overflow-hidden border-2 bg-white shadow-sm ${
+                            s.sticker.rarity >= 4 ? 'border-red-400' : 'border-pink-300'
+                          }`}>
+                            {s.sticker.imageUrl && (
+                              <img src={s.sticker.imageUrl} className="w-full h-full object-contain" />
+                            )}
+                          </div>
+                        </StickerAura>
+                        <div className="mt-0.5">
+                          <RankStars
+                            baseRarity={s.sticker.rarity}
+                            upgradeRank={stickerUpgradeRank}
+                            size="sm"
+                            showAnimation={false}
+                          />
+                        </div>
+                        {/* 相手が選んだシールは相手だけが削除可能（×ボタンなし） */}
                       </div>
-                      <span className="text-[8px] text-yellow-500 leading-none mt-0.5">
-                        {'★'.repeat(Math.min(s.sticker.rarity, 5))}
-                      </span>
-                      <button
-                        onClick={() => onRemovePartnerWant(s.id)}
-                        className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-gray-500 rounded-full text-white text-[6px] flex items-center justify-center shadow"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : (
                   <span className="text-[8px] text-pink-400 col-span-3">あいてがえらぶ</span>
                 )}
@@ -898,6 +926,8 @@ const TradeBookPageComponent = React.forwardRef<
               const stickerSize = getProportionalStickerSize(sticker.scale, pageWidth)
               const x = sticker.x * 100
               const y = sticker.y * 100
+              // アップグレードランクを取得
+              const upgradeRank = (sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
 
               return (
                 <button
@@ -917,25 +947,27 @@ const TradeBookPageComponent = React.forwardRef<
                     touchAction: 'manipulation',
                   }}
                 >
-                  {sticker.sticker.imageUrl ? (
-                    <img
-                      src={sticker.sticker.imageUrl}
-                      alt={sticker.sticker.name}
-                      className="w-full h-full object-contain"
-                      draggable={false}
-                      style={{
-                        filter: isSelected
-                          ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
-                          : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
-                        transition: 'filter 0.2s ease-out, transform 0.15s ease-out',
-                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <StarIcon size={20} color="#FBBF24" />
-                    </div>
-                  )}
+                  <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                    {sticker.sticker.imageUrl ? (
+                      <img
+                        src={sticker.sticker.imageUrl}
+                        alt={sticker.sticker.name}
+                        className="w-full h-full object-contain"
+                        draggable={false}
+                        style={{
+                          filter: isSelected
+                            ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
+                            : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
+                          transition: 'filter 0.2s ease-out, transform 0.15s ease-out',
+                          transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <StarIcon size={20} color="#FBBF24" />
+                      </div>
+                    )}
+                  </StickerAura>
                   {/* 選択マーク */}
                   {isSelected && (
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center shadow-lg">
@@ -1082,6 +1114,8 @@ const CleanPageComponent = React.forwardRef<
               const stickerSize = getProportionalStickerSize(sticker.scale, pageWidth)
               const x = sticker.x * 100
               const y = sticker.y * 100
+              // アップグレードランクを取得
+              const upgradeRank = (sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
 
               return (
                 <div
@@ -1096,18 +1130,20 @@ const CleanPageComponent = React.forwardRef<
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   }}
                 >
-                  {sticker.sticker.imageUrl ? (
-                    <img
-                      src={sticker.sticker.imageUrl}
-                      alt={sticker.sticker.name}
-                      className="w-full h-full object-contain drop-shadow-md"
-                      draggable={false}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <StarIcon size={24} color="#FBBF24" />
-                    </div>
-                  )}
+                  <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                    {sticker.sticker.imageUrl ? (
+                      <img
+                        src={sticker.sticker.imageUrl}
+                        alt={sticker.sticker.name}
+                        className="w-full h-full object-contain drop-shadow-md"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <StarIcon size={24} color="#FBBF24" />
+                      </div>
+                    )}
+                  </StickerAura>
                 </div>
               )
             })}
@@ -1255,6 +1291,8 @@ const SelectablePageComponent = React.forwardRef<
               const x = sticker.x * 100
               const y = sticker.y * 100
               const isSelected = selectedStickers.includes(sticker.id)
+              // アップグレードランクを取得
+              const upgradeRank = (sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
 
               return (
                 <div
@@ -1277,31 +1315,33 @@ const SelectablePageComponent = React.forwardRef<
                     onStickerSelect(sticker.id)
                   }}
                 >
-                  {sticker.sticker.imageUrl ? (
-                    <img
-                      src={sticker.sticker.imageUrl}
-                      alt={sticker.sticker.name}
-                      className="w-full h-full object-contain pointer-events-none"
-                      draggable={false}
-                      style={{
-                        filter: isSelected
-                          ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493) drop-shadow(0 0 12px #ff69b4)'
-                          : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
-                        transition: 'filter 0.2s ease-out',
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center"
-                      style={{
-                        filter: isSelected
-                          ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
-                          : 'none',
-                      }}
-                    >
-                      <StarIcon size={24} color="#FBBF24" />
-                    </div>
-                  )}
+                  <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                    {sticker.sticker.imageUrl ? (
+                      <img
+                        src={sticker.sticker.imageUrl}
+                        alt={sticker.sticker.name}
+                        className="w-full h-full object-contain pointer-events-none"
+                        draggable={false}
+                        style={{
+                          filter: isSelected
+                            ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493) drop-shadow(0 0 12px #ff69b4)'
+                            : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
+                          transition: 'filter 0.2s ease-out',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          filter: isSelected
+                            ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
+                            : 'none',
+                        }}
+                      >
+                        <StarIcon size={24} color="#FBBF24" />
+                      </div>
+                    )}
+                  </StickerAura>
                   {/* 選択時のチェックマーク */}
                   {isSelected && (
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
@@ -2048,6 +2088,7 @@ const MyBookSelectablePage = React.forwardRef<
               const y = sticker.y * 100
               const isSelected = selectedStickers.includes(sticker.id)
               const isWantedByPartner = partnerSelectedStickers.includes(sticker.id)
+              const upgradeRank = (sticker.upgradeRank ?? sticker.sticker.upgradeRank ?? UPGRADE_RANKS.NORMAL) as UpgradeRank
 
               return (
                 <div
@@ -2070,35 +2111,37 @@ const MyBookSelectablePage = React.forwardRef<
                     onStickerSelect(sticker.id)
                   }}
                 >
-                  {sticker.sticker.imageUrl ? (
-                    <img
-                      src={sticker.sticker.imageUrl}
-                      alt={sticker.sticker.name}
-                      className={`w-full h-full object-contain pointer-events-none ${isWantedByPartner ? 'animate-pulse' : ''}`}
-                      draggable={false}
-                      style={{
-                        filter: isWantedByPartner
-                          ? 'drop-shadow(0 0 6px #a855f7) drop-shadow(0 0 12px #9333ea) drop-shadow(0 0 18px #a855f7)'
-                          : isSelected
-                            ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
-                            : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
-                        transition: 'filter 0.2s ease-out',
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center"
-                      style={{
-                        filter: isWantedByPartner
-                          ? 'drop-shadow(0 0 6px #a855f7) drop-shadow(0 0 12px #9333ea)'
-                          : isSelected
-                            ? 'drop-shadow(0 0 4px #ff69b4)'
-                            : 'none',
-                      }}
-                    >
-                      <StarIcon size={28} color="#FBBF24" />
-                    </div>
-                  )}
+                  <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                    {sticker.sticker.imageUrl ? (
+                      <img
+                        src={sticker.sticker.imageUrl}
+                        alt={sticker.sticker.name}
+                        className={`w-full h-full object-contain pointer-events-none ${isWantedByPartner ? 'animate-pulse' : ''}`}
+                        draggable={false}
+                        style={{
+                          filter: isWantedByPartner
+                            ? 'drop-shadow(0 0 6px #a855f7) drop-shadow(0 0 12px #9333ea) drop-shadow(0 0 18px #a855f7)'
+                            : isSelected
+                              ? 'drop-shadow(0 0 4px #ff69b4) drop-shadow(0 0 8px #ff1493)'
+                              : 'drop-shadow(2px 2px 3px rgba(0,0,0,0.2))',
+                          transition: 'filter 0.2s ease-out',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          filter: isWantedByPartner
+                            ? 'drop-shadow(0 0 6px #a855f7) drop-shadow(0 0 12px #9333ea)'
+                            : isSelected
+                              ? 'drop-shadow(0 0 4px #ff69b4)'
+                              : 'none',
+                        }}
+                      >
+                        <StarIcon size={28} color="#FBBF24" />
+                      </div>
+                    )}
+                  </StickerAura>
                   {/* 相手が欲しがっているマーク */}
                   {isWantedByPartner && (
                     <div className="absolute -top-2 -left-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
@@ -2356,7 +2399,8 @@ const PostTradeProfileScreen: React.FC<{
   onFollow: () => void
   onClose: () => void
   isFollowing: boolean
-}> = ({ partner, receivedStickers, onFollow, onClose, isFollowing }) => {
+  isFriend?: boolean // 相互フォロー状態
+}> = ({ partner, receivedStickers, onFollow, onClose, isFollowing, isFriend }) => {
   // クライアントサイドでのみレンダリング（SSR対応）
   const [mounted, setMounted] = useState(false)
 
@@ -2394,33 +2438,7 @@ const PostTradeProfileScreen: React.FC<{
 
   const content = (
     <div id="post-trade-profile-screen" style={overlayStyle}>
-      {/* キラキラエフェクト */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            style={{ position: 'absolute', fontSize: '20px' }}
-            initial={{
-              x: `${Math.random() * 100}%`,
-              y: `${Math.random() * 100}%`,
-              scale: 0,
-            }}
-            animate={{
-              scale: [0, 1, 0],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 2,
-              delay: Math.random() * 2,
-              repeat: Infinity,
-            }}
-          >
-            {[<SparkleIcon key="sp" size={20} color="#FBBF24" />, <StarIcon key="st" size={20} color="#FBBF24" />, <SparkleIcon key="sp2" size={18} color="#F9A8D4" />, <StarIcon key="st2" size={18} color="#F9A8D4" />][i % 4]}
-          </motion.div>
-        ))}
-      </div>
-
-      <motion.div
+<motion.div
         initial={{ scale: 0.8, y: 50 }}
         animate={{ scale: 1, y: 0 }}
         transition={{ type: 'spring', duration: 0.6 }}
@@ -2449,29 +2467,55 @@ const PostTradeProfileScreen: React.FC<{
           boxSizing: 'border-box',
         }}>
           <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', textAlign: 'center', marginBottom: '8px', margin: '0 0 8px 0' }}>もらったシール</p>
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {receivedStickers.map((s, i) => (
-              <motion.div
-                key={s.id}
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', delay: 0.2 + i * 0.1 }}
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(255,255,255,0.3)',
-                  overflow: 'hidden',
-                  border: '2px solid rgba(255,255,255,0.5)',
-                }}
-              >
-                {s.sticker.imageUrl ? (
-                  <img src={s.sticker.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><StarIcon size={24} color="#FBBF24" /></span>
-                )}
-              </motion.div>
-            ))}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {receivedStickers.map((s, i) => {
+              const upgradeRank = (s.upgradeRank ?? 0) as UpgradeRank
+              const rate = calculateStickerPoints(s.sticker.rarity, upgradeRank)
+              return (
+                <motion.div
+                  key={s.id}
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', delay: 0.2 + i * 0.1 }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '2px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(255,255,255,0.3)',
+                      overflow: 'visible',
+                      border: '2px solid rgba(255,255,255,0.5)',
+                      position: 'relative',
+                    }}
+                  >
+                    <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
+                      {s.sticker.imageUrl ? (
+                        <img src={s.sticker.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><StarIcon size={24} color="#FBBF24" /></span>
+                      )}
+                    </StickerAura>
+                  </div>
+                  {/* 星とレート */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
+                    <RankStars
+                      baseRarity={s.sticker.rarity}
+                      upgradeRank={upgradeRank}
+                      size="sm"
+                      showAnimation={false}
+                    />
+                    <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.9)', fontWeight: 'bold' }}>{rate}pt</span>
+                  </div>
+                </motion.div>
+              )
+            })}
           </div>
         </div>
 
@@ -2528,6 +2572,7 @@ const PostTradeProfileScreen: React.FC<{
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={onFollow}
+              disabled={isFriend}
               style={{
                 flex: 1,
                 padding: '10px',
@@ -2535,14 +2580,16 @@ const PostTradeProfileScreen: React.FC<{
                 fontWeight: 'bold',
                 fontSize: '14px',
                 border: 'none',
-                cursor: 'pointer',
-                ...(isFollowing
-                  ? { backgroundColor: '#e5e7eb', color: '#4b5563' }
-                  : { background: 'linear-gradient(to right, #a855f7, #ec4899)', color: 'white', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)' }
+                cursor: isFriend ? 'default' : 'pointer',
+                ...(isFriend
+                  ? { background: 'linear-gradient(to right, #10b981, #059669)', color: 'white' }
+                  : isFollowing
+                    ? { backgroundColor: '#e5e7eb', color: '#4b5563' }
+                    : { background: 'linear-gradient(to right, #a855f7, #ec4899)', color: 'white', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)' }
                 ),
               }}
             >
-              {isFollowing ? 'フォロー中' : <><HandshakeIcon size={16} color="white" /> フォローする</>}
+              {isFriend ? '🤝 フレンド' : isFollowing ? 'フォロー中' : 'フォローする'}
             </button>
             <button
               onClick={onClose}
@@ -2585,8 +2632,10 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   myCoverDesignId,
   partnerCoverDesignId,
   onTradeComplete,
-  onCancel,
+  onBack,
+  onEndNegotiation,
   onFollowPartner,
+  isFriend: isFriendProp,
   // Supabase連携用
   supabaseMessages,
   onSendStamp,
@@ -2624,31 +2673,58 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   const completedWantStickersRef = useRef<PlacedSticker[]>([]) // 実際のシールオブジェクト
   const hasHandledCompletionRef = useRef(false)
 
-  // Supabase経由で交換が完了した時の処理
+  // 交換完了判定（統合版）
+  // 条件1: 両者がconfirmed（myConfirmed && partnerConfirmed）
+  // 条件2: Supabase経由でtradeCompleted
+  // どちらかを満たせば完了画面を表示
   useEffect(() => {
-    if (tradeCompleted && !hasHandledCompletionRef.current && !showComplete) {
-      console.log('[TradeSession] Trade completed via Supabase, showing complete screen')
-      console.log('[TradeSession] Preserving myWantIds:', myWantIds)
-      console.log('[TradeSession] Preserving myOfferIds:', myOfferIds)
-      // 現在の選択状態を保存（sync effectでクリアされる前に）
-      completedWantsRef.current = [...myWantIds]
-      completedOffersRef.current = [...myOfferIds]
-      // 実際のシールオブジェクトも保存（ページが更新されても表示できるように）
-      const wantStickers = myWantIds
-        .map((id) => {
+    const bothConfirmed = myConfirmed && partnerConfirmed
+    const shouldComplete = (bothConfirmed || tradeCompleted) && !hasHandledCompletionRef.current && !showComplete
+
+    if (shouldComplete) {
+      console.log('[TradeSession] Trade completed!', { bothConfirmed, tradeCompleted })
+      console.log('[TradeSession] supabaseMyItems:', supabaseMyItems?.length)
+      console.log('[TradeSession] myWantIds:', myWantIds)
+      console.log('[TradeSession] myOfferIds:', myOfferIds)
+
+      // 直接supabaseMyItemsからシールを取得（myWantIdsの同期タイミング問題を回避）
+      const wantStickers: PlacedSticker[] = []
+      if (supabaseMyItems && supabaseMyItems.length > 0) {
+        for (const item of supabaseMyItems) {
           for (const page of partnerPages) {
-            const found = page.stickers.find((s) => s.id === id)
-            if (found) return found
+            const found = page.stickers.find((s) => s.userStickerId === item.user_sticker_id)
+            if (found) {
+              wantStickers.push(found)
+              break
+            }
           }
-          return null
-        })
-        .filter((s): s is PlacedSticker => s !== null)
+        }
+        console.log('[TradeSession] Found stickers from supabaseMyItems:', wantStickers.length)
+      }
+
+      // フォールバック: myWantIdsも試す（supabaseMyItemsが空の場合）
+      if (wantStickers.length === 0 && myWantIds.length > 0) {
+        const fallbackStickers = myWantIds
+          .map((id) => {
+            for (const page of partnerPages) {
+              const found = page.stickers.find((s) => s.id === id)
+              if (found) return found
+            }
+            return null
+          })
+          .filter((s): s is PlacedSticker => s !== null)
+        wantStickers.push(...fallbackStickers)
+        console.log('[TradeSession] Found stickers from myWantIds (fallback):', fallbackStickers.length)
+      }
+
       completedWantStickersRef.current = wantStickers
-      console.log('[TradeSession] Preserved stickers:', wantStickers.length)
+      completedWantsRef.current = wantStickers.map(s => s.id)
+      completedOffersRef.current = [...myOfferIds]
+      console.log('[TradeSession] Preserved stickers total:', wantStickers.length)
       hasHandledCompletionRef.current = true
       setShowComplete(true)
     }
-  }, [tradeCompleted, showComplete, myWantIds, myOfferIds, partnerPages])
+  }, [myConfirmed, partnerConfirmed, tradeCompleted, showComplete, myWantIds, myOfferIds, partnerPages, supabaseMyItems])
 
   const MAX_SELECTIONS = 5
   const COOLDOWN_SECONDS = 5
@@ -2851,61 +2927,38 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     }
   }, [myWantIds.length, myOfferIds.length, onSetReady])
 
-  // 両者OK → 成立
-  useEffect(() => {
-    if (myConfirmed && partnerConfirmed && !hasHandledCompletionRef.current) {
-      console.log('[TradeSession] Both confirmed, preserving stickers before complete')
-      // 完了画面表示前にシールデータを保存（syncでクリアされる前に）
-      completedWantsRef.current = [...myWantIds]
-      completedOffersRef.current = [...myOfferIds]
-      const wantStickers = myWantIds
-        .map((id) => {
-          for (const page of partnerPages) {
-            const found = page.stickers.find((s) => s.id === id)
-            if (found) return found
-          }
-          return null
-        })
-        .filter((s): s is PlacedSticker => s !== null)
-      completedWantStickersRef.current = wantStickers
-      hasHandledCompletionRef.current = true
-      console.log('[TradeSession] Preserved wants:', myWantIds.length, 'stickers:', wantStickers.length)
-
-      setTimeout(() => {
-        setShowComplete(true)
-      }, 500)
-    }
-  }, [myConfirmed, partnerConfirmed, myWantIds, myOfferIds, partnerPages])
-
   // Supabaseメッセージを監視して表示
+  // 非同期交換の場合はsupabaseMessagesをそのまま使用
   useEffect(() => {
     if (!supabaseMessages || supabaseMessages.length === 0) return
 
-    // 新しいメッセージを処理
-    supabaseMessages.forEach((msg) => {
-      // 既に表示済みのメッセージは無視
-      const exists = messages.some((m) => m.id === msg.id)
-      if (exists) return
+    // supabaseMessagesからTradeMessage形式に変換
+    const convertedMessages: TradeMessage[] = supabaseMessages.map((msg) => {
+      const msgType = msg.message_type || 'stamp'
+      const content = msgType === 'stamp' ? msg.stamp_id : msg.content
 
-      // 相手からのメッセージのみ追加（自分のメッセージは送信時に追加済み）
-      if (msg.user_id !== myUser.id) {
-        // メッセージタイプを判定
-        const msgType = msg.message_type || 'stamp'
-        const content = msgType === 'stamp' ? msg.stamp_id : msg.content
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: msg.id,
-            type: msgType as 'stamp' | 'text' | 'preset',
-            content: content || '',
-            senderId: msg.user_id,
-            timestamp: new Date(msg.created_at),
-          },
-        ])
+      return {
+        id: msg.id,
+        type: msgType as 'stamp' | 'text' | 'preset',
+        content: content || '',
+        senderId: msg.user_id,
+        timestamp: new Date(msg.created_at),
       }
     })
-  }, [supabaseMessages, messages, myUser.id])
+
+    // 重複を排除してメッセージを設定
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map(m => m.id))
+      const newMessages = convertedMessages.filter(m => !existingIds.has(m.id))
+
+      if (newMessages.length === 0) return prev
+
+      // 既存のメッセージと新しいメッセージを結合し、時間順でソート
+      const combined = [...prev, ...newMessages]
+      combined.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      return combined
+    })
+  }, [supabaseMessages])
 
   // userStickerId から placement.id を検索するヘルパー関数
   const findPlacementIdByUserStickerId = useCallback((pages: TradeBookPageFull[], userStickerId: string): string | null => {
@@ -3039,6 +3092,8 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
       ? completedWantStickersRef.current
       : myWants
     console.log('[TradeSession] Complete screen - displayStickers:', displayStickers.length)
+    // フレンド状態：propsから来るか、このセッションでフォローした場合
+    const isFriendNow = isFriendProp || isFollowing
     return (
       <PostTradeProfileScreen
         partner={partnerUser}
@@ -3046,6 +3101,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
         onFollow={handleFollow}
         onClose={handleClose}
         isFollowing={isFollowing}
+        isFriend={isFriendNow}
       />
     )
   }
@@ -3081,13 +3137,13 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
           paddingBottom: '12px',
         }}
       >
-        {/* 左側: 交換終了ボタン */}
+        {/* 左側: 戻るボタン */}
         <button
-          onClick={() => setShowCancelConfirm(true)}
-          className="flex items-center gap-1 text-white/90 text-xs font-medium px-2 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+          onClick={onBack}
+          className="flex items-center gap-1 text-white text-sm font-medium px-3 py-1.5 rounded-lg bg-white/25 hover:bg-white/35 transition-colors"
         >
-          <span>✕</span>
-          <span>終了</span>
+          <span>←</span>
+          <span>もどる</span>
         </button>
 
         {/* 中央: 相手のプロフィール */}
@@ -3112,8 +3168,17 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
           </div>
         </div>
 
-        {/* 右側: スペーサー（左ボタンとのバランス用） */}
-        <div className="w-12" />
+        {/* 右側: 交渉終了ボタン（確認付き） */}
+        {onEndNegotiation && (
+          <button
+            onClick={() => setShowCancelConfirm(true)}
+            className="flex items-center gap-1 text-red-100 text-[10px] font-medium px-2 py-1 rounded-lg bg-red-500/40 hover:bg-red-500/60 transition-colors border border-red-300/30"
+          >
+            <span>✕</span>
+            <span>終了</span>
+          </button>
+        )}
+        {!onEndNegotiation && <div className="w-12" />}
       </div>
 
       {/* メインコンテンツ - flex-1で残り領域を埋め、justify-endで下寄せ */}
@@ -3138,7 +3203,6 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
             myWants={myWants}
             partnerWants={myOffers}
             onRemoveMyWant={(id) => setMyWantIds((prev) => prev.filter((i) => i !== id))}
-            onRemovePartnerWant={(id) => setMyOfferIds((prev) => prev.filter((i) => i !== id))}
             myConfirmed={myConfirmed}
             partnerConfirmed={partnerConfirmed}
             canConfirm={canConfirm}
@@ -3236,24 +3300,30 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-purple-700 text-center mb-2">
-                こうかんをやめる？
+              <h3 className="text-lg font-bold text-red-600 text-center mb-2">
+                ⚠️ こうかんをやめる？
               </h3>
-              <p className="text-sm text-purple-500 text-center mb-4">
-                まだせいりつしていません
+              <p className="text-sm text-gray-600 text-center mb-2">
+                この交渉を<span className="text-red-500 font-bold">完全に終了</span>します。
+              </p>
+              <p className="text-xs text-gray-500 text-center mb-4 bg-gray-100 rounded-lg p-2">
+                💡 交渉を続けたい場合は「← もどる」ボタンで<br />いつでも戻ってこられます
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowCancelConfirm(false)}
-                  className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-medium"
+                  className="flex-1 py-3 rounded-xl bg-purple-100 text-purple-700 font-bold"
                 >
-                  つづける
+                  キャンセル
                 </button>
                 <button
-                  onClick={onCancel}
-                  className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium"
+                  onClick={() => {
+                    setShowCancelConfirm(false)
+                    onEndNegotiation?.()
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold"
                 >
-                  やめる
+                  終了する
                 </button>
               </div>
             </motion.div>

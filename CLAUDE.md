@@ -181,3 +181,161 @@ npx supabase db push --include-all
 ```bash
 npx supabase migration list  # 適用済みマイグレーション一覧
 ```
+
+## 10. シールアップグレードシステム
+
+ダブりシールを集めてアップグレードできるシステム。同じシールを最大20枚集めることで最高ランク「プリズム」に到達できる。
+
+### 10.1 ランク構造
+
+| ランク | 値 | 必要条件 | 累計必要枚数 | 星の追加 | 累計星追加 |
+|--------|-----|----------|--------------|----------|------------|
+| ノーマル | 0 | 1枚 | 1枚 | +0 | 0 |
+| シルバー | 1 | ノーマル×5 | 5枚 | +1 | +1 |
+| ゴールド | 2 | シルバー×2 | 10枚 | +2 | +3 |
+| プリズム | 3 | ゴールド×2 | 20枚 | +2 | +5 |
+
+**アップグレードフロー:**
+```
+[ノーマル×5] → [シルバー×1]
+      ↓
+[シルバー×2] → [ゴールド×1]
+      ↓
+[ゴールド×2] → [プリズム×1] ← 最高ランク
+```
+
+### 10.2 データベース設計
+
+**user_stickers テーブル変更:**
+- `upgrade_rank` INTEGER DEFAULT 0 (0:ノーマル, 1:シルバー, 2:ゴールド, 3:プリズム)
+- `upgraded_at` TIMESTAMP (アップグレード実行日時)
+- 同じ `sticker_id` で異なる `upgrade_rank` のレコードを複数持てる（案B）
+
+**user_sticker_achievements テーブル（新規）:**
+- 各シールの最高到達ランクを記録
+- `max_upgrade_rank` INTEGER
+- `first_prism_at` TIMESTAMP (初めてプリズムになった日時)
+
+### 10.3 名前装飾（絵文字不使用）
+
+CSSでゴージャスなマークを実装する。iPhone絵文字は使用禁止。
+
+| ランク | 装飾 | スタイル |
+|--------|------|----------|
+| ノーマル | なし | - |
+| シルバー | ◆ シール名 | 銀色グラデーション、光沢 |
+| ゴールド | ◆◆ シール名 | 金色グラデーション、輝き |
+| プリズム | ◆◆◆ シール名 | 虹色グラデーション、アニメーション |
+
+**実装例（CSS）:**
+```css
+.rank-silver {
+  background: linear-gradient(135deg, #C0C0C0, #E8E8E8, #C0C0C0);
+  -webkit-background-clip: text;
+  text-shadow: 0 1px 2px rgba(192,192,192,0.5);
+}
+.rank-gold {
+  background: linear-gradient(135deg, #FFD700, #FFF8DC, #FFD700);
+  -webkit-background-clip: text;
+  text-shadow: 0 2px 4px rgba(255,215,0,0.6);
+}
+.rank-prism {
+  background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+  background-size: 200% 100%;
+  animation: rainbow 3s linear infinite;
+  -webkit-background-clip: text;
+}
+```
+
+### 10.4 星の表示
+
+- **表示数:** 元のrarity + ランクボーナス
+- **色:** ランクに応じて変化
+  - ノーマル: ゴールド（通常）
+  - シルバー: シルバー（銀色）
+  - ゴールド: ゴールド（より輝く金色）
+  - プリズム: 虹色アニメーション
+
+**例:** rarity=3 のシールをプリズムにすると → 3+5=8個の虹色の星
+
+### 10.5 エフェクト（シール形状に沿うオーラ）
+
+シールの輪郭に沿って漂うオーラエフェクト。`filter: drop-shadow()` を使用してシール形状を保持。
+
+| ランク | エフェクト | 色 | アニメーション |
+|--------|------------|-----|----------------|
+| ノーマル | なし | - | - |
+| シルバー | 薄いオーラ | 白〜淡いブルー | ゆっくり明滅（2s） |
+| ゴールド | 輝くオーラ | 金〜オレンジ | パルス + 回転（1.5s） |
+| プリズム | 虹色オーラ + キラキラ | 虹色グラデーション | 常時パーティクル + 回転 |
+
+**実装例:**
+```css
+.sticker-silver {
+  filter: drop-shadow(0 0 8px rgba(192, 192, 192, 0.8));
+  animation: pulse-silver 2s ease-in-out infinite;
+}
+.sticker-gold {
+  filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9));
+  animation: pulse-gold 1.5s ease-in-out infinite;
+}
+.sticker-prism {
+  filter: drop-shadow(0 0 16px rgba(255, 0, 255, 0.8))
+          drop-shadow(0 0 24px rgba(0, 255, 255, 0.6));
+  animation: prism-glow 3s linear infinite;
+}
+```
+
+### 10.6 機能一覧
+
+1. **アップグレード実行**
+   - コレクション画面でシールタップ → アップグレードボタン
+   - 条件を満たしている場合のみボタン表示
+   - 確認モーダルで実行
+
+2. **アップグレード履歴**
+   - `upgraded_at` で記録
+   - シール詳細画面で「プリズム到達日」等を表示
+
+3. **図鑑進捗表示**
+   - `user_sticker_achievements` で最高ランクを記録
+   - 図鑑画面でプリズム到達数などを表示
+
+4. **ランク別フィルター**
+   - コレクション画面で「プリズムのみ表示」等のフィルター
+
+5. **交換時のランク選択**
+   - 交換画面でシール選択時にランクも選択可能
+   - 高ランクシールは交換価値が高い
+
+### 10.7 定数定義
+
+```typescript
+// src/constants/upgradeRanks.ts
+export const UPGRADE_RANKS = {
+  NORMAL: 0,
+  SILVER: 1,
+  GOLD: 2,
+  PRISM: 3,
+} as const
+
+export const UPGRADE_REQUIREMENTS = {
+  [UPGRADE_RANKS.SILVER]: { fromRank: UPGRADE_RANKS.NORMAL, count: 5 },
+  [UPGRADE_RANKS.GOLD]: { fromRank: UPGRADE_RANKS.SILVER, count: 2 },
+  [UPGRADE_RANKS.PRISM]: { fromRank: UPGRADE_RANKS.GOLD, count: 2 },
+} as const
+
+export const STAR_BONUS = {
+  [UPGRADE_RANKS.NORMAL]: 0,
+  [UPGRADE_RANKS.SILVER]: 1,
+  [UPGRADE_RANKS.GOLD]: 3,  // 累計
+  [UPGRADE_RANKS.PRISM]: 5, // 累計
+} as const
+
+export const RANK_NAMES = {
+  [UPGRADE_RANKS.NORMAL]: 'ノーマル',
+  [UPGRADE_RANKS.SILVER]: 'シルバー',
+  [UPGRADE_RANKS.GOLD]: 'ゴールド',
+  [UPGRADE_RANKS.PRISM]: 'プリズム',
+} as const
+```

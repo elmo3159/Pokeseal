@@ -4,21 +4,26 @@ import React, { useState } from 'react'
 import { PostCard, Post, ReactionType } from './PostCard'
 
 // フィードタイプ
-export type FeedType = 'latest' | 'following' | 'popular'
+export type FeedType = 'latest' | 'following' | 'popular' | 'liked'
 
 interface TimelineViewProps {
   posts: Post[]
+  currentUserId?: string
   onReact: (postId: string, reactionType: ReactionType) => void
   onComment: (postId: string) => void
   onUserClick: (userId: string) => void
   onFollow: (userId: string) => void
   onCreatePost: () => void
+  onDelete?: (postId: string) => void
   onReport?: (postId: string, userId: string, userName: string) => void
   onBlock?: (userId: string, userName: string) => void
   blockedUserIds?: string[]
+  onOpenSearch?: () => void
+  activeTab?: FeedType
+  onTabChange?: (tab: FeedType) => void
 }
 
-// フィードタブ - iOS風セグメントコントロール
+// フィードタブ - 茶色・ベージュ系
 const FeedTabs: React.FC<{
   activeTab: FeedType
   onTabChange: (tab: FeedType) => void
@@ -27,27 +32,51 @@ const FeedTabs: React.FC<{
     { id: 'latest', label: 'さいしん', icon: '🕐' },
     { id: 'following', label: 'フォロー中', icon: '👫' },
     { id: 'popular', label: 'にんき', icon: '🔥' },
+    { id: 'liked', label: 'いいね', icon: '❤️' },
   ]
 
   return (
     <div
-      className="flex gap-1 bg-white/50 backdrop-blur-md rounded-2xl p-1 shadow-[0_2px_8px_rgba(139,92,246,0.08)] border border-white/50"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      style={{
+        display: 'flex',
+        flexWrap: 'nowrap',
+        gap: '1px',
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: '14px',
+        padding: '2px',
+        boxShadow: '0 2px 8px rgba(184, 149, 107, 0.15)',
+        border: '2px solid #D4C4B0',
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        flex: '1 1 auto',
+        minWidth: 0,
+        maxWidth: 'calc(100% - 52px)',
+      }}
     >
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`
-            flex items-center gap-1 px-4 py-2.5 rounded-xl text-sm font-medium
-            transition-all duration-200
-            ${activeTab === tab.id
-              ? 'bg-white text-purple-600 shadow-[0_2px_8px_rgba(139,92,246,0.15)]'
-              : 'text-purple-400 hover:text-purple-600'
-            }
-          `}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '2px',
+            padding: '6px 6px',
+            borderRadius: '10px',
+            fontSize: '11px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            flex: '1 1 auto',
+            minWidth: 0,
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            background: activeTab === tab.id ? 'white' : 'transparent',
+            color: activeTab === tab.id ? '#8B5A2B' : '#C4A484',
+            boxShadow: activeTab === tab.id ? '0 2px 8px rgba(184, 149, 107, 0.2)' : 'none',
+          }}
         >
-          <span>{tab.icon}</span>
+          <span style={{ fontSize: '10px' }}>{tab.icon}</span>
           <span>{tab.label}</span>
         </button>
       ))}
@@ -55,7 +84,7 @@ const FeedTabs: React.FC<{
   )
 }
 
-// 投稿作成ボタン - iOS風FAB
+// 投稿作成ボタン - 茶色・ベージュ系FAB
 const CreatePostButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   return (
     <button
@@ -68,16 +97,15 @@ const CreatePostButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
         width: '56px',
         height: '56px',
         borderRadius: '50%',
-        background: 'linear-gradient(to right, rgba(168, 85, 247, 0.9), rgba(236, 72, 153, 0.9))',
-        backdropFilter: 'blur(4px)',
+        background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
         color: 'white',
         fontSize: '24px',
-        boxShadow: '0 4px 16px rgba(139, 92, 246, 0.4)',
+        boxShadow: '0 4px 16px rgba(184, 149, 107, 0.5)',
         transition: 'all 0.2s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
+        border: '2px solid rgba(255, 255, 255, 0.3)',
         cursor: 'pointer',
       }}
     >
@@ -86,7 +114,7 @@ const CreatePostButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   )
 }
 
-// 空の状態表示 - iOS風
+// 空の状態表示 - 茶色・ベージュ系
 const EmptyFeed: React.FC<{ feedType: FeedType }> = ({ feedType }) => {
   const messages = {
     latest: {
@@ -103,6 +131,11 @@ const EmptyFeed: React.FC<{ feedType: FeedType }> = ({ feedType }) => {
       icon: '🌟',
       title: 'にんきの投稿がありません',
       description: 'みんなの投稿にリアクションしよう！'
+    },
+    liked: {
+      icon: '❤️',
+      title: 'いいねした投稿がありません',
+      description: 'すきな投稿にいいねしよう！'
     }
   }
 
@@ -110,46 +143,56 @@ const EmptyFeed: React.FC<{ feedType: FeedType }> = ({ feedType }) => {
 
   return (
     <div
-      className="flex flex-col items-center justify-center py-16 px-4 mx-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-white/50 shadow-[0_2px_8px_rgba(139,92,246,0.06)]"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      className="flex flex-col items-center justify-center py-16 px-4 mx-4 rounded-2xl"
+      style={{
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        background: 'rgba(255, 255, 255, 0.9)',
+        border: '2px solid #D4C4B0',
+        boxShadow: '0 2px 8px rgba(184, 149, 107, 0.1)',
+      }}
     >
       <div className="text-6xl mb-4">{icon}</div>
-      <h3 className="text-lg font-bold text-purple-700 mb-2">{title}</h3>
-      <p className="text-sm text-purple-400 text-center">{description}</p>
+      <h3 className="text-lg font-bold mb-2" style={{ color: '#8B5A2B' }}>{title}</h3>
+      <p className="text-sm text-center" style={{ color: '#A67C52' }}>{description}</p>
     </div>
   )
 }
 
-// ローディングスケルトン - iOS風
+// ローディングスケルトン - 茶色・ベージュ系
 const PostSkeleton: React.FC = () => {
   return (
     <div
-      className="bg-white/70 backdrop-blur-md rounded-2xl shadow-[0_2px_8px_rgba(139,92,246,0.1)] border border-white/50 overflow-hidden mb-4 animate-pulse"
-      style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
+      className="rounded-2xl overflow-hidden mb-4 animate-pulse"
+      style={{
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        background: 'rgba(255, 255, 255, 0.9)',
+        border: '2px solid #E8D5C4',
+        boxShadow: '0 2px 8px rgba(184, 149, 107, 0.1)',
+      }}
     >
       {/* ヘッダー */}
       <div className="flex items-center gap-3 p-4">
-        <div className="w-10 h-10 rounded-full bg-purple-200/50" />
+        <div className="w-10 h-10 rounded-full" style={{ background: '#E8D5C4' }} />
         <div className="flex-1">
-          <div className="h-4 w-24 bg-purple-200/50 rounded-full mb-1" />
-          <div className="h-3 w-16 bg-purple-100/50 rounded-full" />
+          <div className="h-4 w-24 rounded-full mb-1" style={{ background: '#E8D5C4' }} />
+          <div className="h-3 w-16 rounded-full" style={{ background: '#F5EDE6' }} />
         </div>
       </div>
 
       {/* 画像 */}
-      <div className="aspect-[4/3] bg-gradient-to-br from-purple-100/40 to-pink-100/40" />
+      <div className="aspect-[4/3]" style={{ background: 'linear-gradient(135deg, #F5EDE6 0%, #E8D5C4 100%)' }} />
 
       {/* リアクションバー */}
-      <div className="flex gap-2 p-3 border-b border-purple-100/30">
-        <div className="h-8 w-16 bg-purple-100/50 rounded-xl" />
-        <div className="h-8 w-16 bg-purple-100/50 rounded-xl" />
-        <div className="h-8 w-16 bg-purple-100/50 rounded-xl" />
+      <div className="flex gap-2 p-3" style={{ borderBottom: '1px solid #E8D5C4' }}>
+        <div className="h-8 w-16 rounded-xl" style={{ background: '#F5EDE6' }} />
+        <div className="h-8 w-16 rounded-xl" style={{ background: '#F5EDE6' }} />
+        <div className="h-8 w-16 rounded-xl" style={{ background: '#F5EDE6' }} />
       </div>
 
       {/* キャプション */}
       <div className="p-4">
-        <div className="h-4 w-full bg-purple-100/50 rounded-full mb-2" />
-        <div className="h-4 w-3/4 bg-purple-100/50 rounded-full" />
+        <div className="h-4 w-full rounded-full mb-2" style={{ background: '#F5EDE6' }} />
+        <div className="h-4 w-3/4 rounded-full" style={{ background: '#F5EDE6' }} />
       </div>
     </div>
   )
@@ -158,23 +201,37 @@ const PostSkeleton: React.FC = () => {
 // メインのTimelineView
 export const TimelineView: React.FC<TimelineViewProps> = ({
   posts,
+  currentUserId,
   onReact,
   onComment,
   onUserClick,
   onFollow,
   onCreatePost,
+  onDelete,
   onReport,
   onBlock,
-  blockedUserIds = []
+  blockedUserIds = [],
+  onOpenSearch,
+  activeTab: externalActiveTab,
+  onTabChange: externalOnTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<FeedType>('latest')
+  const [internalActiveTab, setInternalActiveTab] = useState<FeedType>('latest')
   const [isLoading, setIsLoading] = useState(false)
 
+  // 外部制御または内部状態を使用
+  const activeTab = externalActiveTab ?? internalActiveTab
+
   // フィードタイプに応じて投稿をフィルタリング（ブロックユーザーは除外）
+  // likedタブの場合は親から渡されたpostsをそのまま使用
   const filteredPosts = posts.filter(post => {
     // ブロックしたユーザーの投稿は表示しない
     if (blockedUserIds.includes(post.userId)) {
       return false
+    }
+
+    // likedタブの場合は親が既にフィルタリングしているのでそのまま表示
+    if (activeTab === 'liked') {
+      return true
     }
 
     switch (activeTab) {
@@ -192,7 +249,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   // タブ変更時の処理
   const handleTabChange = (tab: FeedType) => {
     setIsLoading(true)
-    setActiveTab(tab)
+    if (externalOnTabChange) {
+      externalOnTabChange(tab)
+    } else {
+      setInternalActiveTab(tab)
+    }
     // デモ用：少し遅延を入れる
     setTimeout(() => setIsLoading(false), 300)
   }
@@ -206,13 +267,36 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
       }}
     >
-      {/* タブ */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+      {/* タブ & 検索ボタン */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginBottom: '16px', paddingLeft: '8px', paddingRight: '8px' }}>
         <FeedTabs activeTab={activeTab} onTabChange={handleTabChange} />
+        {onOpenSearch && (
+          <button
+            onClick={onOpenSearch}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #D4A574 0%, #C4956A 100%)',
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              boxShadow: '0 2px 8px rgba(184, 149, 107, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'all 0.2s ease',
+            }}
+            title="おともだちを さがす"
+          >
+            🔍
+          </button>
+        )}
       </div>
 
       {/* フィード */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '80px', paddingLeft: '16px', paddingRight: '16px' }}>
         {isLoading ? (
           // ローディング
           <>
@@ -225,10 +309,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             <PostCard
               key={post.id}
               post={post}
+              currentUserId={currentUserId}
               onReact={onReact}
               onComment={onComment}
               onUserClick={onUserClick}
               onFollow={onFollow}
+              onDelete={onDelete}
               onReport={onReport}
               onBlock={onBlock}
               isBlocked={blockedUserIds.includes(post.userId)}

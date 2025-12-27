@@ -42,13 +42,81 @@ export const rankRateBonus: Record<RankLevel, number> = {
   5: 100   // +100%（2倍）
 }
 
-// スターポイント変換レート（レアリティ別）
-export const starPointsPerRarity: Record<1 | 2 | 3 | 4 | 5, number> = {
-  1: 5,    // ★1 = 5ポイント
-  2: 15,   // ★2 = 15ポイント
-  3: 50,   // ★3 = 50ポイント
-  4: 150,  // ★4 = 150ポイント
-  5: 500   // ★5 = 500ポイント
+// =============================================
+// シール交換ポイント計算システム
+// =============================================
+//
+// ベースレアリティ × アップグレードランク でポイントを決定
+//
+// 設計思想:
+// - 低レアでもアップグレードすれば価値が上がる
+// - 段階的交換ルート: ★1 → Prism★1 → ★3 → Prism★3 → ★5
+// - 交換アービトラージを防止（Prism★1 < ★4）
+//
+// アップグレードランク:
+// - Normal (0): そのまま
+// - Silver (1): 5枚消費、★+1
+// - Gold (2): 10枚消費（累計）、★+3
+// - Prism (3): 20枚消費（累計）、★+5
+
+// ベースレアリティのポイント（後方互換性のため維持）
+export const starPointsPerRarity: Record<number, number> = {
+  1: 5,
+  2: 15,
+  3: 50,
+  4: 150,
+  5: 500,
+}
+
+// ベースレアリティ × アップグレードランク のポイントテーブル
+// [baseRarity][upgradeRank] = points
+export const STICKER_POINTS: Record<number, Record<number, number>> = {
+  // ★1: 低レアだがアップグレードで価値上昇
+  1: {
+    0: 5,      // Normal
+    1: 20,     // Silver (★2より少し上)
+    2: 60,     // Gold (★3より少し上)
+    3: 100,    // Prism (★3〜★4の間)
+  },
+  // ★2
+  2: {
+    0: 15,     // Normal
+    1: 35,     // Silver
+    2: 80,     // Gold
+    3: 180,    // Prism
+  },
+  // ★3
+  3: {
+    0: 50,     // Normal
+    1: 100,    // Silver
+    2: 200,    // Gold
+    3: 600,    // Prism (★5以上)
+  },
+  // ★4
+  4: {
+    0: 150,    // Normal
+    1: 225,    // Silver
+    2: 450,    // Gold
+    3: 1200,   // Prism
+  },
+  // ★5: 最高レア
+  5: {
+    0: 500,    // Normal
+    1: 750,    // Silver
+    2: 1250,   // Gold
+    3: 3000,   // Prism
+  },
+}
+
+/**
+ * シールのポイントを計算
+ * @param baseRarity ベースレアリティ (1-5)
+ * @param upgradeRank アップグレードランク (0:Normal, 1:Silver, 2:Gold, 3:Prism)
+ */
+export function calculateStickerPoints(baseRarity: number, upgradeRank: number = 0): number {
+  const clampedRarity = Math.max(1, Math.min(5, baseRarity))
+  const clampedRank = Math.max(0, Math.min(3, upgradeRank))
+  return STICKER_POINTS[clampedRarity]?.[clampedRank] ?? starPointsPerRarity[clampedRarity] ?? 5
 }
 
 /**
@@ -96,10 +164,13 @@ export function calculateRateWithBonus(baseRate: number, rank: RankLevel): numbe
 }
 
 /**
- * シールをスターポイントに変換
+ * シールをスターポイントに変換（新方式）
+ * @param baseRarity ベースレアリティ (1-5)
+ * @param upgradeRank アップグレードランク (0:Normal, 1:Silver, 2:Gold, 3:Prism)
+ * @param quantity 数量
  */
-export function convertToStarPoints(rarity: 1 | 2 | 3 | 4 | 5, quantity: number): number {
-  return starPointsPerRarity[rarity] * quantity
+export function convertToStarPoints(baseRarity: number, upgradeRank: number, quantity: number = 1): number {
+  return calculateStickerPoints(baseRarity, upgradeRank) * quantity
 }
 
 /**

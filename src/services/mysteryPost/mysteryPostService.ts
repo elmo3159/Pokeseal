@@ -1,5 +1,6 @@
 // ミステリーポストサービス - Supabaseでシール投函・受け取りを管理
 import { getSupabase } from '@/services/supabase'
+import { dailyMissionService } from '@/services/dailyMissions'
 import { MYSTERY_POST_RULES } from '@/domain/mysteryPost'
 
 
@@ -94,6 +95,9 @@ export const mysteryPostService = {
       console.error('[MysteryPost] Insert error:', insertError)
       return { success: false, error: '投函に失敗しました' }
     }
+
+    // デイリーミッション進捗を更新
+    await dailyMissionService.updateProgress(userId, 'post', 1)
 
     console.log('[MysteryPost] Posted:', post.id)
     return { success: true, postId: post.id }
