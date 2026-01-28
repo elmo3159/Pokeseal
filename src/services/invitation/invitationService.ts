@@ -279,7 +279,7 @@ export function generateInvitationMessage(invitationCode: string, userName: stri
 かわいいシールを集めて、自分だけのシール帳を作ろう！
 
 📱 招待コード: ${invitationCode}
-🎁 特典: シルチケ15枚 + プレシル1枚がもらえるよ！
+🎁 特典: シルチケ15枚 + プレシルチケ1枚がもらえるよ！
 
 ${generateInvitationLink(invitationCode)}`
 }

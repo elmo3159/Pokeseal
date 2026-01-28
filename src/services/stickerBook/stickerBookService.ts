@@ -1,6 +1,7 @@
 // シール帳サービス - Supabaseからシール帳データを取得
 import { getSupabase } from '@/services/supabase'
 import { dailyMissionService } from '@/services/dailyMissions'
+import { getDefaultCoverDesignId, getDefaultThemeId } from '@/domain/theme'
 import type { Sticker } from '@/features/sticker-book/StickerTray'
 import type { PlacedSticker } from '@/features/sticker-book/StickerPlacement'
 import type { PlacedDecoItem, DecoItemData, DecoItemType } from '@/domain/decoItems'
@@ -11,6 +12,7 @@ export interface StickerBookPage {
   pageNumber: number
   pageType: 'cover' | 'page' | 'back-cover'
   side?: 'left' | 'right'
+  themeConfig?: Record<string, unknown> | null
   stickers: PlacedSticker[]
   decoItems?: PlacedDecoItem[]
 }
@@ -21,6 +23,7 @@ export interface StickerBook {
   userId: string
   name: string
   themeId?: string
+  coverDesignId?: string
   isPublic: boolean
   pages: StickerBookPage[]
 }
@@ -57,6 +60,7 @@ interface RawPage {
   page_number: number
   page_type: string
   side: string | null
+  theme_config: Record<string, unknown> | null
 }
 
 // デコ配置の生データ型
@@ -139,9 +143,14 @@ export const stickerBookService = {
       .from('sticker_books')
       .select('*')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    if (bookError || !book) {
+    if (bookError) {
+      console.error('[StickerBookService] Book fetch error:', bookError)
+      return null
+    }
+
+    if (!book) {
       // 新規ユーザーの場合はシール帳がないのは正常
       return null
     }
@@ -149,7 +158,7 @@ export const stickerBookService = {
     // 2. シール帳のページを取得
     const { data: pages, error: pagesError } = await supabase
       .from('sticker_book_pages')
-      .select('id, page_number, page_type, side')
+      .select('id, page_number, page_type, side, theme_config')
       .eq('book_id', book.id)
       .order('page_number', { ascending: true })
 
@@ -247,6 +256,7 @@ export const stickerBookService = {
         pageNumber: page.page_number,
         pageType: page.page_type as 'cover' | 'page' | 'back-cover',
         side: page.side as 'left' | 'right' | undefined,
+        themeConfig: page.theme_config,
         stickers: pageStickers,
         decoItems: pageDecos.length > 0 ? pageDecos : undefined,
       }
@@ -257,6 +267,7 @@ export const stickerBookService = {
       userId: book.user_id,
       name: book.name,
       themeId: book.theme_id || undefined,
+      coverDesignId: book.cover_design_id || undefined,
       isPublic: book.is_public ?? false,
       pages: pagesWithStickers,
     }
@@ -351,11 +362,16 @@ export const stickerBookService = {
     const supabase = getSupabase()
 
     // 既存のシール帳を確認
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('sticker_books')
       .select('id')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
+
+    if (existingError) {
+      console.error('[StickerBookService] Existing book check error:', existingError)
+      return null
+    }
 
     if (existing) {
       return this.getUserStickerBook(userId)
@@ -368,6 +384,8 @@ export const stickerBookService = {
         user_id: userId,
         name,
         is_public: true,
+        theme_id: getDefaultThemeId(),
+        cover_design_id: getDefaultCoverDesignId(),
       })
       .select()
       .single()
@@ -405,6 +423,57 @@ export const stickerBookService = {
     }
 
     return this.getUserStickerBook(userId)
+  },
+
+  /**
+   * シール帳のテーマを更新する
+   */
+  async updateBookTheme(userId: string, themeId: string): Promise<boolean> {
+    const supabase = getSupabase()
+    const { error } = await supabase
+      .from('sticker_books')
+      .update({ theme_id: themeId, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('[StickerBookService] Update theme error:', error)
+      return false
+    }
+    return true
+  },
+
+  /**
+   * シール帳の表紙デザインを更新する
+   */
+  async updateCoverDesign(userId: string, coverDesignId: string): Promise<boolean> {
+    const supabase = getSupabase()
+    const { error } = await supabase
+      .from('sticker_books')
+      .update({ cover_design_id: coverDesignId, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('[StickerBookService] Update cover design error:', error)
+      return false
+    }
+    return true
+  },
+
+  /**
+   * ページのテーマ設定を更新する
+   */
+  async updatePageThemeConfig(pageId: string, themeConfig: Record<string, unknown> | null): Promise<boolean> {
+    const supabase = getSupabase()
+    const { error } = await supabase
+      .from('sticker_book_pages')
+      .update({ theme_config: themeConfig, updated_at: new Date().toISOString() })
+      .eq('id', pageId)
+
+    if (error) {
+      console.error('[StickerBookService] Update page theme error:', error)
+      return false
+    }
+    return true
   },
 
   // =============================================
@@ -530,7 +599,7 @@ export const stickerBookService = {
       .eq('user_id', userId)
       .eq('sticker_id', baseId)
       .eq('upgrade_rank', upgradeRank)
-      .single()
+      .maybeSingle()
 
     if (error || !data) {
       // テストモードなどでユーザーがシールを所持していない場合は正常なケース
@@ -548,11 +617,16 @@ export const stickerBookService = {
     const supabase = getSupabase()
 
     // シール帳を取得
-    const { data: book } = await supabase
+    const { data: book, error: bookError } = await supabase
       .from('sticker_books')
       .select('id')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
+
+    if (bookError) {
+      console.error('[StickerBookService] Page mapping book fetch error:', bookError)
+      return new Map()
+    }
 
     if (!book) {
       // 新規ユーザーの場合はシール帳がないのは正常
@@ -795,7 +869,7 @@ export const stickerBookService = {
     // ページ情報を取得
     const { data: page, error: pageError } = await supabase
       .from('sticker_book_pages')
-      .select('id, page_number, page_type, side')
+      .select('id, page_number, page_type, side, theme_config')
       .eq('id', pageId)
       .single()
 
@@ -888,6 +962,7 @@ export const stickerBookService = {
       pageNumber: page.page_number,
       pageType: page.page_type as 'cover' | 'page' | 'back-cover',
       side: page.side as 'left' | 'right' | undefined,
+      themeConfig: (page as RawPage).theme_config,
       stickers: pageStickers,
       decoItems: pageDecos.length > 0 ? pageDecos : undefined,
     }

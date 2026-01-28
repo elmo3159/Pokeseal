@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dailyMissionService } from '@/services/dailyMissions'
 import type { UserDailyMission } from '@/services/dailyMissions/dailyMissionService'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 interface DailyMissionPanelProps {
   userId: string
@@ -73,12 +74,12 @@ export const DailyMissionPanel: React.FC<DailyMissionPanelProps> = ({
   }
 
   // 報酬アイコンを取得
-  const getRewardIcon = (rewardType: string): string => {
-    if (rewardType === 'tickets') return '🎟️'
-    if (rewardType === 'stars') return '⭐'
-    if (rewardType === 'gems') return '💎'
-    if (rewardType === 'exp') return '✨'
-    return '🎁'
+  const getRewardIcon = (rewardType: string): React.ReactNode => {
+    if (rewardType === 'tickets') return <CurrencyIcon type="ticket" size="md" />
+    if (rewardType === 'stars') return <CurrencyIcon type="star" size="md" />
+    if (rewardType === 'gems') return <CurrencyIcon type="gem" size="md" />
+    if (rewardType === 'exp') return <span style={{ fontSize: '24px' }}>✨</span>
+    return <span style={{ fontSize: '24px' }}>🎁</span>
   }
 
   // 進捗率を計算

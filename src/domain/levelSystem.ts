@@ -23,35 +23,107 @@ export const LEVEL_TITLES: Record<number, string> = {
   18: 'シールてんさい',
   19: 'シールかみさま',
   20: 'シールでんせつ',
+  21: 'シールリーダー',
+  22: 'シールキャプテン',
+  23: 'シールたいちょう',
+  24: 'シールぐんだんちょう',
+  25: 'シールしゅごしゃ',
+  26: 'シールたからもの',
+  27: 'シールきらきら',
+  28: 'シールわくわく',
+  29: 'シールきらめき',
+  30: 'シールエンペラー',
+  31: 'シールほし',
+  32: 'シールほしぞら',
+  33: 'シールおひさま',
+  34: 'シールつき',
+  35: 'シールにじ',
+  36: 'シールゆめ',
+  37: 'シールぼうけん',
+  38: 'シールワンダー',
+  39: 'シールミラクル',
+  40: 'シールまじん',
+  41: 'シールハッピー',
+  42: 'シールスマイル',
+  43: 'シールルンルン',
+  44: 'シールおまつり',
+  45: 'シールパーティ',
+  46: 'シールステキ',
+  47: 'シールキラリ',
+  48: 'シールピカピカ',
+  49: 'シールゴージャス',
+  50: 'シールかいおう',
+  51: 'シールおうさま',
+  52: 'シールおひめさま',
+  53: 'シールガーディアン',
+  54: 'シールナイト',
+  55: 'シールドラゴン',
+  56: 'シールフェニックス',
+  57: 'シールユニコーン',
+  58: 'シールスーパースター',
+  59: 'シールメガスター',
+  60: 'シールギャラクシー',
+  61: 'シールうちゅう',
+  62: 'シールロケット',
+  63: 'シールぎんが',
+  64: 'シールほしつかい',
+  65: 'シールまほう',
+  66: 'シールまほうつかい',
+  67: 'シールてんし',
+  68: 'シールこおり',
+  69: 'シールほのお',
+  70: 'シールでんき',
+  71: 'シールかぜ',
+  72: 'シールみず',
+  73: 'シールもり',
+  74: 'シールだいち',
+  75: 'シールだいおう',
+  76: 'シールてんくう',
+  77: 'シールそら',
+  78: 'シールくも',
+  79: 'シールあめ',
+  80: 'シールかがやき',
+  81: 'シールひかり',
+  82: 'シールきせき',
+  83: 'シールしんでんせつ',
+  84: 'シールさいこう',
+  85: 'シールさいつよ',
+  86: 'シールきわみ',
+  87: 'シールしんか',
+  88: 'シールしんせい',
+  89: 'シールてっぺん',
+  90: 'シールおうじゃ',
+  91: 'シールてんてい',
+  92: 'シールきょだい',
+  93: 'シールぜったい',
+  94: 'シールむてき',
+  95: 'シールさいしゅう',
+  96: 'シールえいえん',
+  97: 'シールさいこうおう',
+  98: 'シールきわみおう',
+  99: 'シールさいごのほし',
+  100: 'シールぜんのうしん',
 }
 
-// レベルごとの必要経験値（累積）
-// レベルアップするごとに必要EXPが増加
-export const LEVEL_EXP_REQUIREMENTS: number[] = [
-  0,      // Level 1 (start)
-  100,    // Level 2
-  250,    // Level 3
-  450,    // Level 4
-  700,    // Level 5
-  1000,   // Level 6
-  1400,   // Level 7
-  1900,   // Level 8
-  2500,   // Level 9
-  3200,   // Level 10
-  4000,   // Level 11
-  5000,   // Level 12
-  6200,   // Level 13
-  7600,   // Level 14
-  9200,   // Level 15
-  11000,  // Level 16
-  13000,  // Level 17
-  15500,  // Level 18
-  18500,  // Level 19
-  22000,  // Level 20 (max)
-]
-
 // 最大レベル
-export const MAX_LEVEL = 20
+export const MAX_LEVEL = 100
+
+// レベルごとの必要経験値（累積）
+// レベルアップするごとに必要EXPが増加（線形）
+const LEVEL_BASE_EXP = 100
+const LEVEL_EXP_STEP = 30
+export const LEVEL_EXP_REQUIREMENTS: number[] = (() => {
+  const requirements: number[] = [0]
+  for (let level = 2; level <= MAX_LEVEL; level += 1) {
+    const needed = LEVEL_BASE_EXP + LEVEL_EXP_STEP * (level - 2)
+    const prev = requirements[requirements.length - 1] || 0
+    requirements.push(prev + needed)
+  }
+  return requirements
+})()
+
+// 最大累積経験値（レベル100到達に必要な総EXP）
+export const MAX_TOTAL_EXP = LEVEL_EXP_REQUIREMENTS[MAX_LEVEL - 1] || 0
 
 // 経験値獲得アクション
 export type ExpAction =
@@ -60,6 +132,7 @@ export type ExpAction =
   | 'place_sticker'     // シールを貼る
   | 'trade_complete'    // 交換成立
   | 'post_create'       // 投稿する
+  | 'comment_create'    // コメントする
   | 'receive_like'      // いいねをもらう
   | 'daily_login'       // デイリーログイン
   | 'first_sticker'     // 初めてのシールをゲット
@@ -71,6 +144,7 @@ export const EXP_REWARDS: Record<ExpAction, number> = {
   place_sticker: 2,     // 連続で稼げるので控えめに（5→2）
   trade_complete: 30,   // 連続交換対策で減少（50→30）
   post_create: 10,      // 連続投稿対策で減少（20→10）
+  comment_create: 2,    // コメント連投対策で控えめ
   receive_like: 1,      // いいね稼ぎ対策（2→1）
   daily_login: 15,
   first_sticker: 25,    // 初ゲットボーナス
@@ -79,14 +153,15 @@ export const EXP_REWARDS: Record<ExpAction, number> = {
 // 各アクションの1日あたりの上限回数（無制限は undefined）
 // この回数を超えた場合、経験値は獲得できない
 export const EXP_DAILY_LIMITS: Partial<Record<ExpAction, number>> = {
-  place_sticker: 20,    // 1日20回まで（計40EXP）
-  trade_complete: 10,   // 1日10回まで（計300EXP）
+  place_sticker: 30,    // 1日30回まで（計60EXP）
+  trade_complete: 5,    // 1日5回まで（計150EXP）
   post_create: 5,       // 1日5回まで（計50EXP）
+  comment_create: 20,   // 1日20回まで（計40EXP）
   receive_like: 50,     // 1日50回まで（計50EXP）
+  daily_login: 1,       // 1日1回まで
+  first_sticker: 1,     // 初回のみ（実際は呼び出し側で1回）
   // gacha_single: 制限なし（通貨で制限）
   // gacha_ten: 制限なし（通貨で制限）
-  // daily_login: 1日1回のみ（別途管理）
-  // first_sticker: 初回のみ
 }
 
 // アクションの日本語名（UI表示用）
@@ -96,6 +171,7 @@ export const EXP_ACTION_NAMES: Record<ExpAction, string> = {
   place_sticker: 'シールを貼った',
   trade_complete: '交換成立',
   post_create: '投稿した',
+  comment_create: 'コメントした',
   receive_like: 'いいねをもらった',
   daily_login: 'ログインボーナス',
   first_sticker: '新しいシールをゲット',
@@ -205,7 +281,21 @@ export function getExpToNextLevel(totalExp: number): number {
 
 // レベルに対応する称号を取得
 export function getLevelTitle(level: number): string {
-  return LEVEL_TITLES[Math.min(level, MAX_LEVEL)] || 'シールあつめびと'
+  const safeLevel = Math.min(level, MAX_LEVEL)
+  const exact = LEVEL_TITLES[safeLevel]
+  if (exact) return exact
+
+  const sortedLevels = Object.keys(LEVEL_TITLES)
+    .map(Number)
+    .sort((a, b) => a - b)
+
+  let closest = sortedLevels[0] || 1
+  for (const lv of sortedLevels) {
+    if (lv <= safeLevel) closest = lv
+    else break
+  }
+
+  return LEVEL_TITLES[closest] || 'シールあつめびと'
 }
 
 // 経験値を追加した結果を計算
@@ -225,7 +315,21 @@ export interface ExpGainResult {
 // 基本版（デイリー上限チェックなし - 互換性のため残す）
 export function addExp(currentTotalExp: number, action: ExpAction): ExpGainResult {
   const oldLevel = calculateLevel(currentTotalExp)
-  const expGained = EXP_REWARDS[action]
+  if (oldLevel >= MAX_LEVEL) {
+    return {
+      newTotalExp: currentTotalExp,
+      newLevel: oldLevel,
+      oldLevel,
+      leveledUp: false,
+      levelsGained: 0,
+      newTitle: getLevelTitle(oldLevel),
+      expGained: 0,
+      dailyLimitReached: false,
+      remainingToday: null,
+    }
+  }
+
+  const expGained = Math.min(EXP_REWARDS[action], Math.max(0, MAX_TOTAL_EXP - currentTotalExp))
   const newTotalExp = currentTotalExp + expGained
   const newLevel = calculateLevel(newTotalExp)
 
@@ -254,6 +358,21 @@ export function addExpWithDailyLimit(
 ): AddExpWithLimitResult {
   const oldLevel = calculateLevel(currentTotalExp)
 
+  if (oldLevel >= MAX_LEVEL) {
+    return {
+      newTotalExp: currentTotalExp,
+      newLevel: oldLevel,
+      oldLevel,
+      leveledUp: false,
+      levelsGained: 0,
+      newTitle: getLevelTitle(oldLevel),
+      expGained: 0,
+      dailyLimitReached: false,
+      remainingToday: null,
+      newDailyCounts: dailyCounts,
+    }
+  }
+
   // デイリー上限チェック
   if (hasReachedDailyLimit(action, dailyCounts)) {
     return {
@@ -271,7 +390,7 @@ export function addExpWithDailyLimit(
   }
 
   // 経験値を加算
-  const expGained = EXP_REWARDS[action]
+  const expGained = Math.min(EXP_REWARDS[action], Math.max(0, MAX_TOTAL_EXP - currentTotalExp))
   const newTotalExp = currentTotalExp + expGained
   const newLevel = calculateLevel(newTotalExp)
 
@@ -359,6 +478,7 @@ export default {
   createInitialDailyCounts,
   getTodayDateString,
   MAX_LEVEL,
+  MAX_TOTAL_EXP,
   EXP_REWARDS,
   EXP_DAILY_LIMITS,
   EXP_ACTION_NAMES,

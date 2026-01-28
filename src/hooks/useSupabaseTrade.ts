@@ -52,6 +52,7 @@ export interface SupabaseTradeActions {
   startMatching: () => Promise<void>
   cancelMatching: () => Promise<void>
   joinTrade: (tradeId: string) => Promise<void>
+  startDirectTrade: (partnerId: string) => Promise<void>
 
   // アイテム操作
   addItem: (userStickerId: string, quantity?: number) => Promise<void>
@@ -207,6 +208,27 @@ export function useSupabaseTrade(
 
     try {
       const trade = await tradeService.createTrade(supabaseUserId)
+      if (!trade) {
+        throw new Error('交換セッションの作成に失敗しました')
+      }
+
+      const details = await tradeService.getTrade(trade.id)
+      setCurrentTrade(details)
+      subscribeToTrade(trade.id)
+    } catch (e) {
+      handleError((e as Error).message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [supabaseUserId, subscribeToTrade, handleError])
+
+  // 直接交換（掲示板から特定ユーザーと）
+  const startDirectTrade = useCallback(async (partnerId: string) => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const trade = await tradeService.createDirectTrade(supabaseUserId, partnerId)
       if (!trade) {
         throw new Error('交換セッションの作成に失敗しました')
       }
@@ -538,6 +560,7 @@ export function useSupabaseTrade(
     startMatching,
     cancelMatching,
     joinTrade,
+    startDirectTrade,
     addItem,
     removeItem,
     setReady,

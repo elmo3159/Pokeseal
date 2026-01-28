@@ -40,7 +40,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
         {/* PWA: Apple Touch Icon */}
-        <link rel="apple-touch-icon" href="/stickers/ポフン/sticker_1.png" />
+        <link rel="apple-touch-icon" href="/stickers/ポフン/ポフン_1.png" />
         {/* PWA: Splash Screen Color */}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>

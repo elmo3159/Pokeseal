@@ -17,6 +17,8 @@ export interface StickerBookPage {
   placedStickers?: PlacedSticker[]
   // 実際の配置デコアイテムデータ
   placedDecoItems?: PlacedDecoItem[]
+  // ページテーマ設定
+  themeConfig?: Record<string, unknown> | null
 }
 
 interface CreatePostModalProps {
@@ -425,9 +427,10 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         caption,
         hashtags: selectedTags,
         visibility,
-        pageData: hasContent ? {
+        pageData: hasContent || selectedPage.themeConfig ? {
           placedStickers: selectedPage.placedStickers || [],
           placedDecoItems: selectedPage.placedDecoItems,
+          themeConfig: selectedPage.themeConfig,
         } : undefined,
       })
       handleClose()

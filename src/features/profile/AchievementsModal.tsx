@@ -6,12 +6,12 @@ import { Achievement } from './ProfileView'
 import {
   TrophyIcon,
   PaletteIcon,
-  HandshakeIcon,
   UsersGroupIcon,
   StarIcon,
   TargetIcon,
   CelebrationIcon,
 } from '@/components/icons/ProfileIcons'
+import { defaultThemes } from '@/domain/theme'
 
 interface AchievementsModalProps {
   isOpen: boolean
@@ -23,7 +23,8 @@ interface AchievementsModalProps {
 const AchievementCard: React.FC<{
   achievement: Achievement
   index: number
-}> = ({ achievement, index }) => {
+  rewardThemes?: { name: string; emoji: string }[]
+}> = ({ achievement, index, rewardThemes }) => {
   const { name, icon, description, unlockedAt, isUnlocked } = achievement
 
   return (
@@ -86,7 +87,7 @@ const AchievementCard: React.FC<{
               filter: isUnlocked ? 'none' : 'grayscale(100%) opacity(0.5)',
             }}
           >
-            {isUnlocked ? icon : '🔒'}
+            {icon}
           </span>
         </div>
 
@@ -101,7 +102,7 @@ const AchievementCard: React.FC<{
               marginBottom: '2px',
             }}
           >
-            {isUnlocked ? name : '???'}
+            {name}
           </h4>
           <p
             style={{
@@ -111,8 +112,32 @@ const AchievementCard: React.FC<{
               lineHeight: 1.4,
             }}
           >
-            {isUnlocked ? description : 'まだかいほうされていません'}
+            {description}
           </p>
+          {rewardThemes && rewardThemes.length > 0 && (
+            <p
+              style={{
+                fontSize: '11px',
+                color: isUnlocked ? '#6D28D9' : '#9CA3AF',
+                fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                marginTop: '4px',
+              }}
+            >
+              もらえるテーマ：{rewardThemes.map((theme) => `${theme.emoji} ${theme.name}`).join(' / ')}
+            </p>
+          )}
+          {!isUnlocked && (
+            <p
+              style={{
+                fontSize: '10px',
+                color: '#BDB0C9',
+                fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                marginTop: '2px',
+              }}
+            >
+              まだかいほうされていません
+            </p>
+          )}
           {isUnlocked && unlockedAt && (
             <p
               style={{
@@ -156,7 +181,8 @@ const AchievementCategory: React.FC<{
   icon: React.ReactNode
   achievements: Achievement[]
   startIndex: number
-}> = ({ title, icon, achievements, startIndex }) => {
+  rewardThemeMap: Map<string, { name: string; emoji: string }[]>
+}> = ({ title, icon, achievements, startIndex, rewardThemeMap }) => {
   const unlockedCount = achievements.filter(a => a.isUnlocked).length
 
   return (
@@ -203,6 +229,7 @@ const AchievementCategory: React.FC<{
             key={achievement.id}
             achievement={achievement}
             index={startIndex + index}
+            rewardThemes={rewardThemeMap.get(achievement.id)}
           />
         ))}
       </div>
@@ -215,19 +242,41 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
   onClose,
   achievements,
 }) => {
+  const rewardThemeMap = useMemo(() => {
+    const map = new Map<string, { name: string; emoji: string }[]>()
+    defaultThemes.forEach(theme => {
+      if (theme.obtainMethod !== 'achievement') return
+      if (!theme.unlockAchievementId) return
+      const list = map.get(theme.unlockAchievementId) ?? []
+      list.push({ name: theme.name, emoji: theme.previewEmoji })
+      map.set(theme.unlockAchievementId, list)
+    })
+    return map
+  }, [])
+
+  const allAchievementsTheme = useMemo(() => {
+    return defaultThemes.find(theme => theme.unlockAllAchievements)
+  }, [])
+
   // 実績をカテゴリ別に分類
   const categorizedAchievements = useMemo(() => {
-    // IDのプレフィックスでカテゴリを判定
-    const collection = achievements.filter(a => a.id.startsWith('collection'))
-    const trade = achievements.filter(a => a.id.startsWith('trade'))
-    const social = achievements.filter(a => a.id.startsWith('social'))
-    const others = achievements.filter(a =>
-      !a.id.startsWith('collection') &&
-      !a.id.startsWith('trade') &&
-      !a.id.startsWith('social')
-    )
+    const getCategory = (achievement: Achievement) => {
+      if (achievement.category) return achievement.category
+      if (achievement.id.startsWith('collection')) return 'collection'
+      if (achievement.id.startsWith('book')) return 'book'
+      if (achievement.id.startsWith('gacha')) return 'gacha'
+      if (achievement.id.startsWith('timeline')) return 'timeline'
+      if (achievement.id.startsWith('special')) return 'special'
+      return 'special'
+    }
 
-    return { collection, trade, social, others }
+    const collection = achievements.filter(a => getCategory(a) === 'collection')
+    const book = achievements.filter(a => getCategory(a) === 'book')
+    const gacha = achievements.filter(a => getCategory(a) === 'gacha')
+    const timeline = achievements.filter(a => getCategory(a) === 'timeline')
+    const special = achievements.filter(a => getCategory(a) === 'special')
+
+    return { collection, book, gacha, timeline, special }
   }, [achievements])
 
   const unlockedCount = achievements.filter(a => a.isUnlocked).length
@@ -392,6 +441,21 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                   }}
                 />
               </div>
+              {allAchievementsTheme && (
+                <div
+                  style={{
+                    marginTop: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.7)',
+                    fontSize: '12px',
+                    color: '#6D28D9',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
+                >
+                  ぜんぶ そろえると：{allAchievementsTheme.previewEmoji} {allAchievementsTheme.name}
+                </div>
+              )}
             </div>
 
             {/* コンテンツ */}
@@ -409,40 +473,56 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                   icon={<PaletteIcon size={20} />}
                   achievements={categorizedAchievements.collection}
                   startIndex={0}
+                  rewardThemeMap={rewardThemeMap}
                 />
               )}
 
-              {/* 交換系 */}
-              {categorizedAchievements.trade.length > 0 && (
+              {/* シール帳系 */}
+              {categorizedAchievements.book.length > 0 && (
                 <AchievementCategory
-                  title="こうかん"
-                  icon={<HandshakeIcon size={20} />}
-                  achievements={categorizedAchievements.trade}
+                  title="シール帳"
+                  icon={<TargetIcon size={20} />}
+                  achievements={categorizedAchievements.book}
                   startIndex={categorizedAchievements.collection.length}
+                  rewardThemeMap={rewardThemeMap}
                 />
               )}
 
-              {/* ソーシャル系 */}
-              {categorizedAchievements.social.length > 0 && (
+              {/* ガチャ系 */}
+              {categorizedAchievements.gacha.length > 0 && (
                 <AchievementCategory
-                  title="なかま"
-                  icon={<UsersGroupIcon size={20} />}
-                  achievements={categorizedAchievements.social}
-                  startIndex={categorizedAchievements.collection.length + categorizedAchievements.trade.length}
+                  title="ガチャ"
+                  icon={<StarIcon size={20} />}
+                  achievements={categorizedAchievements.gacha}
+                  startIndex={categorizedAchievements.collection.length + categorizedAchievements.book.length}
+                  rewardThemeMap={rewardThemeMap}
                 />
               )}
 
-              {/* その他 */}
-              {categorizedAchievements.others.length > 0 && (
+              {/* タイムライン系 */}
+              {categorizedAchievements.timeline.length > 0 && (
+                <AchievementCategory
+                  title="タイムライン"
+                  icon={<UsersGroupIcon size={20} />}
+                  achievements={categorizedAchievements.timeline}
+                  startIndex={categorizedAchievements.collection.length + categorizedAchievements.book.length + categorizedAchievements.gacha.length}
+                  rewardThemeMap={rewardThemeMap}
+                />
+              )}
+
+              {/* スペシャル系 */}
+              {categorizedAchievements.special.length > 0 && (
                 <AchievementCategory
                   title="スペシャル"
-                  icon={<StarIcon size={20} />}
-                  achievements={categorizedAchievements.others}
+                  icon={<CelebrationIcon size={20} />}
+                  achievements={categorizedAchievements.special}
                   startIndex={
                     categorizedAchievements.collection.length +
-                    categorizedAchievements.trade.length +
-                    categorizedAchievements.social.length
+                    categorizedAchievements.book.length +
+                    categorizedAchievements.gacha.length +
+                    categorizedAchievements.timeline.length
                   }
+                  rewardThemeMap={rewardThemeMap}
                 />
               )}
 
@@ -476,3 +556,5 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
 }
 
 export default AchievementsModal
+
+

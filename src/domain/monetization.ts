@@ -210,7 +210,7 @@ export const TICKETS_PER_AD = 1 // 広告1回あたりのチケット
 export interface UserMonetization {
   // 通貨
   tickets: number  // シルチケ
-  gems: number     // プレシル（プレミアムシルチケ）
+  gems: number     // プレシルチケ（プレミアムシールチケット）
   stars: number    // どろっぷ
 
   // サブスク
@@ -236,7 +236,7 @@ export interface UserMonetization {
 // 初期状態
 export const DEFAULT_USER_MONETIZATION: UserMonetization = {
   tickets: 10,  // 初期シルチケ
-  gems: 5,      // 初期プレシル
+  gems: 5,      // 初期プレシルチケ
   stars: 100,   // 初期どろっぷ
 
   subscription: 'none',

@@ -50,11 +50,13 @@ export interface TradeWithDetails extends Trade {
     id: string
     display_name: string
     avatar_url: string | null
+    selected_frame_id: string | null  // キャラクター報酬で解放したフレーム
   } | null
   user2: {
     id: string
     display_name: string
     avatar_url: string | null
+    selected_frame_id: string | null  // キャラクター報酬で解放したフレーム
   } | null
   items: TradeItem[]
 }
@@ -86,6 +88,41 @@ export const tradeService = {
     if (error) {
       console.error('[TradeService] Create trade error:', error)
       return null
+    }
+
+    return data as Trade
+  },
+
+  // 直接交換（掲示板から特定ユーザーと交換を開始）
+  async createDirectTrade(userId: string, partnerId: string): Promise<Trade | null> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase
+      .from('trades')
+      .insert({
+        user1_id: userId,
+        user2_id: partnerId,
+        status: 'negotiating',
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[TradeService] Create direct trade error:', error)
+      return null
+    }
+
+    // 相手に通知
+    try {
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', userId)
+        .single()
+      const myName = myProfile?.display_name || 'だれか'
+      await notificationService.sendTradeRequestNotification(partnerId, myName, data.id)
+    } catch {
+      // 通知失敗は無視
     }
 
     return data as Trade
@@ -201,25 +238,36 @@ export const tradeService = {
     }
 
     // ユーザー情報を個別に取得
+    // Note: selected_frame_idはマイグレーション038で追加、型定義は将来再生成予定
     let user1 = null
     let user2 = null
 
     if (trade.user1_id) {
       const { data: u1 } = await supabase
         .from('profiles')
-        .select('id, display_name, avatar_url')
+        .select('*')
         .eq('id', trade.user1_id)
         .single()
-      user1 = u1
+      user1 = u1 ? {
+        id: u1.id,
+        display_name: u1.display_name,
+        avatar_url: u1.avatar_url,
+        selected_frame_id: (u1 as any).selected_frame_id || null,
+      } : null
     }
 
     if (trade.user2_id) {
       const { data: u2 } = await supabase
         .from('profiles')
-        .select('id, display_name, avatar_url')
+        .select('*')
         .eq('id', trade.user2_id)
         .single()
-      user2 = u2
+      user2 = u2 ? {
+        id: u2.id,
+        display_name: u2.display_name,
+        avatar_url: u2.avatar_url,
+        selected_frame_id: (u2 as any).selected_frame_id || null,
+      } : null
     }
 
     // アイテムも取得
@@ -331,7 +379,7 @@ export const tradeService = {
     if (success) {
       try {
         const trade = await this.getTrade(tradeId)
-        if (trade && trade.user1 && trade.user2) {
+        if (trade && trade.user1 && trade.user2 && trade.user2_id) {
           // User1に通知
           await notificationService.sendTradeAcceptedNotification(
             trade.user1_id,
@@ -340,7 +388,7 @@ export const tradeService = {
           )
           // User2に通知
           await notificationService.sendTradeAcceptedNotification(
-            trade.user2_id!,
+            trade.user2_id,
             trade.user1.display_name || 'だれか',
             tradeId
           )

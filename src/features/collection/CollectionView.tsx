@@ -12,6 +12,30 @@ import {
   defaultSearchFilter,
   filterStickers
 } from '@/domain/stickerTags'
+import { CharacterProgressModal } from './CharacterProgressModal'
+
+const VirtuosoScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  (props, ref) => (
+    <div
+      {...props}
+      ref={ref}
+      style={{
+        ...props.style,
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+      }}
+    />
+  )
+)
+VirtuosoScroller.displayName = 'VirtuosoScroller'
+
+const PREFETCH_ROW_BEFORE = 2
+const PREFETCH_ROW_AFTER = 5
+
+const resolveImageUrl = (url?: string) => {
+  if (!url) return undefined
+  return url.startsWith('/') ? url : `/${url}`
+}
 
 // 画面幅に応じたグリッド列数を計算するカスタムフック
 const useResponsiveColumns = () => {
@@ -161,6 +185,7 @@ interface StickerCardProps {
 
 const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
   const { owned, type, name, quantity, imageUrl, upgradeRank = 0 } = sticker
+  const resolvedImageUrl = resolveImageUrl(imageUrl)
 
   const cardContent = (
     <button
@@ -169,109 +194,117 @@ const StickerCard: React.FC<StickerCardProps> = memo(({ sticker, onClick }) => {
         position: 'relative',
         width: '100%',
         minWidth: 0, // グリッドアイテムの縮小を許可
-        aspectRatio: '1/1',
-        borderRadius: 'clamp(6px, 2vw, 12px)',
-        overflow: 'hidden',
+        display: 'block',
+        paddingTop: '100%',
         transition: 'all 0.2s',
         background: owned ? 'rgba(255, 255, 255, 0.7)' : 'rgba(229, 231, 235, 0.5)',
         border: owned ? '1px solid rgba(196, 181, 253, 0.5)' : '1px solid rgba(209, 213, 219, 0.5)',
+        borderRadius: 'clamp(6px, 2vw, 12px)',
+        overflow: 'hidden',
         boxShadow: type === 'puffy'
           ? '0 4px 8px rgba(0, 0, 0, 0.1)'
           : '0 2px 4px rgba(139, 92, 246, 0.1)',
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         cursor: 'pointer',
-        padding: 0,
+        paddingLeft: 0,
+        paddingRight: 0,
+        paddingBottom: 0,
       }}
     >
-      {/* シール画像エリア - アップグレードランクに基づくオーラ */}
-      <StickerAura upgradeRank={upgradeRank as UpgradeRank}>
-        <div style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: owned ? 1 : 0.3,
-          filter: owned ? 'none' : 'grayscale(100%)',
-        }}>
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={name}
-              loading="lazy"
-              style={{
+      <div style={{ position: 'absolute', inset: 0 }}>
+          {/* シール画像エリア - アップグレードランクに基づくオーラ */}
+          <StickerAura upgradeRank={upgradeRank as UpgradeRank}>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: owned ? 1 : 0.3,
+              filter: owned ? 'none' : 'grayscale(100%)',
+            }}>
+              {resolvedImageUrl ? (
+                <img
+                  src={resolvedImageUrl}
+                  alt={name}
+                  loading="lazy"
+                  decoding="async"
+                  width={256}
+                  height={256}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    padding: '4%'
+                  }}
+                />
+              ) : (
+                <div style={{ fontSize: 'clamp(16px, 5vw, 24px)' }}>
+                  {type === 'sparkle' ? '?' : type === 'puffy' ? '??' : '?'}
+                </div>
+              )}
+            </div>
+          </StickerAura>
+
+          {/* 未所持オーバーレイ */}
+          {!owned && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: 'clamp(14px, 4.5vw, 22px)' }}>?</span>
+            </div>
+          )}
+
+          {/* 所持数バッジ */}
+          {owned && quantity > 1 && (
+            <div style={{
+              position: 'absolute',
+              bottom: '2%',
+              left: '2%',
+              background: '#7C3AED',
+              color: 'white',
+              fontSize: 'clamp(8px, 2.2vw, 11px)',
+              paddingLeft: '1vw',
+              paddingRight: '1vw',
+              paddingTop: '0.5vw',
+              paddingBottom: '0.5vw',
+              borderRadius: '9999px',
+              fontWeight: 'bold',
+              zIndex: 10,
+            }}>
+              ×{quantity}
+            </div>
+          )}
+
+          {/* キラキラエフェクト */}
+          {owned && type === 'sparkle' && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              pointerEvents: 'none',
+              overflow: 'hidden',
+            }}>
+              <div className="animate-shine" style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',
-                padding: '4%'
-              }}
-            />
-          ) : (
-            <div style={{ fontSize: 'clamp(16px, 5vw, 24px)' }}>
-              {type === 'sparkle' ? '✨' : type === 'puffy' ? '🌟' : '⭐'}
+                background: 'linear-gradient(to bottom right, transparent, rgba(255, 255, 255, 0.3), transparent)',
+              }} />
             </div>
           )}
         </div>
-      </StickerAura>
-
-      {/* 未所持オーバーレイ */}
-      {!owned && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <span style={{ fontSize: 'clamp(14px, 4.5vw, 22px)' }}>❓</span>
-        </div>
-      )}
-
-      {/* 所持数バッジ */}
-      {owned && quantity > 1 && (
-        <div style={{
-          position: 'absolute',
-          bottom: '2%',
-          left: '2%',
-          background: '#7C3AED',
-          color: 'white',
-          fontSize: 'clamp(8px, 2.2vw, 11px)',
-          paddingLeft: '1vw',
-          paddingRight: '1vw',
-          paddingTop: '0.5vw',
-          paddingBottom: '0.5vw',
-          borderRadius: '9999px',
-          fontWeight: 'bold',
-          zIndex: 10,
-        }}>
-          ×{quantity}
-        </div>
-      )}
-
-      {/* キラキラエフェクト */}
-      {owned && type === 'sparkle' && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
-          overflow: 'hidden',
-        }}>
-          <div className="animate-shine" style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            background: 'linear-gradient(to bottom right, transparent, rgba(255, 255, 255, 0.3), transparent)',
-          }} />
-        </div>
-      )}
     </button>
   )
 
@@ -323,9 +356,10 @@ const StickerLabel: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => 
 interface CollectionStatsProps {
   total: number
   owned: number
+  onRewardsClick?: () => void
 }
 
-const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
+const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned, onRewardsClick }) => {
   const percentage = Math.round((owned / total) * 100)
 
   return (
@@ -381,9 +415,38 @@ const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
           }}
         />
       </div>
-      <p style={{ fontSize: 'clamp(10px, 2.5vw, 14px)', marginTop: 'clamp(4px, 1.5vw, 8px)', color: '#A67C52' }}>
-        {owned} / {total} シール
-      </p>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 'clamp(4px, 1.5vw, 8px)',
+      }}>
+        <p style={{ fontSize: 'clamp(10px, 2.5vw, 14px)', color: '#A67C52', margin: 0 }}>
+          {owned} / {total} シール
+        </p>
+        {onRewardsClick && (
+          <button
+            onClick={onRewardsClick}
+            style={{
+              padding: 'clamp(4px, 1.5vw, 8px) clamp(8px, 2.5vw, 12px)',
+              borderRadius: 'clamp(8px, 2vw, 12px)',
+              background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+              color: 'white',
+              fontSize: 'clamp(10px, 2.5vw, 12px)',
+              fontWeight: 'bold',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>🏆</span>
+            <span>シリーズ報酬</span>
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -392,15 +455,19 @@ const CollectionStats: React.FC<CollectionStatsProps> = ({ total, owned }) => {
 interface CollectionViewProps {
   stickers: CollectionSticker[]
   onStickerClick?: (sticker: CollectionSticker) => void
+  onGoGacha?: () => void
 }
 
 export const CollectionView: React.FC<CollectionViewProps> = ({
   stickers,
-  onStickerClick
+  onStickerClick,
+  onGoGacha
 }) => {
   const [filter, setFilter] = useState<StickerSearchFilter>(defaultSearchFilter)
+  const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false)
   const columns = useResponsiveColumns()
   const containerRef = useRef<HTMLDivElement>(null)
+  const preloadedImagesRef = useRef<Set<string>>(new Set())
 
   const filteredStickers = useMemo(() => {
     return filterStickers(stickers, filter)
@@ -423,6 +490,39 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
     }
     return result
   }, [filteredStickers, columns])
+
+  const preloadImage = useCallback((url: string) => {
+    if (!url) return
+    if (preloadedImagesRef.current.has(url)) return
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = url
+    preloadedImagesRef.current.add(url)
+  }, [])
+
+  const preloadRows = useCallback((startIndex: number, endIndex: number) => {
+    if (rows.length === 0) return
+    const start = Math.max(0, startIndex)
+    const end = Math.min(rows.length - 1, endIndex)
+    for (let rowIndex = start; rowIndex <= end; rowIndex += 1) {
+      const row = rows[rowIndex]
+      if (!row) continue
+      for (const sticker of row) {
+        const resolved = resolveImageUrl(sticker.imageUrl)
+        if (resolved) {
+          preloadImage(resolved)
+        }
+      }
+    }
+  }, [rows, preloadImage])
+
+  const handleRangeChanged = useCallback((range: { startIndex: number; endIndex: number }) => {
+    preloadRows(range.startIndex - PREFETCH_ROW_BEFORE, range.endIndex + PREFETCH_ROW_AFTER)
+  }, [preloadRows])
+
+  useEffect(() => {
+    preloadRows(0, PREFETCH_ROW_AFTER)
+  }, [preloadRows])
 
   // 行のレンダリング
   const rowContent = useCallback((index: number) => {
@@ -461,6 +561,7 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
               }
               placement="top"
               disabled={!sticker.owned}
+              block
             >
               <StickerCard sticker={sticker} onClick={handleStickerClick} />
             </FloatingTooltip>
@@ -485,7 +586,11 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
       }}
     >
       {/* ヘッダー統計 */}
-      <CollectionStats total={stats.total} owned={stats.owned} />
+      <CollectionStats
+        total={stats.total}
+        owned={stats.owned}
+        onRewardsClick={() => setIsSeriesModalOpen(true)}
+      />
 
       {/* 検索フィルターパネル */}
       <div style={{ marginBottom: 'clamp(6px, 2vw, 12px)' }}>
@@ -534,10 +639,14 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
                 height: '100%',
                 width: '100%',
               }}
+              components={{
+                Scroller: VirtuosoScroller,
+              }}
               totalCount={rows.length}
               itemContent={rowContent}
               overscan={300} // 画面外300pxまで先読み
               increaseViewportBy={{ top: 200, bottom: 200 }}
+              rangeChanged={handleRangeChanged}
             />
           ) : (
             /* 結果なし */
@@ -551,11 +660,37 @@ export const CollectionView: React.FC<CollectionViewProps> = ({
               color: '#A78BFA',
             }}>
               <span style={{ fontSize: 'clamp(20px, 6vw, 32px)', marginBottom: 'clamp(6px, 1.5vw, 10px)' }}>🔍</span>
-              <p style={{ fontSize: 'clamp(12px, 2.5vw, 16px)' }}>みつかりませんでした</p>
+              <p style={{ fontSize: 'clamp(12px, 2.5vw, 16px)' }}>みつからないよ</p>
+              {onGoGacha && (
+                <button
+                  onClick={onGoGacha}
+                  style={{
+                    marginTop: 'clamp(8px, 2vw, 12px)',
+                    padding: '8px 16px',
+                    borderRadius: '9999px',
+                    fontSize: 'clamp(12px, 2.5vw, 16px)',
+                    fontWeight: 'bold',
+                    color: 'white',
+                    background: 'linear-gradient(135deg, #F472B6 0%, #A78BFA 100%)',
+                    boxShadow: '0 4px 12px rgba(167, 139, 250, 0.3)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
+                >
+                  がちゃへ
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* キャラクター報酬モーダル */}
+      <CharacterProgressModal
+        isOpen={isSeriesModalOpen}
+        onClose={() => setIsSeriesModalOpen(false)}
+      />
     </div>
   )
 }

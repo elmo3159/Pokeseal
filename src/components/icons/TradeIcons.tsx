@@ -56,14 +56,20 @@ export const ChatIcon: React.FC<{ size?: number; color?: string }> = ({ size = 2
   </svg>
 )
 
-// 握手・交換アイコン
+// 握手・交換アイコン（2つのシールが入れ替わるデザイン）
 export const HandshakeIcon: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = '#22C55E' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <path d="M2 10L6 6L10 10L14 6L18 10" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M6 14L2 10V18H6V14Z" fill={color} fillOpacity="0.3" stroke={color} strokeWidth="1.5"/>
-    <path d="M18 14L22 10V18H18V14Z" fill={color} fillOpacity="0.3" stroke={color} strokeWidth="1.5"/>
-    <path d="M10 14H14" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-    <path d="M8 18H16" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    {/* 左のシール（丸） */}
+    <circle cx="6" cy="8" r="4" fill="#EC4899" stroke="#DB2777" strokeWidth="1.5"/>
+    <path d="M6 6.5L6.8 8.5H8.5L7 9.5L7.5 11.5L6 10.2L4.5 11.5L5 9.5L3.5 8.5H5.2L6 6.5Z" fill="white"/>
+    {/* 右のシール（丸） */}
+    <circle cx="18" cy="16" r="4" fill="#8B5CF6" stroke="#7C3AED" strokeWidth="1.5"/>
+    <path d="M18 14.5L18.8 16.5H20.5L19 17.5L19.5 19.5L18 18.2L16.5 19.5L17 17.5L15.5 16.5H17.2L18 14.5Z" fill="white"/>
+    {/* 交換の矢印 */}
+    <path d="M11 6L14 9" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    <path d="M14 6L14 9L11 9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M13 18L10 15" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    <path d="M10 18L10 15L13 15" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 )
 

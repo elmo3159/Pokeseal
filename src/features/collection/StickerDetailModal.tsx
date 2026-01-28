@@ -80,37 +80,6 @@ const UpgradeProgress: React.FC<{ quantity: number; currentUpgradeRank: UpgradeR
   )
 }
 
-// シールタイプバッジ
-const TypeBadge: React.FC<{ type: 'normal' | 'puffy' | 'sparkle' }> = ({ type }) => {
-  const typeInfo = {
-    normal: { label: 'ふつう', emoji: '📄', bg: '#F3F4F6', color: '#374151' },
-    puffy: { label: 'ぷっくり', emoji: '🫧', bg: '#DBEAFE', color: '#1D4ED8' },
-    sparkle: { label: 'キラキラ', emoji: '✨', bg: '#FEF9C3', color: '#A16207' }
-  }
-
-  const info = typeInfo[type]
-
-  return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '4px',
-      paddingLeft: '12px',
-      paddingRight: '12px',
-      paddingTop: '4px',
-      paddingBottom: '4px',
-      borderRadius: '9999px',
-      fontSize: '14px',
-      fontWeight: 500,
-      background: info.bg,
-      color: info.color,
-    }}>
-      <span>{info.emoji}</span>
-      <span>{info.label}</span>
-    </span>
-  )
-}
-
 // シールプレビュー（シンプル版 - バッジなし）
 const StickerPreview: React.FC<{ sticker: CollectionSticker }> = ({ sticker }) => {
   const { type, imageUrl, owned, upgradeRank = 0 } = sticker
@@ -305,11 +274,6 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
             {sticker.owned ? sticker.name : '???'}
           </h2>
 
-          {/* シリーズ */}
-          <p style={{ fontSize: '14px', textAlign: 'center', color: '#8B5CF6', marginBottom: '12px' }}>
-            {sticker.series}
-          </p>
-
           {/* レアリティと種類 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px' }}>
             <RankStars
@@ -318,7 +282,6 @@ export const StickerDetailModal: React.FC<StickerDetailModalProps> = ({
               size="md"
               showAnimation={false}
             />
-            <TypeBadge type={sticker.type} />
           </div>
 
           {/* レートポイント */}

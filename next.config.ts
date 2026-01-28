@@ -1,5 +1,9 @@
 import type { NextConfig } from 'next'
 
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+})
+
 const nextConfig: NextConfig = {
   // モバイルアプリ用の静的エクスポート設定
   output: 'export',
@@ -13,6 +17,16 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+
+  // 実験的機能
+  experimental: {
+    // 最適化されたパッケージインポート
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      '@floating-ui/react',
+    ],
+  },
 }
 
-export default nextConfig
+export default withBundleAnalyzer(nextConfig)

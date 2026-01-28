@@ -1,5 +1,6 @@
 // 実績サービス - ユーザーのアクションに基づいて実績を計算
 import { Achievement } from '@/features/profile/ProfileView'
+import { getSupabase } from '@/services/supabase'
 
 // 実績の定義
 export interface AchievementDefinition {
@@ -177,8 +178,82 @@ export function calculateAchievements(stats: AchievementStats): Achievement[] {
       icon: def.icon,
       isUnlocked,
       unlockedAt: isUnlocked ? new Date().toISOString() : undefined,
+      category: def.category,
     }
   })
+}
+
+export interface UserAchievementRecord {
+  achievement_id: string
+  unlocked_at: string
+}
+
+export async function fetchUserAchievementMap(userId: string): Promise<Map<string, string>> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('user_achievements')
+    .select('achievement_id, unlocked_at')
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('[AchievementService] Fetch user achievements error:', error)
+    return new Map()
+  }
+
+  const map = new Map<string, string>()
+  for (const row of (data as UserAchievementRecord[] | null) || []) {
+    if (row.achievement_id) {
+      map.set(row.achievement_id, row.unlocked_at)
+    }
+  }
+  return map
+}
+
+export function buildAchievementList(stats: AchievementStats, unlockedMap?: Map<string, string>): Achievement[] {
+  return ACHIEVEMENT_DEFINITIONS.map(def => {
+    const shouldUnlock = def.condition(stats)
+    const unlockedAt = unlockedMap?.get(def.id)
+    const isUnlocked = Boolean(unlockedAt) || shouldUnlock
+    return {
+      id: def.id,
+      name: def.name,
+      description: def.description,
+      icon: def.icon,
+      isUnlocked,
+      unlockedAt: unlockedAt || (shouldUnlock ? new Date().toISOString() : undefined),
+      category: def.category,
+    }
+  })
+}
+
+export async function syncUserAchievements(
+  userId: string,
+  stats: AchievementStats
+): Promise<Achievement[]> {
+  const supabase = getSupabase()
+  const unlockedIds = ACHIEVEMENT_DEFINITIONS
+    .filter(def => def.condition(stats))
+    .map(def => def.id)
+
+  if (unlockedIds.length > 0) {
+    const { error } = await supabase
+      .from('user_achievements')
+      .upsert(
+        unlockedIds.map(id => ({
+          user_id: userId,
+          achievement_id: id,
+        })),
+        { onConflict: 'user_id,achievement_id', ignoreDuplicates: true }
+      )
+
+    if (error) {
+      console.error('[AchievementService] Upsert achievements error:', error)
+      return buildAchievementList(stats)
+    }
+  }
+
+  const unlockedMap = await fetchUserAchievementMap(userId)
+  return buildAchievementList(stats, unlockedMap)
 }
 
 // カテゴリ別に実績を取得
@@ -214,6 +289,9 @@ export function getCompletionRate(achievements: Achievement[]): number {
 
 export default {
   calculateAchievements,
+  buildAchievementList,
+  syncUserAchievements,
+  fetchUserAchievementMap,
   getAchievementsByCategory,
   getUnlockedCount,
   getCompletionRate,

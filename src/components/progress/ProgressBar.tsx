@@ -27,6 +27,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   size = 'medium'
 }) => {
   const [progress, setProgress] = useState(0)
+  const isMaxLevel = expForNextLevel === 0
 
   // 進捗率を計算（0-100）
   const progressPercentage = expForNextLevel > 0
@@ -53,6 +54,14 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
     medium: { level: '18px', exp: '12px', title: '12px' },
     large: { level: '24px', exp: '14px', title: '14px' }
   }
+
+  const levelFontSize = (() => {
+    const base = Number.parseInt(fontSize[size].level, 10)
+    if (Number.isNaN(base)) return fontSize[size].level
+    if (level >= 100) return `${Math.max(10, base - 6)}px`
+    if (level >= 10) return `${Math.max(12, base - 2)}px`
+    return fontSize[size].level
+  })()
 
   return (
     <div
@@ -87,7 +96,10 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
             <span style={{
               color: 'white',
               fontWeight: 'bold',
-              fontSize: fontSize[size].level,
+              fontSize: levelFontSize,
+              lineHeight: 1,
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
               textShadow: '0 1px 2px rgba(0,0,0,0.2)'
             }}>
               Lv{level}
@@ -123,7 +135,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
           color: '#A0826D',
           fontWeight: 'bold'
         }}>
-          {currentExp} / {expForNextLevel}
+          {isMaxLevel ? 'MAX' : `${currentExp} / ${expForNextLevel}`}
         </div>
       </div>
 

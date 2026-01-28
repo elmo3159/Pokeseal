@@ -334,6 +334,16 @@ html {
   animation: twinkle 2s ease-in-out infinite;
 }
 
+/* 操作中はアニメを一時停止（操作の重さを軽くする） */
+body.drag-optimizing [class^="animate-"],
+body.drag-optimizing [class*=" animate-"] {
+  animation-play-state: paused !important;
+}
+
+body.drag-optimizing .animate-shine::after {
+  animation-play-state: paused !important;
+}
+
 /* 浮遊アニメーション */
 @keyframes float {
   0%, 100% {

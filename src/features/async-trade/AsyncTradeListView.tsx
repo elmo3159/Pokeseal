@@ -3,11 +3,13 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { asyncTradeService, TradeSession } from '@/services/asyncTrade'
 import { UserIcon } from '@/components/icons/TradeIcons'
+import { Avatar } from '@/components/ui/Avatar'
 
 interface AsyncTradeListViewProps {
   userId: string
   onSelectSession: (sessionId: string) => void
   onInviteUser: () => void
+  onAcceptInvitation?: (sessionId: string) => void
 }
 
 // タブ種別
@@ -45,13 +47,12 @@ const formatExpiresIn = (expiresAt: string): string => {
   return 'まもなく期限'
 }
 
-// セッションカード
+// セッションカード（しんこう中）
 const SessionCard: React.FC<{
   session: TradeSession
   userId: string
-  isPending?: boolean
   onClick: () => void
-}> = ({ session, userId, isPending, onClick }) => {
+}> = ({ session, userId, onClick }) => {
   const partner = session.partner
   const isRequester = session.requesterId === userId
 
@@ -67,26 +68,22 @@ const SessionCard: React.FC<{
         fontFamily: "'M PLUS Rounded 1c', sans-serif",
         background: 'rgba(255, 255, 255, 0.95)',
         boxShadow: '0 2px 12px rgba(184, 149, 107, 0.15)',
-        border: isPending ? '2px solid #FFB74D' : '2px solid #D4C4B0',
+        border: '2px solid #D4C4B0',
       }}
     >
       {/* アバター */}
-      <div className="relative">
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #E8D5C4 0%, #D4C4B0 100%)' }}
-        >
-          {partner?.avatarUrl ? (
-            <img src={partner.avatarUrl} alt={partner.displayName || partner.username} className="w-full h-full object-cover" />
-          ) : (
-            <UserIcon size={28} color="#8B5A2B" />
-          )}
-        </div>
+      <div className="relative flex-shrink-0">
+        <Avatar
+          src={partner?.avatarUrl}
+          alt={partner?.displayName || partner?.username || '???'}
+          size="md"
+          frameId={partner?.selectedFrameId}
+        />
         {/* 未読バッジ */}
         {session.unreadCount && session.unreadCount > 0 && (
           <div
             className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: '#E74C3C' }}
+            style={{ background: '#E74C3C', zIndex: 10 }}
           >
             {session.unreadCount > 9 ? '9+' : session.unreadCount}
           </div>
@@ -95,16 +92,16 @@ const SessionCard: React.FC<{
 
       {/* 情報 */}
       <div className="flex-1 min-w-0 text-left">
-        <div className="flex items-center gap-2">
-          <h4 className="font-bold truncate" style={{ color: '#8B5A2B' }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h4 className="font-bold" style={{ color: '#8B5A2B', wordBreak: 'break-all' }}>
             {partner?.displayName || partner?.username || '???'}
           </h4>
-          {isPending && (
+          {partner?.level != null && (
             <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{ background: '#FFF3E0', color: '#E65100' }}
+              className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+              style={{ background: 'rgba(184, 149, 107, 0.2)', color: '#8B5A2B' }}
             >
-              NEW
+              Lv.{partner.level}
             </span>
           )}
         </div>
@@ -114,7 +111,7 @@ const SessionCard: React.FC<{
         </p>
 
         {/* 確認状態（アクティブセッションのみ） */}
-        {!isPending && session.status === 'active' && (
+        {session.status === 'active' && (
           <div className="flex items-center gap-2 mt-1.5">
             <span
               className="text-xs px-2 py-0.5 rounded-full"
@@ -139,13 +136,96 @@ const SessionCard: React.FC<{
       </div>
 
       {/* 期限 */}
-      <div className="text-right">
+      <div className="text-right flex-shrink-0">
         <p className="text-xs" style={{ color: '#B8956B' }}>
           {formatExpiresIn(session.expiresAt)}
         </p>
         <span style={{ color: '#C4A484' }} className="text-lg">›</span>
       </div>
     </button>
+  )
+}
+
+// うけとりカード（pending invitation）
+const PendingCard: React.FC<{
+  session: TradeSession
+  onAccept: () => void
+  onDecline: () => void
+  isProcessing: boolean
+}> = ({ session, onAccept, onDecline, isProcessing }) => {
+  const partner = session.partner
+
+  return (
+    <div
+      className="w-full p-4 rounded-2xl"
+      style={{
+        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+        background: 'rgba(255, 255, 255, 0.95)',
+        boxShadow: '0 2px 12px rgba(184, 149, 107, 0.15)',
+        border: '2px solid #FFB74D',
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {/* アバター */}
+        <div className="flex-shrink-0">
+          <Avatar
+            src={partner?.avatarUrl}
+            alt={partner?.displayName || partner?.username || '???'}
+            size="md"
+            frameId={partner?.selectedFrameId}
+          />
+        </div>
+
+        {/* 情報 */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="font-bold" style={{ color: '#8B5A2B', wordBreak: 'break-all' }}>
+              {partner?.displayName || partner?.username || '???'}
+            </h4>
+            {partner?.level != null && (
+              <span
+                className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                style={{ background: 'rgba(184, 149, 107, 0.2)', color: '#8B5A2B' }}
+              >
+                Lv.{partner.level}
+              </span>
+            )}
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+              style={{ background: '#FFF3E0', color: '#E65100' }}
+            >
+              NEW
+            </span>
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: '#A67C52' }}>
+            {formatRelativeTime(session.createdAt)} にさそわれました
+          </p>
+        </div>
+      </div>
+
+      {/* ボタン */}
+      <div className="flex items-center gap-3 mt-3">
+        <button
+          onClick={onAccept}
+          disabled={isProcessing}
+          className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm transition-all active:scale-95 disabled:opacity-50"
+          style={{
+            background: 'linear-gradient(135deg, #66BB6A 0%, #43A047 100%)',
+            boxShadow: '0 2px 8px rgba(67, 160, 71, 0.4)',
+          }}
+        >
+          {isProcessing ? '...' : 'こうかんをはじめる'}
+        </button>
+        <button
+          onClick={onDecline}
+          disabled={isProcessing}
+          className="py-2.5 px-4 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:opacity-50"
+          style={{ color: '#A67C52' }}
+        >
+          ことわる
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -192,11 +272,13 @@ export const AsyncTradeListView: React.FC<AsyncTradeListViewProps> = ({
   userId,
   onSelectSession,
   onInviteUser,
+  onAcceptInvitation,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('active')
   const [activeSessions, setActiveSessions] = useState<TradeSession[]>([])
   const [pendingInvitations, setPendingInvitations] = useState<TradeSession[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [processingSessionId, setProcessingSessionId] = useState<string | null>(null)
 
   // データ取得
   const fetchData = useCallback(async () => {
@@ -224,12 +306,43 @@ export const AsyncTradeListView: React.FC<AsyncTradeListViewProps> = ({
     fetchData()
   }, [fetchData])
 
+  const handleAccept = async (sessionId: string) => {
+    setProcessingSessionId(sessionId)
+    try {
+      const success = await asyncTradeService.acceptInvitation(sessionId, userId)
+      if (success) {
+        // リストを再取得
+        await fetchData()
+        // しんこう中タブに切替
+        setActiveTab('active')
+        // 親に通知
+        onAcceptInvitation?.(sessionId)
+      }
+    } catch (error) {
+      console.error('[AsyncTradeList] Accept error:', error)
+    } finally {
+      setProcessingSessionId(null)
+    }
+  }
+
+  const handleDecline = async (sessionId: string) => {
+    if (!confirm('こうかんをことわりますか？')) return
+    setProcessingSessionId(sessionId)
+    try {
+      await asyncTradeService.declineInvitation(sessionId, userId)
+      // リストから削除
+      setPendingInvitations(prev => prev.filter(s => s.id !== sessionId))
+    } catch (error) {
+      console.error('[AsyncTradeList] Decline error:', error)
+    } finally {
+      setProcessingSessionId(null)
+    }
+  }
+
   const tabs: { id: TabType; label: string; count: number }[] = [
     { id: 'active', label: 'しんこう中', count: activeSessions.length },
     { id: 'pending', label: 'うけとり', count: pendingInvitations.length },
   ]
-
-  const currentSessions = activeTab === 'active' ? activeSessions : pendingInvitations
 
   return (
     <div className="flex flex-col h-full" style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}>
@@ -266,10 +379,10 @@ export const AsyncTradeListView: React.FC<AsyncTradeListViewProps> = ({
             {tab.label}
             {tab.count > 0 && (
               <span
-                className="ml-1 px-1.5 py-0.5 rounded-full text-xs"
+                className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full text-xs inline-flex items-center justify-center font-bold text-white"
                 style={{
-                  background: activeTab === tab.id ? '#C4956A' : 'rgba(184, 149, 107, 0.3)',
-                  color: activeTab === tab.id ? 'white' : '#8B5A2B',
+                  background: '#E74C3C',
+                  lineHeight: 1,
                 }}
               >
                 {tab.count}
@@ -292,20 +405,37 @@ export const AsyncTradeListView: React.FC<AsyncTradeListViewProps> = ({
               />
             ))}
           </div>
-        ) : currentSessions.length > 0 ? (
-          <div className="space-y-3">
-            {currentSessions.map(session => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                userId={userId}
-                isPending={activeTab === 'pending'}
-                onClick={() => onSelectSession(session.id)}
-              />
-            ))}
-          </div>
+        ) : activeTab === 'active' ? (
+          activeSessions.length > 0 ? (
+            <div className="space-y-3">
+              {activeSessions.map(session => (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  userId={userId}
+                  onClick={() => onSelectSession(session.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState type="active" onInvite={onInviteUser} />
+          )
         ) : (
-          <EmptyState type={activeTab} onInvite={onInviteUser} />
+          pendingInvitations.length > 0 ? (
+            <div className="space-y-3">
+              {pendingInvitations.map(session => (
+                <PendingCard
+                  key={session.id}
+                  session={session}
+                  onAccept={() => handleAccept(session.id)}
+                  onDecline={() => handleDecline(session.id)}
+                  isProcessing={processingSessionId === session.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState type="pending" onInvite={onInviteUser} />
+          )
         )}
       </div>
     </div>

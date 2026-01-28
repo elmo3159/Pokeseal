@@ -1,5 +1,6 @@
 // 非同期交換サービス
 import { getSupabase } from '@/services/supabase'
+import { calculateLevel } from '@/domain/levelSystem'
 
 // 交換セッションのステータス
 export type TradeSessionStatus = 'pending' | 'active' | 'completed' | 'cancelled' | 'declined' | 'expired'
@@ -28,8 +29,8 @@ export const SYSTEM_MESSAGES = {
   sticker_unavailable_request: 'リクエストしていたシールが使えなくなりました',
   trade_completed: '交換が成立しました！🎉',
   session_expired: 'この交換は期限切れになりました',
-  confirmed: '交換内容を確認しました',
-  unconfirmed: '確認を取り消しました',
+  confirmed: 'こうかん OK！',
+  unconfirmed: 'やっぱり やめる！',
 } as const
 
 // 交換セッション
@@ -52,6 +53,8 @@ export interface TradeSession {
     username: string
     displayName?: string
     avatarUrl?: string
+    level?: number
+    selectedFrameId?: string | null
   }
   unreadCount?: number
 }
@@ -231,8 +234,8 @@ export const asyncTradeService = {
       .from('async_trade_sessions')
       .select(`
         *,
-        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url),
-        responder:profiles!async_trade_sessions_responder_id_fkey(id, username, display_name, avatar_url)
+        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url, total_exp, selected_frame_id),
+        responder:profiles!async_trade_sessions_responder_id_fkey(id, username, display_name, avatar_url, total_exp, selected_frame_id)
       `)
       .or(`requester_id.eq.${userId},responder_id.eq.${userId}`)
       .in('status', ['pending', 'active'])
@@ -255,6 +258,8 @@ export const asyncTradeService = {
           username: p.username as string,
           displayName: p.display_name as string | undefined,
           avatarUrl: p.avatar_url as string | undefined,
+          level: calculateLevel((p.total_exp as number) || 0),
+          selectedFrameId: p.selected_frame_id as string | null,
         }
       }
       return session
@@ -271,7 +276,7 @@ export const asyncTradeService = {
       .from('async_trade_sessions')
       .select(`
         *,
-        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url)
+        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url, total_exp, selected_frame_id)
       `)
       .eq('responder_id', userId)
       .eq('status', 'pending')
@@ -292,6 +297,8 @@ export const asyncTradeService = {
           username: r.username as string,
           displayName: r.display_name as string | undefined,
           avatarUrl: r.avatar_url as string | undefined,
+          level: calculateLevel((r.total_exp as number) || 0),
+          selectedFrameId: r.selected_frame_id as string | null,
         }
       }
       return session
@@ -313,8 +320,8 @@ export const asyncTradeService = {
       .from('async_trade_sessions')
       .select(`
         *,
-        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url, last_seen_at),
-        responder:profiles!async_trade_sessions_responder_id_fkey(id, username, display_name, avatar_url, last_seen_at)
+        requester:profiles!async_trade_sessions_requester_id_fkey(id, username, display_name, avatar_url, total_exp, selected_frame_id, last_seen_at),
+        responder:profiles!async_trade_sessions_responder_id_fkey(id, username, display_name, avatar_url, total_exp, selected_frame_id, last_seen_at)
       `)
       .eq('id', sessionId)
       .or(`requester_id.eq.${userId},responder_id.eq.${userId}`)
@@ -337,6 +344,8 @@ export const asyncTradeService = {
         username: p.username as string,
         displayName: p.display_name as string | undefined,
         avatarUrl: p.avatar_url as string | undefined,
+        level: calculateLevel((p.total_exp as number) || 0),
+        selectedFrameId: p.selected_frame_id as string | null,
       }
     }
 
@@ -590,7 +599,7 @@ export const asyncTradeService = {
     }
 
     // メッセージ追加
-    await this.sendMessage(sessionId, userId, 'system', 'confirmed')
+    await this.sendMessage(sessionId, userId, 'system', SYSTEM_MESSAGES.confirmed)
 
     // 更新後のセッション状態を再取得して、両者の確認状態を確認
     const { data: updatedSession } = await supabase
@@ -657,7 +666,7 @@ export const asyncTradeService = {
 
     if (error) return false
 
-    await this.sendMessage(sessionId, userId, 'system', 'unconfirmed')
+    await this.sendMessage(sessionId, userId, 'system', SYSTEM_MESSAGES.unconfirmed)
 
     return true
   },
@@ -736,6 +745,45 @@ export const asyncTradeService = {
       .eq('is_read', false)
 
     return count || 0
+  },
+
+  // =============================================
+  // バッジカウント
+  // =============================================
+
+  /**
+   * 交換タブのバッジカウントを取得（pending招待数 + 未読メッセージ数）
+   */
+  async getTradeBadgeCount(userId: string): Promise<number> {
+    const supabase = getSupabase()
+
+    // pending招待数
+    const { count: pendingCount } = await supabase
+      .from('async_trade_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('responder_id', userId)
+      .eq('status', 'pending')
+
+    // active sessionの未読メッセージ数
+    const { data: activeSessions } = await supabase
+      .from('async_trade_sessions')
+      .select('id')
+      .or(`requester_id.eq.${userId},responder_id.eq.${userId}`)
+      .eq('status', 'active')
+
+    let unreadCount = 0
+    if (activeSessions && activeSessions.length > 0) {
+      const sessionIds = activeSessions.map(s => s.id)
+      const { count } = await supabase
+        .from('async_trade_messages')
+        .select('*', { count: 'exact', head: true })
+        .in('session_id', sessionIds)
+        .neq('sender_id', userId)
+        .eq('is_read', false)
+      unreadCount = count || 0
+    }
+
+    return (pendingCount || 0) + unreadCount
   },
 
   // =============================================

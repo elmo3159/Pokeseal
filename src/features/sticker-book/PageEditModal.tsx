@@ -3,16 +3,59 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { BookPage, PageTheme } from './BookView'
 import { PlacedSticker } from './StickerPlacement'
-import { CoverDesign } from '@/domain/theme'
+import { CoverDesign, StickerBookTheme, defaultThemes } from '@/domain/theme'
+
+
+const mapCornerStyleToDecoration = (
+  cornerStyle?: StickerBookTheme['decoration']['cornerStyle']
+): PageTheme['decoration'] => {
+  switch (cornerStyle) {
+    case 'ribbon':
+      return 'ribbon'
+    case 'heart':
+      return 'heart'
+    case 'star':
+      return 'star'
+    case 'flower':
+      return 'flower'
+    case 'image':
+      return 'image'
+    default:
+      return 'none'
+  }
+}
+
+const toPageTheme = (theme: StickerBookTheme): PageTheme => ({
+  id: theme.id,
+  backgroundColor: theme.page.backgroundColor,
+  backgroundGradientTo: theme.page.backgroundGradientTo,
+  pattern: theme.page.pattern === 'plain' ? 'none' : theme.page.pattern,
+  patternColor: theme.page.patternColor,
+  patternOpacity: theme.page.patternOpacity,
+  frameColor: theme.page.frameColor,
+  frameAccentColor: theme.page.frameAccentColor,
+  frameGlowColor: theme.page.frameGlowColor,
+  decoration: mapCornerStyleToDecoration(theme.decoration.cornerStyle),
+  cornerImage: theme.decoration.cornerImage,
+})
 
 // ページテーマのプリセット
 export const pageThemePresets: { id: string; name: string; emoji: string; theme: PageTheme }[] = [
-  { id: 'hearts', name: 'ハート', emoji: '💕', theme: { backgroundColor: '#FFF0F5', pattern: 'hearts', decoration: 'heart' } },
-  { id: 'stars', name: 'スター', emoji: '⭐', theme: { backgroundColor: '#FFFAF0', pattern: 'stars', decoration: 'star' } },
-  { id: 'dots', name: 'ドット', emoji: '🔵', theme: { backgroundColor: '#F0FFF0', pattern: 'dots', decoration: 'ribbon' } },
-  { id: 'grid', name: 'グリッド', emoji: '📐', theme: { backgroundColor: '#F0F8FF', pattern: 'grid', decoration: 'none' } },
-  { id: 'plain', name: 'シンプル', emoji: '📄', theme: { backgroundColor: '#FFFFFF', pattern: 'none', decoration: 'none' } },
+  { id: 'hearts', name: 'ハート', emoji: '💕', theme: { id: 'hearts', backgroundColor: '#FFF0F5', pattern: 'hearts', decoration: 'heart' } },
+  { id: 'stars', name: 'スター', emoji: '⭐', theme: { id: 'stars', backgroundColor: '#FFFAF0', pattern: 'stars', decoration: 'star' } },
+  { id: 'dots', name: 'ドット', emoji: '🔵', theme: { id: 'dots', backgroundColor: '#F0FFF0', pattern: 'dots', decoration: 'ribbon' } },
+  { id: 'grid', name: 'グリッド', emoji: '📐', theme: { id: 'grid', backgroundColor: '#F0F8FF', pattern: 'grid', decoration: 'none' } },
+  { id: 'plain', name: 'シンプル', emoji: '📄', theme: { id: 'plain', backgroundColor: '#FFFFFF', pattern: 'none', decoration: 'none' } },
+  ...defaultThemes.map((theme) => ({
+    id: theme.id,
+    name: theme.name,
+    emoji: theme.previewEmoji,
+    theme: toPageTheme(theme),
+  })),
 ]
+
+const defaultPageTheme = pageThemePresets.find(preset => preset.id === 'plain')?.theme
+  ?? pageThemePresets[0].theme
 
 interface PageEditModalProps {
   isOpen: boolean
@@ -20,15 +63,12 @@ interface PageEditModalProps {
   placedStickers: PlacedSticker[] // 配置済みシール
   currentCoverId: string
   availableCovers: CoverDesign[]
-  currentCharmId: string
-  availableCharms: { id: string; name: string; emoji: string; isOwned: boolean }[]
   onClose: () => void
   onPagesChange: (pages: BookPage[]) => void
   onCoverChange: (coverId: string) => void
-  onCharmChange: (charmId: string) => void
 }
 
-type TabType = 'pages' | 'cover' | 'charm'
+type TabType = 'pages' | 'cover'
 
 // 見開きデータの型
 interface SpreadData {
@@ -77,18 +117,15 @@ const PageCard: React.FC<{
 }) => {
   const [showThemeSelect, setShowThemeSelect] = useState(false)
   const theme = spread.leftPage.theme
+  const themeLabel = theme?.id
+    ? pageThemePresets.find(preset => preset.id === theme.id)?.name
+    : undefined
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
       style={{
         background: isDragOver && !isDragging ? '#F3E8FF' : 'white',
         borderRadius: '16px',
@@ -96,12 +133,13 @@ const PageCard: React.FC<{
         boxShadow: isDragging
           ? '0 20px 40px rgba(139, 92, 246, 0.4), 0 8px 16px rgba(0, 0, 0, 0.15)'
           : '0 1px 3px rgba(0, 0, 0, 0.1)',
-        border: isDragging || (isDragOver && !isDragging)
-          ? '2px solid #8B5CF6'
-          : '2px solid #F3E8FF',
+        borderWidth: '2px',
         borderStyle: isDragOver && !isDragging ? 'dashed' : 'solid',
+        borderColor: isDragging || (isDragOver && !isDragging)
+          ? '#8B5CF6'
+          : '#F3E8FF',
         transition: 'all 0.2s',
-        cursor: 'grab',
+        cursor: 'default',
         opacity: isDragging ? 0.7 : 1,
         transform: isDragging ? 'scale(1.05) rotate(2deg)' : isDragOver && !isDragging ? 'scale(1.02)' : 'none',
         zIndex: isDragging ? 50 : 'auto',
@@ -109,7 +147,14 @@ const PageCard: React.FC<{
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* ドラッグハンドル */}
-        <div style={{
+        <div
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -123,13 +168,39 @@ const PageCard: React.FC<{
           color: isDragging ? '#7C3AED' : '#A78BFA',
           background: isDragging ? '#DDD6FE' : 'transparent',
           transition: 'all 0.15s',
+          cursor: 'grab',
+          touchAction: 'none',
         }}>
           <span style={{ fontSize: '20px', fontWeight: 'bold' }}>⋮⋮</span>
           <span style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>ドラッグ</span>
         </div>
 
         {/* 見開きプレビュー - 左右ページとシール */}
-        <div style={{ display: 'flex', borderRadius: '8px', border: '2px solid #DDD6FE', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', borderRadius: '8px', border: '2px solid #DDD6FE', overflow: 'hidden', position: 'relative' }}>
+          {themeLabel && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '2px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '2px 6px',
+                borderRadius: '9999px',
+                background: 'rgba(139, 92, 246, 0.9)',
+                color: 'white',
+                fontSize: '8px',
+                fontWeight: 600,
+                zIndex: 5,
+                pointerEvents: 'none',
+                maxWidth: '88px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {themeLabel}
+            </div>
+          )}
           {/* 左ページ */}
           <div
             style={{
@@ -296,32 +367,40 @@ const PageCard: React.FC<{
       {showThemeSelect && (
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F3E8FF' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {pageThemePresets.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onThemeChange(preset.theme)
-                  setShowThemeSelect(false)
-                }}
-                style={{
-                  paddingLeft: '12px',
-                  paddingRight: '12px',
-                  paddingTop: '6px',
-                  paddingBottom: '6px',
-                  borderRadius: '9999px',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  transition: 'all 0.2s',
-                  background: theme?.decoration === preset.theme.decoration ? '#8B5CF6' : '#F3E8FF',
-                  color: theme?.decoration === preset.theme.decoration ? 'white' : '#7C3AED',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {preset.emoji} {preset.name}
-              </button>
-            ))}
+            {pageThemePresets.map((preset) => {
+              const isSelected = theme?.id
+                ? theme.id === preset.id
+                : theme?.pattern === preset.theme.pattern &&
+                  theme?.decoration === preset.theme.decoration &&
+                  theme?.backgroundColor === preset.theme.backgroundColor
+
+              return (
+                <button
+                  key={preset.id}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onThemeChange(preset.theme)
+                    setShowThemeSelect(false)
+                  }}
+                  style={{
+                    paddingLeft: '12px',
+                    paddingRight: '12px',
+                    paddingTop: '6px',
+                    paddingBottom: '6px',
+                    borderRadius: '9999px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s',
+                    background: isSelected ? '#8B5CF6' : '#F3E8FF',
+                    color: isSelected ? 'white' : '#7C3AED',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {preset.emoji} {preset.name}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -335,10 +414,11 @@ const CoverCard: React.FC<{
   isSelected: boolean
   onSelect: () => void
 }> = ({ cover, isSelected, onSelect }) => {
+  const isOwned = cover.isOwned
   return (
     <button
-      onClick={onSelect}
-      disabled={!cover.isOwned}
+      onClick={isOwned ? onSelect : undefined}
+      disabled={!isOwned}
       style={{
         position: 'relative',
         borderRadius: '16px',
@@ -346,10 +426,10 @@ const CoverCard: React.FC<{
         transition: 'all 0.2s',
         border: isSelected ? '4px solid #8B5CF6' : '4px solid transparent',
         transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-        opacity: !cover.isOwned ? 0.5 : 1,
-        cursor: !cover.isOwned ? 'not-allowed' : 'pointer',
+        cursor: isOwned ? 'pointer' : 'not-allowed',
         background: 'none',
         padding: 0,
+        opacity: isOwned ? 1 : 0.6,
       }}
     >
       {/* 表紙プレビュー */}
@@ -470,12 +550,9 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
   placedStickers,
   currentCoverId,
   availableCovers,
-  currentCharmId,
-  availableCharms,
   onClose,
   onPagesChange,
   onCoverChange,
-  onCharmChange,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('pages')
   const [localPages, setLocalPages] = useState<BookPage[]>(pages)
@@ -531,7 +608,7 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
       type: 'page',
       side: 'left',
       spreadId: newSpreadId,
-      theme: pageThemePresets[0].theme,
+      theme: defaultPageTheme,
     }
 
     const newRightPage: BookPage = {
@@ -539,6 +616,7 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
       type: 'page',
       side: 'right',
       spreadId: newSpreadId,
+      theme: defaultPageTheme,
     }
 
     const newPages = [...localPages]
@@ -650,8 +728,8 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
     if (!spread) return
 
     const newPages = localPages.map(page => {
-      // 左ページにテーマを適用
-      if (page.id === spread.leftPage.id) {
+      // 左右ページにテーマを適用
+      if (page.id === spread.leftPage.id || page.id === spread.rightPage.id) {
         return { ...page, theme }
       }
       return page
@@ -662,13 +740,15 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
 
   if (!isOpen) return null
 
+  const isReordering = dragIndex !== null || touchDragIndex !== null
+
   return (
     <div style={{
       position: 'fixed',
       top: 0,
       left: 0,
       right: 0,
-      bottom: 80, // タブバーの高さ分を確保
+      bottom: 0, // モーダル表示中はタブバーが非表示のため、画面下部まで拡張
       zIndex: 50,
       display: 'flex',
       alignItems: 'flex-end',
@@ -735,7 +815,6 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
           {[
             { id: 'pages' as TabType, label: 'ページ', emoji: '📄' },
             { id: 'cover' as TabType, label: 'ひょうし', emoji: '📕' },
-            { id: 'charm' as TabType, label: 'チャーム', emoji: '✨' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -761,7 +840,15 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
         </div>
 
         {/* コンテンツ */}
-        <div style={{ padding: '16px', overflowY: 'auto', maxHeight: 'calc(85vh - 140px)' }}>
+        <div
+          style={{
+            padding: '16px',
+            overflowY: isReordering ? 'hidden' : 'auto',
+            maxHeight: 'calc(85vh - 140px)',
+            overscrollBehavior: 'contain',
+            touchAction: isReordering ? 'none' : 'auto',
+          }}
+        >
           {/* ページ編集タブ */}
           {activeTab === 'pages' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -841,54 +928,9 @@ export const PageEditModal: React.FC<PageEditModalProps> = ({
                 ))}
               </div>
 
-              {/* 表紙画像の説明 */}
-              <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.7)', borderRadius: '16px' }}>
-                <h4 style={{ fontWeight: 'bold', color: '#6B21A8', fontSize: '14px', marginBottom: '8px' }}>📐 カスタム表紙について</h4>
-                <p style={{ fontSize: '12px', color: '#7C3AED', lineHeight: 1.6 }}>
-                  オリジナルの表紙を作成する場合は、以下のサイズで画像を用意してください：
-                </p>
-                <ul style={{ fontSize: '12px', color: '#8B5CF6', marginTop: '8px' }}>
-                  <li style={{ marginBottom: '4px' }}>• 表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
-                  <li style={{ marginBottom: '4px' }}>• 裏表紙サイズ: <strong>320 × 480 ピクセル</strong></li>
-                  <li>• 形式: PNG または JPEG</li>
-                </ul>
-                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ display: 'flex', border: '2px solid #C4B5FD', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
-                    <div style={{ width: '64px', height: '96px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #DDD6FE' }}>
-                      裏表紙
-                    </div>
-                    <div style={{ width: '8px', height: '96px', background: '#C4B5FD', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #DDD6FE' }}>
-                    </div>
-                    <div style={{ width: '64px', height: '96px', background: '#F3E8FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      表紙
-                    </div>
-                  </div>
-                </div>
-                <p style={{ fontSize: '12px', color: '#A78BFA', marginTop: '8px', textAlign: 'center' }}>
-                  ※ 背表紙は自動生成されます
-                </p>
-              </div>
             </div>
           )}
 
-          {/* チャーム編集タブ */}
-          {activeTab === 'charm' && (
-            <div>
-              <p style={{ fontSize: '14px', color: '#7C3AED', marginBottom: '12px' }}>
-                シール帳につけるチャームを選んでね！
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center' }}>
-                {availableCharms.map((charm) => (
-                  <CharmCard
-                    key={charm.id}
-                    charm={charm}
-                    isSelected={charm.id === currentCharmId}
-                    onSelect={() => onCharmChange(charm.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

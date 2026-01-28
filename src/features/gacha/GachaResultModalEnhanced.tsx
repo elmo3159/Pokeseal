@@ -32,8 +32,8 @@ const rarityColors = {
   5: { from: '#FBBF24', via: '#F97316', to: '#EC4899', glow: 'rgba(251, 191, 36, 0.7)' },
 }
 
-// 結果表示のタイミング（秒）
-const RESULT_SHOW_TIME = 6.03
+// 結果表示のタイミング（動画終了の何秒前に表示するか）
+const RESULT_BEFORE_END = 3.0
 
 // パーティクル設定
 const getParticlesConfig = (rarity: number, hasUltraRare: boolean): ISourceOptions => ({
@@ -282,7 +282,7 @@ const BigStickerCard: React.FC<{
               animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: index * 0.15 + 0.3, duration: 0.8, type: 'spring' }}
             >
-              {sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'}
+              ⭐
             </motion.div>
           )}
         </div>
@@ -469,7 +469,7 @@ const MiniResultCard: React.FC<{
             animate={sticker.rarity >= 4 ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] } : {}}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
-            {sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'}
+            ⭐
           </motion.div>
         )}
       </div>
@@ -584,8 +584,6 @@ const StickerDetailOverlay: React.FC<{
   onClose: () => void
 }> = ({ sticker, onClose }) => {
   const colors = rarityColors[sticker.rarity]
-  const typeLabel = sticker.type === 'sparkle' ? 'キラキラ' : sticker.type === 'puffy' ? 'ぷっくり' : 'ノーマル'
-  const typeIcon = sticker.type === 'sparkle' ? '✨' : sticker.type === 'puffy' ? '🌟' : '⭐'
 
   return (
     <motion.div
@@ -687,7 +685,7 @@ const StickerDetailOverlay: React.FC<{
                 }}
               />
             ) : (
-              <span style={{ fontSize: '80px' }}>{typeIcon}</span>
+              <span style={{ fontSize: '80px' }}>⭐</span>
             )}
           </div>
 
@@ -778,33 +776,6 @@ const StickerDetailOverlay: React.FC<{
           ))}
         </motion.div>
 
-        {/* タイプ表示 */}
-        <motion.div
-          style={{
-            marginTop: '16px',
-            padding: '8px 20px',
-            borderRadius: '20px',
-            background: 'rgba(255, 255, 255, 0.15)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <span style={{ fontSize: '18px' }}>{typeIcon}</span>
-          <span style={{
-            color: 'white',
-            fontSize: '16px',
-            fontWeight: 600,
-            fontFamily: "'M PLUS Rounded 1c', sans-serif",
-          }}>
-            {typeLabel}タイプ
-          </span>
-        </motion.div>
-
         {/* 閉じるヒント */}
         <motion.p
           style={{
@@ -812,10 +783,15 @@ const StickerDetailOverlay: React.FC<{
             color: 'rgba(255, 255, 255, 0.5)',
             fontSize: '14px',
             fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            cursor: 'pointer',
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
+          onClick={(event) => {
+            event.stopPropagation()
+            onClose()
+          }}
         >
           タップして閉じる
         </motion.p>
@@ -868,10 +844,12 @@ export const GachaResultModalEnhanced: React.FC<GachaResultModalProps> = ({
     }
   }, [isOpen])
 
-  // 動画の時間監視
+  // 動画の時間監視 - 動画終了0.5秒前に結果を表示
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current && phase === 'video') {
-      if (videoRef.current.currentTime >= RESULT_SHOW_TIME) {
+      const { currentTime, duration } = videoRef.current
+      // 動画の長さが取得できたら、終了0.5秒前に結果を表示
+      if (duration && currentTime >= duration - RESULT_BEFORE_END) {
         setPhase('result')
         // 結果表示後、少し待ってからcomplete
         setTimeout(() => {

@@ -6,10 +6,10 @@ import { ProgressBar } from '@/components/progress/ProgressBar'
 import { DailyMissionPanel } from '@/components/missions/DailyMissionPanel'
 import { CollectionRewardPanel } from '@/components/collectionRewards/CollectionRewardPanel'
 import { LoginBonusModal } from '@/components/loginBonus/LoginBonusModal'
-import { progressService } from '@/services/progress'
+import { profileService } from '@/services/profile/profileService'
+import { calculateLevel, getCurrentLevelExp, getExpToNextLevel, getLevelTitle } from '@/domain/levelSystem'
 import { dailyMissionService } from '@/services/dailyMissions'
 import { loginBonusService } from '@/services/loginBonus'
-import type { UserProgress } from '@/services/progress/progressService'
 import type { UserDailyMission } from '@/services/dailyMissions/dailyMissionService'
 import type { LoginBonus } from '@/services/loginBonus/loginBonusService'
 import type { CollectionReward } from '@/services/collectionRewards/collectionRewardService'
@@ -27,7 +27,12 @@ interface HomeViewProps {
  * - 図鑑達成報酬
  */
 export const HomeView: React.FC<HomeViewProps> = ({ userId }) => {
-  const [progress, setProgress] = useState<UserProgress | null>(null)
+  const [progress, setProgress] = useState<{
+    level: number
+    exp: number
+    title: string
+    totalExp: number
+  } | null>(null)
   const [unclaimedMissionsCount, setUnclaimedMissionsCount] = useState(0)
   const [showLoginBonus, setShowLoginBonus] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -43,12 +48,22 @@ export const HomeView: React.FC<HomeViewProps> = ({ userId }) => {
   const loadData = async () => {
     setLoading(true)
 
-    const [progressData, unclaimedCount] = await Promise.all([
-      progressService.getOrCreateProgress(userId),
+    const [profileData, unclaimedCount] = await Promise.all([
+      profileService.getProfile(userId),
       dailyMissionService.getUnclaimedCount(userId)
     ])
 
-    setProgress(progressData)
+    if (profileData) {
+      const level = calculateLevel(profileData.totalExp)
+      setProgress({
+        level,
+        exp: getCurrentLevelExp(profileData.totalExp),
+        title: getLevelTitle(level),
+        totalExp: profileData.totalExp,
+      })
+    } else {
+      setProgress(null)
+    }
     setUnclaimedMissionsCount(unclaimedCount)
     setLoading(false)
   }
@@ -65,7 +80,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ userId }) => {
   const handleMissionRewardClaimed = async (mission: UserDailyMission) => {
     // 経験値を追加
     if (mission.mission.reward_type === 'exp') {
-      await progressService.addExp(userId, mission.mission.reward_amount)
+      await profileService.addExp(userId, mission.mission.reward_amount)
       await loadData()
     }
 
@@ -116,7 +131,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ userId }) => {
     )
   }
 
-  const expForNextLevel = progressService.getExpForNextLevel(progress.level)
+  const expForNextLevel = getExpToNextLevel(progress.totalExp)
 
   return (
     <div style={{

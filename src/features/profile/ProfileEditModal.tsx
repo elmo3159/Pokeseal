@@ -1,9 +1,19 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UserProfile } from './ProfileView'
 import { ALL_STICKERS, StickerMaster } from '@/data/stickerMasterData'
+import { characterRewardService, type UnlockedFrame } from '@/services/characterRewards'
+import {
+  CHARACTER_THEME_COLORS,
+  FRAME_METADATA,
+  getFrameId,
+  getFrameImagePath,
+  type CharacterName,
+} from '@/constants/characterRewards'
+import { useAuth } from '@/hooks'
+import { Avatar } from '@/components/ui/Avatar'
 
 // キャラクター情報を取得（各キャラクターの代表シール）
 interface CharacterAvatar {
@@ -37,10 +47,12 @@ function getAllStickersByCharacter(): Map<string, StickerMaster[]> {
   const grouped = new Map<string, StickerMaster[]>()
 
   for (const sticker of ALL_STICKERS) {
-    if (!grouped.has(sticker.character)) {
-      grouped.set(sticker.character, [])
+    const existing = grouped.get(sticker.character)
+    if (existing) {
+      existing.push(sticker)
+    } else {
+      grouped.set(sticker.character, [sticker])
     }
-    grouped.get(sticker.character)!.push(sticker)
   }
 
   return grouped
@@ -50,7 +62,7 @@ interface ProfileEditModalProps {
   isOpen: boolean
   onClose: () => void
   profile: UserProfile
-  onSave: (updates: { name: string; bio: string; avatarUrl?: string }) => void
+  onSave: (updates: { name: string; bio: string; avatarUrl?: string; frameId?: string | null }) => void
 }
 
 export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
@@ -59,25 +71,61 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   profile,
   onSave,
 }) => {
+  const { user } = useAuth()
   const [name, setName] = useState(profile.name)
   const [bio, setBio] = useState(profile.bio || '')
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | undefined>(profile.avatarUrl)
+  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(profile.frameId || null)
   const [nameError, setNameError] = useState('')
   const [showStickerPicker, setShowStickerPicker] = useState(false)
+  const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null)
+  const [unlockedFrames, setUnlockedFrames] = useState<UnlockedFrame[]>([])
 
   const characterAvatars = getCharacterAvatars()
   const stickersByCharacter = getAllStickersByCharacter()
+
+  // 解放済みフレームを取得
+  // TODO: テスト用に全フレームを表示（本番では characterRewardService.getUnlockedFrames を使用）
+  const loadUnlockedFrames = useCallback(async () => {
+    if (!user) return
+    try {
+      // テスト用: FRAME_METADATA に登録されている全フレームを表示
+      const testFrames: UnlockedFrame[] = Object.entries(FRAME_METADATA).map(([charName, _metadata]) => ({
+        frameId: getFrameId(charName as CharacterName),
+        characterName: charName as CharacterName,
+        frameImageUrl: getFrameImagePath(charName as CharacterName) || '',
+        unlockedAt: new Date().toISOString(),
+      }))
+      // フレームなしオプションも追加
+      setUnlockedFrames(testFrames)
+
+      // 本番用コード（コメントアウト）:
+      // const frames = await characterRewardService.getUnlockedFrames(user.id)
+      // setUnlockedFrames(frames)
+    } catch (error) {
+      console.error('Failed to load frames:', error)
+    }
+  }, [user])
 
   // プロフィールが変わったらリセット
   useEffect(() => {
     setName(profile.name)
     setBio(profile.bio || '')
     setSelectedAvatarUrl(profile.avatarUrl)
+    setSelectedFrameId(profile.frameId || null)
     setNameError('')
     setShowStickerPicker(false)
+    setShowFramePicker(false)
     setSelectedCharacter(null)
   }, [profile, isOpen])
+
+  // モーダル開時にフレーム読み込み
+  useEffect(() => {
+    if (isOpen) {
+      loadUnlockedFrames()
+    }
+  }, [isOpen, loadUnlockedFrames])
 
   const handleSave = () => {
     // バリデーション
@@ -94,6 +142,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
       name: name.trim(),
       bio: bio.trim(),
       avatarUrl: selectedAvatarUrl,
+      frameId: selectedFrameId,
     })
     onClose()
   }
@@ -231,8 +280,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                               overflow: 'hidden',
                               padding: '4px',
                               transition: 'all 0.2s',
-                              background: selectedAvatarUrl === sticker.imageUrl ? '#F3E8FF' : '#F9FAFB',
-                              border: selectedAvatarUrl === sticker.imageUrl ? '3px solid #A78BFA' : '2px solid #E5E7EB',
+                              background: selectedAvatarUrl === sticker.imageUrl ? '#FCE7F3' : '#F9FAFB',
+                              border: selectedAvatarUrl === sticker.imageUrl ? '3px solid #F9A8D4' : '2px solid #E5E7EB',
                               cursor: 'pointer',
                             }}
                           >
@@ -373,6 +422,159 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                     </div>
                   </div>
 
+                  {/* フレーム選択 */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <label
+                        style={{
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          color: '#6B3FA0',
+                        }}
+                      >
+                        ✨ アイコンフレーム
+                      </label>
+                      <button
+                        onClick={() => setShowFramePicker(!showFramePicker)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '9999px',
+                          background: showFramePicker ? '#FCE7F3' : 'linear-gradient(135deg, #A78BFA 0%, #EC4899 100%)',
+                          color: showFramePicker ? '#9D4C6C' : 'white',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          boxShadow: showFramePicker ? 'none' : '0 2px 8px rgba(167, 139, 250, 0.3)',
+                        }}
+                      >
+                        {showFramePicker ? 'とじる ▲' : 'えらぶ ▼'}
+                      </button>
+                    </div>
+
+                    {/* 現在選択中のフレーム表示 */}
+                    {!showFramePicker && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px', background: '#FAFAFA', borderRadius: '12px' }}>
+                        {selectedFrameId ? (
+                          <>
+                            <div style={{ width: '48px', height: '48px', flexShrink: 0 }}>
+                              <img
+                                src={unlockedFrames.find(f => f.frameId === selectedFrameId)?.frameImageUrl || ''}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              />
+                            </div>
+                            <span style={{ fontSize: '14px', color: '#6B3FA0', fontWeight: 'bold' }}>
+                              {unlockedFrames.find(f => f.frameId === selectedFrameId)?.characterName || 'フレーム'}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '14px', color: '#9CA3AF' }}>フレームなし</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* フレーム一覧（展開時） */}
+                    {showFramePicker && (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: '8px',
+                        padding: '12px',
+                        background: '#FAFAFA',
+                        borderRadius: '12px',
+                        maxHeight: '320px',
+                        overflowY: 'auto',
+                      }}>
+                        {/* フレームなし */}
+                        <button
+                          onClick={() => setSelectedFrameId(null)}
+                          style={{
+                            height: '90px',
+                            borderRadius: '12px',
+                            background: selectedFrameId === null ? '#FCE7F3' : '#F3F4F6',
+                            border: selectedFrameId === null ? '3px solid #F9A8D4' : '2px solid #E5E7EB',
+                            boxShadow: selectedFrameId === null ? '0 0 12px rgba(249, 168, 212, 0.6)' : 'none',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            padding: '4px',
+                          }}
+                        >
+                          <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 'bold' }}>なし</span>
+                        </button>
+
+                        {/* 解放済みフレーム */}
+                        {unlockedFrames.map((frame) => {
+                          const isSelected = selectedFrameId === frame.frameId
+                          return (
+                            <button
+                              key={frame.frameId}
+                              onClick={() => setSelectedFrameId(frame.frameId)}
+                              style={{
+                                height: '90px',
+                                padding: '6px 4px 4px',
+                                borderRadius: '12px',
+                                background: isSelected ? '#FCE7F3' : '#FFFFFF',
+                                border: isSelected ? '3px solid #F9A8D4' : '2px solid #E5E7EB',
+                                boxShadow: isSelected
+                                  ? '0 0 12px rgba(249, 168, 212, 0.6)'
+                                  : '0 1px 3px rgba(0,0,0,0.05)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'flex-start',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                overflow: 'hidden',
+                              }}
+                              title={frame.characterName}
+                            >
+                              {/* フレーム画像プレビュー */}
+                              <img
+                                src={frame.frameImageUrl}
+                                alt={frame.characterName}
+                                style={{
+                                  width: '56px',
+                                  height: '56px',
+                                  objectFit: 'contain',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              {/* キャラ名 */}
+                              <span style={{
+                                fontSize: '9px',
+                                color: isSelected ? '#9D4C6C' : '#6B7280',
+                                fontWeight: isSelected ? 'bold' : 'normal',
+                                marginTop: '4px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                width: '100%',
+                                textAlign: 'center',
+                                padding: '0 2px',
+                                lineHeight: '1.2',
+                              }}>
+                                {frame.characterName}
+                              </span>
+                            </button>
+                          )
+                        })}
+
+                        {unlockedFrames.length === 0 && (
+                          <div style={{ gridColumn: 'span 4', textAlign: 'center', padding: '16px' }}>
+                            <span style={{ fontSize: '12px', color: '#9CA3AF' }}>
+                              キャラクター報酬で解放できるよ！
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* 名前入力 */}
                   <div>
                     <label
@@ -463,38 +665,18 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                     style={{
                       padding: '16px',
                       borderRadius: '16px',
-                      background: 'linear-gradient(135deg, #FEF3C7 0%, #FCE7F3 100%)',
+                      background: 'linear-gradient(135deg, #FCE7F3 0%, #FDF2F8 100%)',
                     }}
                   >
                     <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#A78BFA', marginBottom: '8px' }}>👀 プレビュー</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div
-                        style={{
-                          width: '56px',
-                          height: '56px',
-                          borderRadius: '50%',
-                          overflow: 'hidden',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'linear-gradient(135deg, #E9D5FF 0%, #FBCFE8 100%)',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {selectedAvatarUrl ? (
-                          <img
-                            src={selectedAvatarUrl}
-                            alt="プレビュー"
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'contain',
-                              padding: '4px',
-                            }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: '30px', color: '#C084FC' }}>👤</span>
-                        )}
+                      <div style={{ flexShrink: 0 }}>
+                        <Avatar
+                          src={selectedAvatarUrl}
+                          alt="プレビュー"
+                          size="md"
+                          frameId={selectedFrameId}
+                        />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontWeight: 'bold', fontSize: '18px', color: '#4A2068' }}>

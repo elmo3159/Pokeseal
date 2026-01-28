@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Avatar } from '@/components/ui/Avatar'
 
 // フォローユーザー情報
 export interface FollowUser {
   id: string
   name: string
   avatarUrl?: string
+  frameId?: string | null  // キャラクター報酬で解放したフレーム
   level: number
   title?: string
   isFollowing?: boolean  // 自分がフォローしているかどうか
@@ -54,28 +56,19 @@ const UserCard: React.FC<{
       <button
         onClick={() => onUserClick(user.id)}
         style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '50%',
-          border: '2px solid #A78BFA',
-          overflow: 'hidden',
           flexShrink: 0,
           cursor: 'pointer',
-          background: 'linear-gradient(to bottom right, #E9D5FF, #FBCFE8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
         }}
       >
-        {user.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt={user.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        ) : (
-          <UserIcon size={32} />
-        )}
+        <Avatar
+          src={user.avatarUrl}
+          alt={user.name}
+          size="md"
+          frameId={user.frameId}
+        />
       </button>
 
       {/* ユーザー情報 */}

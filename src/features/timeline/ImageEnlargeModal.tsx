@@ -6,6 +6,8 @@ import { PlacedSticker } from '@/features/sticker-book'
 import { PlacedDecoItem } from '@/domain/decoItems'
 import { StickerAura } from '@/components/upgrade'
 import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
+import { getPatternStyle, getDecorationEmoji } from '@/features/sticker-book/BookView'
+import type { PageTheme } from '@/features/sticker-book/BookView'
 
 interface ImageEnlargeModalProps {
   isOpen: boolean
@@ -17,6 +19,7 @@ interface ImageEnlargeModalProps {
     placedStickers: PlacedSticker[]
     placedDecoItems?: PlacedDecoItem[]
     backgroundColor?: string
+    themeConfig?: Record<string, unknown> | null
   }
   userName?: string
   caption?: string
@@ -131,7 +134,18 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
         )}
 
         {/* シール帳ページ表示の場合 - BookViewと同じ表示方式 */}
-        {pageData && (
+        {pageData && (() => {
+          const theme = pageData.themeConfig as PageTheme | null | undefined
+          const bgColor = theme?.backgroundColor || '#FEFBFF'
+          const bgGradientTo = theme?.backgroundGradientTo || '#FFFFFF'
+          const pattern = theme?.pattern || 'dots'
+          const patternColor = theme?.patternColor || 'rgba(167, 139, 250, 0.3)'
+          const patternOpacity = theme?.patternOpacity ?? 0.15
+          const decoration = theme?.decoration || 'none'
+          const decorationEmoji = getDecorationEmoji(decoration)
+          const patternStyle = getPatternStyle(pattern, patternColor)
+
+          return (
           <div
             style={{
               position: 'relative',
@@ -140,30 +154,51 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
               height: '480px',
               maxWidth: '90vw',
               maxHeight: '70vh',
-              background: pageData.backgroundColor || '#fff',
+              background: `linear-gradient(180deg, ${bgColor} 0%, ${bgGradientTo} 100%)`,
               borderRadius: '16px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
               overflow: 'hidden',
             }}
           >
-            {/* グリッドライン */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2, pointerEvents: 'none' }}>
-              {Array.from({ length: 6 }).map((_, row) =>
-                Array.from({ length: 4 }).map((_, col) => (
-                  <div
-                    key={`grid-${row}-${col}`}
-                    style={{
-                      position: 'absolute',
-                      width: '25%',
-                      height: '16.666%',
-                      border: '1px solid #C4A484',
-                      left: `${col * 25}%`,
-                      top: `${row * 16.666}%`,
-                    }}
-                  />
-                ))
-              )}
-            </div>
+            {/* パターン背景 */}
+            <div style={{ position: 'absolute', inset: '16px', ...patternStyle, opacity: patternOpacity, zIndex: 2, pointerEvents: 'none' }} />
+
+            {/* フレーム装飾 */}
+            {theme?.frameColor && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: '6px',
+                  borderRadius: '22px',
+                  border: `4px solid ${theme.frameColor}`,
+                  boxShadow: theme.frameGlowColor
+                    ? `0 0 20px ${theme.frameGlowColor}, 0 0 40px ${theme.frameGlowColor}40, inset 0 0 12px ${theme.frameGlowColor}`
+                    : 'none',
+                  zIndex: 6,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            {/* コーナー装飾（絵文字） */}
+            {decorationEmoji && (
+              <>
+                <div style={{ position: 'absolute', top: 12, left: 12, fontSize: 24, opacity: 0.6, zIndex: 7 }}>{decorationEmoji}</div>
+                <div style={{ position: 'absolute', top: 12, right: 12, fontSize: 24, opacity: 0.6, transform: 'scaleX(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+                <div style={{ position: 'absolute', bottom: 32, left: 12, fontSize: 24, opacity: 0.6, transform: 'scaleY(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+                <div style={{ position: 'absolute', bottom: 32, right: 12, fontSize: 24, opacity: 0.6, transform: 'scale(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+              </>
+            )}
+
+            {/* コーナー装飾（画像） */}
+            {decoration === 'image' && theme?.cornerImage && (
+              <>
+                <img src={theme.cornerImage} alt="" style={{ position: 'absolute', top: 8, left: 8, width: 48, height: 48, objectFit: 'contain', opacity: 0.9, zIndex: 7 }} />
+                <img src={theme.cornerImage} alt="" style={{ position: 'absolute', top: 8, right: 8, width: 48, height: 48, objectFit: 'contain', opacity: 0.9, transform: 'scaleX(-1)', zIndex: 7 }} />
+                <img src={theme.cornerImage} alt="" style={{ position: 'absolute', bottom: 8, left: 8, width: 48, height: 48, objectFit: 'contain', opacity: 0.9, transform: 'scaleY(-1)', zIndex: 7 }} />
+                <img src={theme.cornerImage} alt="" style={{ position: 'absolute', bottom: 8, right: 8, width: 48, height: 48, objectFit: 'contain', opacity: 0.9, transform: 'scale(-1)', zIndex: 7 }} />
+              </>
+            )}
 
             {/* シール配置 - BookViewのPageStickersと同じ構造 */}
             <div
@@ -265,7 +300,8 @@ export const ImageEnlargeModal: React.FC<ImageEnlargeModalProps> = ({
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* ユーザー名とキャプション */}
         {(userName || caption) && (

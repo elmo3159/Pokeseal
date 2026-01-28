@@ -1,6 +1,8 @@
 // 認証サービス - Supabase Auth連携（匿名認証対応）
 import { getSupabase } from '@/services/supabase'
 import type { Profile } from '@/types/database'
+import { withTimeout, DEFAULT_TIMEOUTS, TimeoutError } from '@/utils/timeout'
+import { readRefreshToken, writeRefreshToken } from '@/services/deviceRestore'
 
 export interface AuthUser {
   id: string
@@ -49,6 +51,10 @@ export const authService = {
     if (error) {
       console.error('Session error:', error)
       return null
+    }
+
+    if (data.session?.refresh_token) {
+      await writeRefreshToken(data.session.refresh_token)
     }
 
     return data.session
@@ -170,33 +176,69 @@ export const authService = {
     console.log('[Auth] Calling supabase.auth.signInAnonymously()...')
 
     const startTime = Date.now()
-    const { data: authData, error: authError } = await supabase.auth.signInAnonymously()
-    const endTime = Date.now()
 
-    console.log('[Auth] signInAnonymously completed in', endTime - startTime, 'ms')
-    console.log('[Auth] signInAnonymously user:', authData?.user ? 'created' : 'null')
-    console.log('[Auth] error from response:', authError)
+    try {
+      // タイムアウト付きで匿名サインインを実行
+      const { data: authData, error: authError } = await withTimeout(
+        supabase.auth.signInAnonymously(),
+        DEFAULT_TIMEOUTS.auth,
+        '認証がタイムアウトしました。ネットワーク接続を確認してください。'
+      )
 
-    if (authError) {
-      console.error('[Auth] Anonymous sign in error:', authError)
+      const endTime = Date.now()
+      console.log('[Auth] signInAnonymously completed in', endTime - startTime, 'ms')
+      console.log('[Auth] signInAnonymously user:', authData?.user ? 'created' : 'null')
+      console.log('[Auth] error from response:', authError)
+
+      if (authError) {
+        console.error('[Auth] Anonymous sign in error:', authError)
+        return {
+          success: false,
+          error: '匿名ログインに失敗しました'
+        }
+      }
+
+      if (!authData.user) {
+        return {
+          success: false,
+          error: 'ユーザー作成に失敗しました'
+        }
+      }
+
+      if (authData.session?.refresh_token) {
+        await writeRefreshToken(authData.session.refresh_token)
+      }
+
+      // 以降の処理はタイムアウトエラーが発生していない場合のみ実行
+      return await this._createAnonymousUserProfile(supabase, authData.user)
+    } catch (error) {
+      const endTime = Date.now()
+      console.error('[Auth] signInAnonymously failed after', endTime - startTime, 'ms:', error)
+
+      if (error instanceof TimeoutError) {
+        return {
+          success: false,
+          error: error.message
+        }
+      }
+
       return {
         success: false,
-        error: '匿名ログインに失敗しました'
+        error: '認証中にエラーが発生しました'
       }
     }
+  },
 
-    if (!authData.user) {
-      return {
-        success: false,
-        error: 'ユーザー作成に失敗しました'
-      }
-    }
-
+  // 匿名ユーザープロフィール作成（内部用）
+  async _createAnonymousUserProfile(
+    supabase: ReturnType<typeof getSupabase>,
+    user: { id: string }
+  ): Promise<AuthResult<AuthUser>> {
     // プロフィール作成（user_codeはトリガーで自動生成）
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .insert({
-        id: authData.user.id,
+        id: user.id,
         display_name: 'ゲスト',
         tutorial_completed: false
       })
@@ -209,13 +251,13 @@ export const authService = {
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', authData.user.id)
+        .eq('id', user.id)
         .single()
 
       return {
         success: true,
         data: {
-          id: authData.user.id,
+          id: user.id,
           email: undefined,
           userCode: existingProfile?.user_code || null,
           isAnonymous: true,
@@ -229,7 +271,7 @@ export const authService = {
     return {
       success: true,
       data: {
-        id: authData.user.id,
+        id: user.id,
         email: undefined,
         userCode: profile.user_code,
         isAnonymous: true,
@@ -244,6 +286,28 @@ export const authService = {
     const currentUser = await this.getCurrentUser()
     if (currentUser) {
       return currentUser
+    }
+
+    // iOSの自動復元用に保存されたリフレッシュトークンがあれば復元を試行
+    const supabase = getSupabase()
+    const storedRefreshToken = await readRefreshToken()
+    if (storedRefreshToken) {
+      try {
+        const { data, error } = await supabase.auth.refreshSession({ refresh_token: storedRefreshToken })
+        if (!error && data.session?.user) {
+          if (data.session.refresh_token) {
+            await writeRefreshToken(data.session.refresh_token)
+          }
+          const restoredUser = await this._getCurrentUserFromSession()
+          if (restoredUser) {
+            return restoredUser
+          }
+        } else if (error) {
+          await writeRefreshToken(null)
+        }
+      } catch (error) {
+        console.error('[Auth] Failed to restore session from device token:', error)
+      }
     }
 
     // 未認証なら匿名ログイン
@@ -410,6 +474,7 @@ export const authService = {
       }
     }
 
+    await writeRefreshToken(null)
     return { success: true }
   },
 
@@ -494,10 +559,16 @@ export const authService = {
     const supabase = getSupabase()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } } } | null) => {
+      (_event: string, session: { user: { id: string; email?: string; is_anonymous?: boolean; app_metadata?: { provider?: string } }; refresh_token?: string } | null) => {
         if (session?.user) {
           const isAnonymous = session.user.app_metadata?.provider === 'anonymous' ||
                               session.user.is_anonymous === true
+
+          if (session.refresh_token) {
+            writeRefreshToken(session.refresh_token).catch(err => {
+              console.error('[Auth] Failed to persist refresh token:', err)
+            })
+          }
 
           // プロフィール情報を非同期で取得（コールバックをブロックしない）
           ;(async () => {

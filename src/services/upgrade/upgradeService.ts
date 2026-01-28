@@ -127,7 +127,11 @@ export const upgradeService = {
       return { success: false, message: reason || 'アップグレードできません' }
     }
 
-    const sourceRankData = rankCounts.get(requirement.fromRank)!
+    const sourceRankData = rankCounts.get(requirement.fromRank)
+    if (!sourceRankData || !sourceRankData.userStickerId) {
+      return { success: false, message: '素材シールが見つかりません' }
+    }
+    const sourceUserStickerId = sourceRankData.userStickerId
     const targetRankData = rankCounts.get(targetRank)
 
     try {
@@ -140,7 +144,7 @@ export const upgradeService = {
         await supabase
           .from('user_stickers')
           .delete()
-          .eq('id', sourceRankData.userStickerId!)
+          .eq('id', sourceUserStickerId)
       } else {
         // 数量を減らす
         await supabase
@@ -149,7 +153,7 @@ export const upgradeService = {
             quantity: newSourceQuantity,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', sourceRankData.userStickerId!)
+          .eq('id', sourceUserStickerId)
       }
 
       // 2. アップグレード先シールを追加/更新

@@ -1,12 +1,14 @@
 'use client'
 
+import { CurrencyIcon } from './CurrencyIcon'
+
 // タイトルのデコレーションタイプ
 type TitleDecoration = 'none' | 'gacha' | 'collection' | 'trade' | 'timeline' | 'profile'
 
-// 通貨データ（シルチケ、プレシル、どろっぷ）
+// 通貨データ（シルチケ、プレシルチケ、どろっぷ）
 export interface HeaderCurrency {
   tickets: number   // シルチケ
-  gems: number      // プレシル（プレミアムシルチケ）
+  gems: number      // プレシルチケ（プレミアムシールチケット）
   stars: number     // どろっぷ
 }
 
@@ -122,11 +124,11 @@ const HeaderCurrencyDisplay: React.FC<{
           boxShadow: '0 1px 2px rgba(168, 85, 247, 0.3)',
         }}
       >
-        <span className="text-[8px]">🎫</span>
+        <CurrencyIcon type="ticket" size="xs" />
         <span className="text-[9px] font-bold text-white">{currency.tickets}</span>
       </div>
 
-      {/* プレシル */}
+      {/* プレシルチケ */}
       <div
         className="flex items-center gap-0.5 px-1 py-0.5 rounded-full"
         style={{
@@ -134,7 +136,7 @@ const HeaderCurrencyDisplay: React.FC<{
           boxShadow: '0 1px 2px rgba(96, 165, 250, 0.3)',
         }}
       >
-        <span className="text-[8px]">💎</span>
+        <CurrencyIcon type="gem" size="xs" />
         <span className="text-[9px] font-bold text-white">{currency.gems}</span>
       </div>
 
@@ -146,19 +148,20 @@ const HeaderCurrencyDisplay: React.FC<{
           boxShadow: '0 1px 2px rgba(251, 191, 36, 0.3)',
         }}
       >
-        <span className="text-[8px]">💧</span>
+        <CurrencyIcon type="star" size="xs" />
         <span className="text-[9px] font-bold text-white">{currency.stars}</span>
       </div>
 
       {/* ショップへのインジケーター */}
       <div
-        className="flex items-center justify-center w-3.5 h-3.5 rounded-full"
+        className="flex items-center justify-center rounded-full px-1.5"
         style={{
+          height: '14px',
           background: 'linear-gradient(135deg, #10B981 0%, #34D399 100%)',
           boxShadow: '0 1px 2px rgba(16, 185, 129, 0.3)',
         }}
       >
-        <span className="text-[7px] font-bold text-white">+</span>
+        <span className="text-[7px] font-bold text-white">ほじゅう</span>
       </div>
     </button>
   )

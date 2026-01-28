@@ -7,6 +7,9 @@ import { PlacedDecoItem } from '@/domain/decoItems'
 import { ImageEnlargeModal } from './ImageEnlargeModal'
 import { StickerAura } from '@/components/upgrade'
 import { UPGRADE_RANKS, type UpgradeRank } from '@/constants/upgradeRanks'
+import { Avatar } from '@/components/ui/Avatar'
+import { getPatternStyle, getDecorationEmoji } from '@/features/sticker-book/BookView'
+import type { PageTheme } from '@/features/sticker-book/BookView'
 
 // リアクションの種類（いいねのみに簡略化）
 export type ReactionType = 'heart'
@@ -23,6 +26,7 @@ export interface PostPageData {
   placedStickers: PlacedSticker[]
   placedDecoItems?: PlacedDecoItem[]
   backgroundColor?: string
+  themeConfig?: Record<string, unknown> | null
 }
 
 // フォロー状態
@@ -34,6 +38,8 @@ export interface Post {
   userId: string
   userName: string
   userAvatarUrl?: string
+  userLevel?: number
+  userFrameId?: string | null  // キャラクター報酬で解放したフレーム
   pageImageUrl?: string
   // シール帳ページの実データ（画像の代わりに使用可能）
   pageData?: PostPageData
@@ -117,30 +123,67 @@ const StickerPagePreview: React.FC<{
 }> = ({ pageData, onClick }) => {
   // BookViewのページ幅320pxに対する60pxシールの比率 = 18.75%
   const BASE_STICKER_PERCENT = 18.75
-  // デコの基準サイズも同様の比率で計算
-  const BASE_DECO_PERCENT = 18.75
+
+  // テーマ設定を取得
+  const theme = pageData.themeConfig as PageTheme | null | undefined
+  const bgColor = theme?.backgroundColor || '#FEFBFF'
+  const bgGradientTo = theme?.backgroundGradientTo || '#FFFFFF'
+  const pattern = theme?.pattern || 'dots'
+  const patternColor = theme?.patternColor || 'rgba(167, 139, 250, 0.3)'
+  const patternOpacity = theme?.patternOpacity ?? 0.15
+  const decoration = theme?.decoration || 'none'
+  const decorationEmoji = getDecorationEmoji(decoration)
+  const patternStyle = getPatternStyle(pattern, patternColor)
 
   return (
     <button
       onClick={onClick}
-      className="relative w-full aspect-[2/3] bg-white overflow-hidden group"
+      className="relative w-full aspect-[2/3] overflow-hidden group"
+      style={{
+        background: `linear-gradient(180deg, ${bgColor} 0%, ${bgGradientTo} 100%)`,
+      }}
     >
-      {/* グリッドライン */}
-      <div className="absolute inset-0 opacity-10 pointer-events-none">
-        {Array.from({ length: 6 }).map((_, row) =>
-          Array.from({ length: 4 }).map((_, col) => (
-            <div
-              key={`grid-${row}-${col}`}
-              className="absolute w-[25%] h-[16.666%]"
-              style={{
-                left: `${col * 25}%`,
-                top: `${row * 16.666}%`,
-                border: '1px solid #C4A484',
-              }}
-            />
-          ))
-        )}
-      </div>
+      {/* パターン背景 */}
+      <div
+        className="absolute inset-4 pointer-events-none"
+        style={{ ...patternStyle, opacity: patternOpacity, zIndex: 2 }}
+      />
+
+      {/* フレーム装飾 */}
+      {theme?.frameColor && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            inset: '6px',
+            borderRadius: '22px',
+            border: `4px solid ${theme.frameColor}`,
+            boxShadow: theme.frameGlowColor
+              ? `0 0 20px ${theme.frameGlowColor}, 0 0 40px ${theme.frameGlowColor}40, inset 0 0 12px ${theme.frameGlowColor}`
+              : 'none',
+            zIndex: 6,
+          }}
+        />
+      )}
+
+      {/* コーナー装飾（絵文字） */}
+      {decorationEmoji && (
+        <>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12, left: 12, fontSize: 24, zIndex: 7 }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12, right: 12, fontSize: 24, transform: 'scaleX(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 32, left: 12, fontSize: 24, transform: 'scaleY(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 32, right: 12, fontSize: 24, transform: 'scale(-1)', zIndex: 7 }}>{decorationEmoji}</div>
+        </>
+      )}
+
+      {/* コーナー装飾（画像） */}
+      {decoration === 'image' && theme?.cornerImage && (
+        <>
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg" style={{ opacity: 0.9, top: 8, left: 8, width: 48, height: 48, zIndex: 7 }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg" style={{ opacity: 0.9, top: 8, right: 8, width: 48, height: 48, transform: 'scaleX(-1)', zIndex: 7 }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg" style={{ opacity: 0.9, bottom: 8, left: 8, width: 48, height: 48, transform: 'scaleY(-1)', zIndex: 7 }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg" style={{ opacity: 0.9, bottom: 8, right: 8, width: 48, height: 48, transform: 'scale(-1)', zIndex: 7 }} />
+        </>
+      )}
 
       {/* シール配置 - BookViewと同じ構造 */}
       <div
@@ -270,26 +313,29 @@ export const PostCard: React.FC<PostCardProps> = memo(({
         }}
       >
         {/* ヘッダー */}
-        <header className="flex items-center justify-between p-4">
+        <header className="relative z-20 flex items-center justify-between p-4">
           <button
             onClick={() => onUserClick(post.userId)}
             className="flex items-center gap-3"
           >
             {/* アバター */}
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-              style={{ background: 'linear-gradient(135deg, #E8D5C4 0%, #D4C4B0 100%)' }}
-            >
-              {post.userAvatarUrl ? (
-                <img src={post.userAvatarUrl} alt={post.userName} loading="lazy" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                '👤'
-              )}
-            </div>
+            <Avatar
+              src={post.userAvatarUrl}
+              alt={post.userName}
+              size="sm"
+              frameId={post.userFrameId}
+            />
 
             {/* ユーザー名と時間 */}
             <div className="text-left">
-              <h4 className="font-bold text-sm" style={{ color: '#8B5A2B' }}>{post.userName}</h4>
+              <div className="flex items-center gap-1.5">
+                <h4 className="font-bold text-sm" style={{ color: '#8B5A2B' }}>{post.userName}</h4>
+                {post.userLevel != null && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#F0E6D8', color: '#A67C52' }}>
+                    Lv.{post.userLevel}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1.5">
                 <p className="text-xs" style={{ color: '#A67C52' }}>{formatTime(post.createdAt)}</p>
                 {post.visibility === 'friends' && (
@@ -389,7 +435,7 @@ export const PostCard: React.FC<PostCardProps> = memo(({
 
         {/* 画像 - タップで拡大 */}
         <div
-          className="relative aspect-[4/3]"
+          className="relative z-0 aspect-[4/3]"
           style={{ background: 'linear-gradient(135deg, #F5EDE6 0%, #E8D5C4 100%)' }}
         >
           {post.pageData ? (

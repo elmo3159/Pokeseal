@@ -117,6 +117,11 @@ export type DataSource = 'supabase' | 'localStorage'
 
 // 現在のデータソースを判定（環境変数で切り替え可能）
 export function getDataSource(): DataSource {
+  // 明示的にSupabaseを強制
+  if (process.env.NEXT_PUBLIC_FORCE_SUPABASE === 'true') {
+    return 'supabase'
+  }
+
   // 環境変数があればSupabaseを使用
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

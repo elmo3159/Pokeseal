@@ -37,6 +37,7 @@ interface FloatingTooltipProps {
   delay?: number
   offsetDistance?: number
   disabled?: boolean
+  block?: boolean
 }
 
 export const FloatingTooltip: React.FC<FloatingTooltipProps> = ({
@@ -45,7 +46,8 @@ export const FloatingTooltip: React.FC<FloatingTooltipProps> = ({
   placement = 'top',
   delay = 200,
   offsetDistance = 8,
-  disabled = false
+  disabled = false,
+  block = false
 }) => {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -85,7 +87,10 @@ export const FloatingTooltip: React.FC<FloatingTooltipProps> = ({
       <span
         ref={refs.setReference}
         {...getReferenceProps()}
-        style={{ display: 'inline-block' }}
+        style={{
+          display: block ? 'block' : 'inline-block',
+          width: block ? '100%' : 'auto',
+        }}
       >
         {children}
       </span>

@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react'
+import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo, useEffect, memo } from 'react'
 import dynamic from 'next/dynamic'
 import './book.css'
-import { StickerBookTheme, CoverDesign, getCoverDesignById } from '@/domain/theme'
+import { StickerBookTheme, CoverDesign, getCoverDesignById, getDefaultCoverDesignId, type PagePattern } from '@/domain/theme'
 import type { PlacedSticker } from './StickerPlacement'
 import type { Sticker } from './StickerTray'
 import type { PlacedDecoItem } from '@/domain/decoItems'
@@ -29,10 +29,17 @@ export interface BookPage {
 
 // ページテーマ（見開き左ページの装飾用）
 export interface PageTheme {
+  id?: string
   backgroundColor?: string
-  pattern?: 'dots' | 'grid' | 'lines' | 'stars' | 'hearts' | 'none'
+  backgroundGradientTo?: string
+  pattern?: PagePattern | 'none'
   patternColor?: string
-  decoration?: 'ribbon' | 'flower' | 'star' | 'heart' | 'none'
+  patternOpacity?: number
+  frameColor?: string
+  frameAccentColor?: string
+  frameGlowColor?: string
+  decoration?: 'ribbon' | 'flower' | 'star' | 'heart' | 'image' | 'none'
+  cornerImage?: string  // カスタムコーナー画像パス
 }
 
 interface BookViewProps {
@@ -366,27 +373,7 @@ function UnifiedScrollZone({
         borderRadius: '8px',
       }}
       onMouseDown={handleMouseDown}
-    >
-      {/* 表紙・裏表紙の場合のみヒントを表示 */}
-      {!hideHints && (isOnCover || isOnBackCover) && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="flex items-center gap-2 opacity-40">
-            <span className="text-sm" style={{ color: '#8B5CF6' }}>←</span>
-            <span
-              className="text-xs font-medium px-3 py-1 rounded-full"
-              style={{
-                color: '#8B5CF6',
-                fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                background: 'rgba(139, 92, 246, 0.1)',
-              }}
-            >
-              スワイプでページめくり
-            </span>
-            <span className="text-sm" style={{ color: '#8B5CF6' }}>→</span>
-          </div>
-        </div>
-      )}
-    </div>
+    />
   )
 }
 
@@ -677,7 +664,7 @@ function SwipeZone({
   )
 }
 
-export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
+const BookViewBase = forwardRef<BookViewHandle, BookViewProps>(({
   pages,
   onPageChange,
   width = 320,
@@ -697,8 +684,15 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
   onDecoItemLongPress,
   displayScale = 1,
 }, ref) => {
-  // 表紙デザインを取得
-  const coverDesign = coverDesignId ? getCoverDesignById(coverDesignId) : undefined
+  // 表紙デザインを取得（見つからない場合はデフォルト表紙にフォールバック）
+  const coverDesign = useMemo(() => {
+    if (coverDesignId) {
+      const design = getCoverDesignById(coverDesignId)
+      if (design) return design
+    }
+    // 設定された表紙が見つからない場合、デフォルト表紙を使用
+    return getCoverDesignById(getDefaultCoverDesignId())
+  }, [coverDesignId])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bookRef = useRef<any>(null)
   const bookContainerRef = useRef<HTMLDivElement>(null)
@@ -1100,21 +1094,26 @@ export const BookView = forwardRef<BookViewHandle, BookViewProps>(({
             )}
           </div>
 
-          {/* 操作ヒント - モダンテキスト */}
-          <p
-            className="mt-6 text-xs"
-            style={{
-              fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              color: '#A78BFA',
-            }}
-          >
-            シールを長押しで編集できるよ！
-          </p>
+          {/* 操作ヒント - モダンテキスト（hideHints時は非表示） */}
+          {!hideHints && (
+            <p
+              className="mt-6 text-xs"
+              style={{
+                fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                color: '#A78BFA',
+              }}
+            >
+              シールを長押しで編集できるよ！
+            </p>
+          )}
         </>
       )}
     </div>
   )
 })
+BookViewBase.displayName = 'BookView'
+
+export const BookView = memo(BookViewBase)
 BookView.displayName = 'BookView'
 
 // ページ内シール表示コンポーネント
@@ -1129,6 +1128,32 @@ export function PageStickers({ stickers, editingStickerId, onLongPress, displayS
   // タップ即座に反応するためのハンドラ
   const handleTap = (sticker: PlacedSticker) => {
     onLongPress?.(sticker)
+  }
+
+  const toMaskUrl = (url: string) => {
+    try {
+      return encodeURI(url)
+    } catch {
+      return url
+    }
+  }
+
+  const getStickerMatteStyle = (imageUrl: string): React.CSSProperties => {
+    const safeUrl = toMaskUrl(imageUrl)
+    return {
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'var(--page-bg-color, #FFFFFF)',
+      WebkitMaskImage: `url("${safeUrl}")`,
+      maskImage: `url("${safeUrl}")`,
+      WebkitMaskRepeat: 'no-repeat',
+      maskRepeat: 'no-repeat',
+      WebkitMaskPosition: 'center',
+      maskPosition: 'center',
+      WebkitMaskSize: 'contain',
+      maskSize: 'contain',
+      pointerEvents: 'none',
+    }
   }
 
   return (
@@ -1223,12 +1248,15 @@ export function PageStickers({ stickers, editingStickerId, onLongPress, displayS
               style={{ width: '100%', height: '100%' }}
             >
               {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={sticker.sticker.name}
-                  className="w-full h-full object-contain"
-                  draggable={false}
-                />
+                <div className="relative w-full h-full">
+                  <div style={getStickerMatteStyle(imageUrl)} />
+                  <img
+                    src={imageUrl}
+                    alt={sticker.sticker.name}
+                    className="relative w-full h-full object-contain"
+                    draggable={false}
+                  />
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl">
                   🌟
@@ -1381,6 +1409,49 @@ function PageItems({
   onDecoItemLongPress,
   displayScale = 1,
 }: PageItemsProps) {
+  const toMaskUrl = (url: string) => {
+    try {
+      return encodeURI(url)
+    } catch {
+      return url
+    }
+  }
+
+  const getStickerMatteStyle = (imageUrl: string): React.CSSProperties => {
+    const safeUrl = toMaskUrl(imageUrl)
+    return {
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'var(--page-bg-color, #FFFFFF)',
+      WebkitMaskImage: `url("${safeUrl}")`,
+      maskImage: `url("${safeUrl}")`,
+      WebkitMaskRepeat: 'no-repeat',
+      maskRepeat: 'no-repeat',
+      WebkitMaskPosition: 'center',
+      maskPosition: 'center',
+      WebkitMaskSize: 'contain',
+      maskSize: 'contain',
+      pointerEvents: 'none',
+    }
+  }
+
+  const getDecoMatteStyle = (imageUrl: string): React.CSSProperties => {
+    const safeUrl = toMaskUrl(imageUrl)
+    return {
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'var(--page-bg-color, #FFFFFF)',
+      WebkitMaskImage: `url("${safeUrl}")`,
+      maskImage: `url("${safeUrl}")`,
+      WebkitMaskRepeat: 'no-repeat',
+      maskRepeat: 'no-repeat',
+      WebkitMaskPosition: 'center',
+      maskPosition: 'center',
+      WebkitMaskSize: '100% 100%',
+      maskSize: '100% 100%',
+      pointerEvents: 'none',
+    }
+  }
   // シールとデコを統合してz-indexでソート
   const allItems: PageItemUnion[] = useMemo(() => {
     const stickerItems: PageItemUnion[] = stickers
@@ -1429,6 +1500,8 @@ function PageItems({
         backfaceVisibility: 'hidden',
         // オーラエフェクトがはみ出せるように
         overflow: 'visible',
+        // シール・デコがテーマ装飾の上に来るように
+        zIndex: 30,
       }}
     >
       {allItems.map((entry) => {
@@ -1480,12 +1553,15 @@ function PageItems({
                 style={{ width: '100%', height: '100%' }}
               >
                 {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={sticker.sticker.name}
-                    className="w-full h-full object-contain"
-                    draggable={false}
-                  />
+                  <div className="relative w-full h-full">
+                    <div style={getStickerMatteStyle(imageUrl)} />
+                    <img
+                      src={imageUrl}
+                      alt={sticker.sticker.name}
+                      className="relative w-full h-full object-contain"
+                      draggable={false}
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-3xl">
                     🌟
@@ -1505,8 +1581,8 @@ function PageItems({
           )
         } else {
           const deco = entry.item
-          const decoWidth = deco.width ?? deco.decoItem.baseWidth ?? 60
-          const decoHeight = deco.height ?? deco.decoItem.baseHeight ?? 60
+          const decoWidth = (deco.width ?? deco.decoItem.baseWidth ?? 60) * displayScale
+          const decoHeight = (deco.height ?? deco.decoItem.baseHeight ?? 60) * displayScale
 
           return (
             <div
@@ -1544,13 +1620,16 @@ function PageItems({
               }}
             >
               {deco.decoItem.imageUrl ? (
-                <img
-                  src={deco.decoItem.imageUrl}
-                  alt={deco.decoItem.name}
-                  className="w-full h-full object-fill pointer-events-none select-none"
-                  draggable={false}
-                  style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
-                />
+                <div className="relative w-full h-full pointer-events-none select-none">
+                  <div style={getDecoMatteStyle(deco.decoItem.imageUrl)} />
+                  <img
+                    src={deco.decoItem.imageUrl}
+                    alt={deco.decoItem.name}
+                    className="relative w-full h-full object-fill pointer-events-none select-none"
+                    draggable={false}
+                    style={{ WebkitUserSelect: 'none', userSelect: 'none' }}
+                  />
+                </div>
               ) : (
                 <div
                   className="w-full h-full flex items-center justify-center bg-pink-100 rounded text-2xl pointer-events-none"
@@ -1845,6 +1924,7 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
       <LeftPage
         page={page}
         pageNumber={pageNumber}
+        bookTheme={bookTheme}
         pageStickers={pageStickers}
         editingStickerId={editingStickerId}
         onStickerLongPress={onStickerLongPress}
@@ -1861,6 +1941,7 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
     <RightPage
       page={page}
       pageNumber={pageNumber}
+      bookTheme={bookTheme}
       pageStickers={pageStickers}
       editingStickerId={editingStickerId}
       onStickerLongPress={onStickerLongPress}
@@ -1877,6 +1958,7 @@ function PageContent({ page, pageNumber, bookTheme, coverDesign, pageStickers = 
 interface LeftPageProps {
   page: BookPage
   pageNumber: number
+  bookTheme?: StickerBookTheme
   pageStickers?: PlacedSticker[]
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
@@ -1886,68 +1968,219 @@ interface LeftPageProps {
   displayScale?: number
 }
 
+const mapCornerStyleToDecoration = (
+  cornerStyle?: StickerBookTheme['decoration']['cornerStyle']
+): PageTheme['decoration'] => {
+  switch (cornerStyle) {
+    case 'ribbon':
+      return 'ribbon'
+    case 'heart':
+      return 'heart'
+    case 'star':
+      return 'star'
+    case 'flower':
+      return 'flower'
+    case 'image':
+      return 'image'
+    default:
+      return 'none'
+  }
+}
+
+const resolvePageTheme = (page: BookPage, bookTheme?: StickerBookTheme): PageTheme => {
+  if (!bookTheme) return page.theme ?? {}
+  const pattern = bookTheme.page.pattern === 'plain' ? 'none' : bookTheme.page.pattern
+  const baseTheme: PageTheme = {
+    id: bookTheme.id,
+    backgroundColor: bookTheme.page.backgroundColor,
+    backgroundGradientTo: bookTheme.page.backgroundGradientTo,
+    pattern,
+    patternColor: bookTheme.page.patternColor,
+    patternOpacity: bookTheme.page.patternOpacity,
+    frameColor: bookTheme.page.frameColor,
+    frameAccentColor: bookTheme.page.frameAccentColor,
+    frameGlowColor: bookTheme.page.frameGlowColor,
+    decoration: mapCornerStyleToDecoration(bookTheme.decoration.cornerStyle),
+    cornerImage: bookTheme.decoration.cornerImage,
+  }
+
+  if (!page.theme) return baseTheme
+
+  // page.themeの値がundefinedでない場合のみ上書きする
+  const mergedTheme: PageTheme = { ...baseTheme }
+  if (page.theme.id !== undefined) mergedTheme.id = page.theme.id
+  if (page.theme.backgroundColor !== undefined) mergedTheme.backgroundColor = page.theme.backgroundColor
+  if (page.theme.backgroundGradientTo !== undefined) mergedTheme.backgroundGradientTo = page.theme.backgroundGradientTo
+  if (page.theme.pattern !== undefined) mergedTheme.pattern = page.theme.pattern
+  if (page.theme.patternColor !== undefined) mergedTheme.patternColor = page.theme.patternColor
+  if (page.theme.patternOpacity !== undefined) mergedTheme.patternOpacity = page.theme.patternOpacity
+  if (page.theme.frameColor !== undefined) mergedTheme.frameColor = page.theme.frameColor
+  if (page.theme.frameAccentColor !== undefined) mergedTheme.frameAccentColor = page.theme.frameAccentColor
+  if (page.theme.frameGlowColor !== undefined) mergedTheme.frameGlowColor = page.theme.frameGlowColor
+  if (page.theme.decoration !== undefined) mergedTheme.decoration = page.theme.decoration
+  if (page.theme.cornerImage !== undefined) mergedTheme.cornerImage = page.theme.cornerImage
+
+  return mergedTheme
+}
+
+export const getPatternStyle = (pattern: PageTheme['pattern'], patternColor: string) => {
+  const encodedColor = encodeURIComponent(patternColor)
+  switch (pattern) {
+    case 'dots':
+      return {
+        backgroundImage: `radial-gradient(circle, ${patternColor} 1px, transparent 1px)`,
+        backgroundSize: '20px 20px',
+      }
+    case 'grid':
+      return {
+        backgroundImage: `linear-gradient(${patternColor} 1px, transparent 1px), linear-gradient(90deg, ${patternColor} 1px, transparent 1px)`,
+        backgroundSize: '20px 20px',
+      }
+    case 'lines':
+      return {
+        backgroundImage: `repeating-linear-gradient(0deg, ${patternColor} 0px, ${patternColor} 1px, transparent 1px, transparent 20px)`,
+      }
+    case 'stars':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpolygon points='11,1.5 13.8,8 20.8,8.5 15.2,12.6 17.2,19.8 11,15.6 4.8,19.8 6.8,12.6 1.2,8.5 8.2,8' fill='${encodedColor}' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '44px 44px',
+      }
+    case 'hearts':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M11 18s-6-3.6-6-8a4 4 0 0 1 7-2.5A4 4 0 0 1 17 10c0 4.4-6 8-6 8z' fill='${encodedColor}' opacity='0.35'/%3E%3C/svg%3E")`,
+        backgroundSize: '32px 32px',
+      }
+    case 'flowers':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='${encodedColor}' opacity='0.4'%3E%3Ccircle cx='14' cy='10' r='3'/%3E%3Ccircle cx='10' cy='14' r='3'/%3E%3Ccircle cx='18' cy='14' r='3'/%3E%3Ccircle cx='14' cy='18' r='3'/%3E%3Ccircle cx='14' cy='14' r='2' fill='%23FFD700'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundSize: '36px 36px',
+      }
+    case 'ribbon':
+      return {
+        backgroundImage: `repeating-linear-gradient(135deg, ${patternColor} 0px, ${patternColor} 2px, transparent 2px, transparent 10px)`,
+      }
+    // ===== 新しいパターン =====
+    case 'waves':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='20' viewBox='0 0 60 20'%3E%3Cpath d='M0 10 Q15 0 30 10 T60 10' stroke='${encodedColor}' stroke-width='1.5' fill='none' opacity='0.4'/%3E%3C/svg%3E")`,
+        backgroundSize: '60px 20px',
+      }
+    case 'confetti':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect x='5' y='8' width='4' height='8' rx='1' fill='%23FF6B9D' opacity='0.5' transform='rotate(15 7 12)'/%3E%3Crect x='25' y='5' width='3' height='6' rx='1' fill='%2360D5FF' opacity='0.5' transform='rotate(-20 26.5 8)'/%3E%3Crect x='15' y='25' width='4' height='7' rx='1' fill='%23FFD93D' opacity='0.5' transform='rotate(30 17 28.5)'/%3E%3Crect x='32' y='28' width='3' height='5' rx='1' fill='%239B6BFF' opacity='0.5' transform='rotate(-10 33.5 30.5)'/%3E%3C/svg%3E")`,
+        backgroundSize: '40px 40px',
+      }
+    case 'bubbles':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Ccircle cx='10' cy='15' r='6' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.3'/%3E%3Ccircle cx='35' cy='10' r='4' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.25'/%3E%3Ccircle cx='25' cy='35' r='8' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.35'/%3E%3Ccircle cx='42' cy='40' r='3' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.2'/%3E%3C/svg%3E")`,
+        backgroundSize: '50px 50px',
+      }
+    case 'clouds':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40' viewBox='0 0 80 40'%3E%3Cpath d='M20 30 Q10 30 10 22 Q10 15 18 15 Q20 8 30 10 Q38 5 45 12 Q55 8 58 18 Q68 18 68 26 Q68 32 58 32 Z' fill='${encodedColor}' opacity='0.15'/%3E%3C/svg%3E")`,
+        backgroundSize: '80px 40px',
+      }
+    case 'sparkles':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Cpath d='M25 8 L26.5 18 L31 13 L27 20 L37 21 L27 22 L31 27 L25 22 L19 27 L23 22 L13 21 L23 20 L19 13 L23.5 18 Z' fill='${encodedColor}' opacity='0.5'/%3E%3Cpath d='M10 38 L11 43 L13 41 L11.5 44 L16 44.5 L11.5 45 L13 47 L10 45 L7 47 L8.5 45 L4 44.5 L8.5 44 L7 41 L9 43 Z' fill='${encodedColor}' opacity='0.4'/%3E%3Cpath d='M40 5 L41 9 L43 7 L41.5 10 L45 10.5 L41.5 11 L43 13 L40 11 L37 13 L38.5 11 L35 10.5 L38.5 10 L37 7 L39 9 Z' fill='${encodedColor}' opacity='0.35'/%3E%3Ccircle cx='5' cy='15' r='1.2' fill='${encodedColor}' opacity='0.4'/%3E%3Ccircle cx='45' cy='35' r='1' fill='${encodedColor}' opacity='0.35'/%3E%3Ccircle cx='30' cy='42' r='0.8' fill='${encodedColor}' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '50px 50px',
+      }
+    case 'checkerboard':
+      return {
+        backgroundImage: `linear-gradient(45deg, ${patternColor} 25%, transparent 25%), linear-gradient(-45deg, ${patternColor} 25%, transparent 25%), linear-gradient(45deg, transparent 75%, ${patternColor} 75%), linear-gradient(-45deg, transparent 75%, ${patternColor} 75%)`,
+        backgroundSize: '16px 16px',
+        backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+      }
+    case 'zigzag':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20' viewBox='0 0 40 20'%3E%3Cpath d='M0 10 L10 0 L20 10 L30 0 L40 10' stroke='${encodedColor}' stroke-width='1.5' fill='none' opacity='0.35'/%3E%3C/svg%3E")`,
+        backgroundSize: '40px 20px',
+      }
+    case 'diamonds':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 L22 12 L12 22 L2 12 Z' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '24px 24px',
+      }
+    case 'leaves':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Cpath d='M25 10 Q35 15 35 25 Q35 35 25 40 Q15 35 15 25 Q15 15 25 10 Z' stroke='${encodedColor}' stroke-width='1' fill='${encodedColor}' fill-opacity='0.1' opacity='0.4'/%3E%3Cpath d='M25 15 L25 35' stroke='${encodedColor}' stroke-width='0.5' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '50px 50px',
+      }
+    case 'snowflakes':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.35'%3E%3Cline x1='18' y1='4' x2='18' y2='32'/%3E%3Cline x1='4' y1='18' x2='32' y2='18'/%3E%3Cline x1='8' y1='8' x2='28' y2='28'/%3E%3Cline x1='28' y1='8' x2='8' y2='28'/%3E%3Ccircle cx='18' cy='18' r='3'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundSize: '36px 36px',
+      }
+    case 'hexagons':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='32' viewBox='0 0 28 32'%3E%3Cpath d='M14 0 L28 8 L28 24 L14 32 L0 24 L0 8 Z' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.25'/%3E%3C/svg%3E")`,
+        backgroundSize: '28px 32px',
+      }
+    case 'triangles':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='26' viewBox='0 0 30 26'%3E%3Cpath d='M15 2 L28 24 L2 24 Z' stroke='${encodedColor}' stroke-width='1' fill='none' opacity='0.28'/%3E%3C/svg%3E")`,
+        backgroundSize: '30px 26px',
+      }
+    case 'arcs':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20' viewBox='0 0 40 20'%3E%3Cpath d='M0 20 Q20 0 40 20' stroke='${encodedColor}' stroke-width='1.5' fill='none' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '40px 20px',
+      }
+    case 'crosshatch':
+      return {
+        backgroundImage: `repeating-linear-gradient(45deg, ${patternColor} 0px, ${patternColor} 1px, transparent 1px, transparent 8px), repeating-linear-gradient(-45deg, ${patternColor} 0px, ${patternColor} 1px, transparent 1px, transparent 8px)`,
+      }
+    case 'scallops':
+      return {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='20' viewBox='0 0 40 20'%3E%3Cpath d='M0 20 Q10 10 20 20 Q30 10 40 20' stroke='${encodedColor}' stroke-width='1.5' fill='none' opacity='0.3'/%3E%3C/svg%3E")`,
+        backgroundSize: '40px 20px',
+      }
+    default:
+      return {}
+  }
+}
+
+export const getDecorationEmoji = (decoration: PageTheme['decoration']) => {
+  switch (decoration) {
+    case 'ribbon':
+      return '🎀'
+    case 'flower':
+      return '🌸'
+    case 'star':
+      return '⭐'
+    case 'heart':
+      return '💖'
+    case 'image':
+      return null  // 画像は別途レンダリング
+    default:
+      return null
+  }
+}
+
 // 左ページコンポーネント（装飾・テーマ表示用）- パステルカラー
-function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, displayScale = 1 }: LeftPageProps) {
-  const theme = page.theme || {}
+function LeftPage({ page, pageNumber, bookTheme, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, displayScale = 1 }: LeftPageProps) {
+  const theme = resolvePageTheme(page, bookTheme)
   const bgColor = theme.backgroundColor || '#FEFBFF'
+  const bgGradientTo = theme.backgroundGradientTo || '#FFFFFF'
   const pattern = theme.pattern || 'dots'
   const patternColor = theme.patternColor || 'rgba(167, 139, 250, 0.3)'
+  const patternOpacity = theme.patternOpacity ?? 0.15
   const decoration = theme.decoration || 'none'
 
-  // パターン生成 - パステルカラー
-  const getPatternStyle = () => {
-    switch (pattern) {
-      case 'dots':
-        return {
-          backgroundImage: `radial-gradient(circle, ${patternColor} 1px, transparent 1px)`,
-          backgroundSize: '20px 20px',
-        }
-      case 'grid':
-        return {
-          backgroundImage: `linear-gradient(${patternColor} 1px, transparent 1px), linear-gradient(90deg, ${patternColor} 1px, transparent 1px)`,
-          backgroundSize: '20px 20px',
-        }
-      case 'lines':
-        return {
-          backgroundImage: `repeating-linear-gradient(0deg, ${patternColor} 0px, ${patternColor} 1px, transparent 1px, transparent 20px)`,
-        }
-      case 'stars':
-        return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ctext x='5' y='15' font-size='10' fill='%23A78BFA' opacity='0.3'%3E⭐%3C/text%3E%3C/svg%3E")`,
-          backgroundSize: '40px 40px',
-        }
-      case 'hearts':
-        return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ctext x='5' y='15' font-size='10' fill='%23F9A8D4' opacity='0.4'%3E♡%3C/text%3E%3C/svg%3E")`,
-          backgroundSize: '30px 30px',
-        }
-      default:
-        return {}
-    }
-  }
+  const patternStyle = getPatternStyle(pattern, patternColor)
 
-  // 装飾取得
-  const getDecorationEmoji = () => {
-    switch (decoration) {
-      case 'ribbon': return '🎀'
-      case 'flower': return '🌸'
-      case 'star': return '⭐'
-      case 'heart': return '💖'
-      default: return null
-    }
-  }
-
-  const decorationEmoji = getDecorationEmoji()
+  const decorationEmoji = getDecorationEmoji(decoration)
 
   return (
     <div
       className="w-full h-full p-4 relative"
       style={{
-        background: `linear-gradient(180deg, ${bgColor} 0%, #FFFFFF 100%)`,
+        background: `linear-gradient(180deg, ${bgColor} 0%, ${bgGradientTo} 100%)`,
         boxShadow: 'inset -5px 0 15px rgba(139, 92, 246, 0.03), inset 0 0 20px rgba(139, 92, 246, 0.02)',
         // 3D変形継承（overflow-hiddenを削除）
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
+        ['--page-bg-color' as any]: bgColor,
       }}
     >
       {/* ページ番号 */}
@@ -1962,19 +2195,64 @@ function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onSti
         {pageNumber}
       </div>
 
-      {/* パターン背景 */}
+      {/* パターン背景（シール・デコの後ろに配置） */}
       <div
-        className="absolute inset-4 opacity-15"
-        style={getPatternStyle()}
+        className="absolute inset-4 pointer-events-none"
+        style={{ ...patternStyle, opacity: patternOpacity, zIndex: 1 }}
       />
 
-      {/* コーナー装飾 */}
+      {/* フレーム装飾 */}
+      {theme.frameColor && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            inset: '6px',
+            borderRadius: '22px',
+            border: `4px solid ${theme.frameColor}`,
+            boxShadow: theme.frameGlowColor
+              ? `0 0 20px ${theme.frameGlowColor}, 0 0 40px ${theme.frameGlowColor}40, inset 0 0 12px ${theme.frameGlowColor}`
+              : 'none',
+            zIndex: 2,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              inset: '6px',
+              borderRadius: '18px',
+              border: `2px solid ${theme.frameAccentColor || theme.frameColor}`,
+              opacity: 0.95,
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              inset: '12px',
+              borderRadius: '14px',
+              border: `1px dashed ${theme.frameAccentColor || theme.frameColor}`,
+              opacity: 0.9,
+            }}
+          />
+        </div>
+      )}
+
+      {/* コーナー装飾（絵文字）- シール・デコの後ろ */}
       {decorationEmoji && (
         <>
-          <div className="absolute top-3 left-3 text-2xl opacity-40">{decorationEmoji}</div>
-          <div className="absolute top-3 right-3 text-2xl opacity-40 scale-x-[-1]">{decorationEmoji}</div>
-          <div className="absolute bottom-8 left-3 text-2xl opacity-40 scale-y-[-1]">{decorationEmoji}</div>
-          <div className="absolute bottom-8 right-3 text-2xl opacity-40 scale-[-1]">{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12 * displayScale, left: 12 * displayScale, fontSize: 24 * displayScale }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12 * displayScale, right: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scaleX(-1)' }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 8 * displayScale, left: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scaleY(-1)' }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 8 * displayScale, right: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scale(-1)' }}>{decorationEmoji}</div>
+        </>
+      )}
+
+      {/* コーナー装飾（画像） */}
+      {decoration === 'image' && theme.cornerImage && (
+        <>
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, top: 8 * displayScale, left: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, top: 8 * displayScale, right: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scaleX(-1)' }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, bottom: 40 * displayScale, left: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scaleY(-1)' }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, bottom: 40 * displayScale, right: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scale(-1)' }} />
         </>
       )}
 
@@ -2001,6 +2279,7 @@ function LeftPage({ page, pageNumber, pageStickers = [], editingStickerId, onSti
 interface RightPageProps {
   page: BookPage
   pageNumber: number
+  bookTheme?: StickerBookTheme
   pageStickers?: PlacedSticker[]
   editingStickerId?: string | null
   onStickerLongPress?: (sticker: PlacedSticker) => void
@@ -2012,16 +2291,29 @@ interface RightPageProps {
 }
 
 // 右ページコンポーネント（シール貼り付けメインスペース）- パステルカラー
-function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false, displayScale = 1 }: RightPageProps) {
+function RightPage({ page, pageNumber, bookTheme, pageStickers = [], editingStickerId, onStickerLongPress, pageDecoItems = [], editingDecoItemId, onDecoItemLongPress, hideHints = false, displayScale = 1 }: RightPageProps) {
+  const theme = resolvePageTheme(page, bookTheme)
+  const bgColor = theme.backgroundColor || '#FEFBFF'
+  const bgGradientTo = theme.backgroundGradientTo || '#FFFFFF'
+  const pattern = theme.pattern || 'dots'
+  const patternColor = theme.patternColor || 'rgba(167, 139, 250, 0.3)'
+  const patternOpacity = theme.patternOpacity ?? 0.15
+  const decoration = theme.decoration || 'none'
+
+  const patternStyle = getPatternStyle(pattern, patternColor)
+
+  const decorationEmoji = getDecorationEmoji(decoration)
+
   return (
     <div
       className="w-full h-full p-4 relative"
       style={{
-        background: 'linear-gradient(180deg, #FFFFFF 0%, #FEFBFF 100%)',
+        background: `linear-gradient(180deg, ${bgColor} 0%, ${bgGradientTo} 100%)`,
         boxShadow: 'inset 5px 0 15px rgba(139, 92, 246, 0.02), inset 0 0 20px rgba(139, 92, 246, 0.01)',
         // 3D変形継承
         transformStyle: 'preserve-3d',
         backfaceVisibility: 'hidden',
+        ['--page-bg-color' as any]: bgColor,
       }}
     >
       {/* ページ番号 */}
@@ -2035,6 +2327,67 @@ function RightPage({ page, pageNumber, pageStickers = [], editingStickerId, onSt
       >
         {pageNumber}
       </div>
+
+      {/* パターン背景（シール・デコの後ろに配置） */}
+      <div
+        className="absolute inset-4 pointer-events-none"
+        style={{ ...patternStyle, opacity: patternOpacity, zIndex: 1 }}
+      />
+
+      {/* フレーム装飾 */}
+      {theme.frameColor && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            inset: '6px',
+            borderRadius: '22px',
+            border: `4px solid ${theme.frameColor}`,
+            boxShadow: theme.frameGlowColor
+              ? `0 0 20px ${theme.frameGlowColor}, 0 0 40px ${theme.frameGlowColor}40, inset 0 0 12px ${theme.frameGlowColor}`
+              : 'none',
+            zIndex: 2,
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              inset: '6px',
+              borderRadius: '18px',
+              border: `2px solid ${theme.frameAccentColor || theme.frameColor}`,
+              opacity: 0.95,
+            }}
+          />
+          <div
+            className="absolute"
+            style={{
+              inset: '12px',
+              borderRadius: '14px',
+              border: `1px dashed ${theme.frameAccentColor || theme.frameColor}`,
+              opacity: 0.9,
+            }}
+          />
+        </div>
+      )}
+
+      {/* コーナー装飾（絵文字）- シール・デコの後ろ */}
+      {decorationEmoji && (
+        <>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12 * displayScale, left: 12 * displayScale, fontSize: 24 * displayScale }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ top: 12 * displayScale, right: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scaleX(-1)' }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 8 * displayScale, left: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scaleY(-1)' }}>{decorationEmoji}</div>
+          <div className="absolute opacity-60 drop-shadow-lg" style={{ bottom: 8 * displayScale, right: 12 * displayScale, fontSize: 24 * displayScale, transform: 'scale(-1)' }}>{decorationEmoji}</div>
+        </>
+      )}
+
+      {/* コーナー装飾（画像） */}
+      {decoration === 'image' && theme.cornerImage && (
+        <>
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, top: 8 * displayScale, left: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, top: 8 * displayScale, right: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scaleX(-1)' }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, bottom: 40 * displayScale, left: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scaleY(-1)' }} />
+          <img src={theme.cornerImage} alt="" className="absolute object-contain drop-shadow-lg z-20" style={{ opacity: 0.9, bottom: 40 * displayScale, right: 8 * displayScale, width: 48 * displayScale, height: 48 * displayScale, transform: 'scale(-1)' }} />
+        </>
+      )}
 
       {/* ページコンテンツ */}
       <div className="relative z-10 w-full h-full">

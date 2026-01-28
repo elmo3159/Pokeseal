@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { AppLayout, TabId } from '@/components'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
+import { FullScreenLoading } from '@/components/ui/LoadingSpinner'
 import {
   BookView,
   BookViewHandle,
@@ -14,7 +16,6 @@ import {
   DraggableSticker,
   FloatingEditSticker,
   FloatingEditDeco,
-  PageEditModal,
   CHARM_LIST,
   PeelEffect,
   PlaceEffect,
@@ -23,7 +24,6 @@ import {
   DecoDrawer,
   LayerControlPanel,
   LayerItem,
-  BookShareModal,
 } from '@/features/sticker-book'
 import {
   DecoItemData,
@@ -31,69 +31,75 @@ import {
   DEFAULT_DECO_ITEMS,
   getOwnedDecoItems,
 } from '@/domain/decoItems'
-import { CoverDesign } from '@/domain/theme'
-import { CollectionView, CollectionSticker, StickerDetailModal } from '@/features/collection'
-import { UpgradeModal } from '@/components/upgrade'
-import { GachaView, GachaBanner, UserCurrency, GachaResultModal, GachaResultSticker, GachaConfirmDialog, GachaRate } from '@/features/gacha'
-import { TradeView, Friend, TradeHistory, MatchingModal, MatchingStatus, MatchedUser, TradeSession, TradeSticker, TradePartner, TradeSessionEnhanced, TradeBookPage, TradeSessionFull, TradeUser, TradeBookPageFull } from '@/features/trade'
-import { TimelineView, Post, ReactionType, CreatePostModal, CommentModal, StickerBookPage, Comment, FollowStatus, FeedType } from '@/features/timeline'
-import { timelineService } from '@/services/timeline/timelineService'
+import { CoverDesign, defaultCoverDesigns, defaultThemes, getDefaultThemeId, getThemeById } from '@/domain/theme'
+import { CollectionView, CollectionSticker } from '@/features/collection'
+import { GachaBanner, UserCurrency, GachaResultSticker, GachaConfirmDialog } from '@/features/gacha'
+import { TradeView, Friend, TradeHistory, MatchingStatus, MatchedUser, TradePartner, TradeBookPageFull } from '@/features/trade'
+import { TimelineView, Post, ReactionType, Comment, FollowStatus, FeedType } from '@/features/timeline'
+import { timelineService, PageSnapshot } from '@/services/timeline/timelineService'
 import { asyncTradeService } from '@/services/asyncTrade/asyncTradeService'
-import { ProfileView, ProfileEditModal, LevelUpModal, StatsModal, AchievementsModal, FollowListModal, OtherUserProfileModal, DailyMissionsModal, CollectionRewardsModal, UserSearchModal, UserProfile, UserStats, Achievement, FollowUser, OtherUserProfile, StickerBookPreview } from '@/features/profile'
-import { HomeView } from '@/features/home'
+import { ProfileView, UserProfile, UserStats, Achievement, FollowUser, OtherUserProfile, StickerBookPreview } from '@/features/profile'
+// 動的インポート（バンドルサイズ最適化）
+import {
+  LazyGachaResultModal,
+  LazyMatchingModal,
+  LazyProfileEditModal,
+  LazyLevelUpModal,
+  LazyStatsModal,
+  LazyAchievementsModal,
+  LazyFollowListModal,
+  LazyOtherUserProfileModal,
+  LazyStickerDetailModal,
+  LazyUpgradeModal,
+  LazyPageEditModal,
+  LazyBookShareModal,
+  LazyThemeSelectModal,
+  LazyReportModal,
+  LazyBlockModal,
+  LazyBlockedUsersModal,
+  LazyCreatePostModal,
+  LazyCommentModal,
+  LazyDailyMissionsModal,
+  LazyCollectionRewardsModal,
+  LazyUserSearchModal,
+  LazySubscriptionModal,
+  LazyStarPurchaseModal,
+  LazyAdRewardModal,
+  LazyDailyBonusModal,
+  LazyInsufficientFundsModal,
+  LazyAdminView,
+  LazyTradeSessionFull,
+  LazyGachaView,
+  LazySettingsView,
+} from '@/utils/dynamicImports'
 import {
   calculateLevel,
   getCurrentLevelExp,
   getExpToNextLevel,
   getLevelTitle,
-  addExp,
+  addExpWithDailyLimit,
+  createInitialDailyCounts,
   getLevelUpRewards,
-  ExpAction,
-  ExpGainResult,
-  LevelUpReward,
+  MAX_LEVEL,
+  type ExpAction,
+  type ExpGainResult,
+  type LevelUpReward,
+  type DailyActionCounts,
 } from '@/domain/levelSystem'
 import { TutorialOverlay, defaultTutorialSteps } from '@/features/tutorial'
-import { SettingsView, SettingsData } from '@/features/settings'
+import { SettingsData, ContactFormModal, ContactFormData } from '@/features/settings'
+import { contactService } from '@/services/contact'
 import { AuthView } from '@/features/auth'
 import { useAuth } from '@/contexts/AuthContext'
-import { ReportModal, BlockModal } from '@/features/safety'
+import { authService } from '@/services/auth/authService'
 import { CreateReportInput, CreateBlockInput, ReportTargetType } from '@/domain/safety'
 import { moderationService } from '@/services/moderation'
-import { BlockedUsersModal } from '@/components/moderation'
-import { ThemeSelectModal } from '@/features/theme'
-import { defaultCoverDesigns } from '@/domain/theme'
-import {
-  MysteryPostView,
-  PostStickerModal,
-  ReceivedStickerModal,
-} from '@/features/mystery-post'
-import {
-  MysteryPostState,
-  ReceivedSticker,
-  PostedSticker,
-  PresetMessage,
-  canPostToday,
-  generateAnonymousName,
-  getNextDeliveryTime,
-} from '@/domain/mysteryPost'
-import {
-  TradeScoutView,
-  ScoutListEditModal,
-  MatchDetailModal,
-} from '@/features/trade-scout'
-import {
-  TradeScoutState,
-  ScoutSticker,
-  ScoutMatch,
-  initialTradeScoutState,
-} from '@/domain/tradeScout'
+import { collectionRewardService } from '@/services/collectionRewards'
+import { characterRewardService } from '@/services/characterRewards'
+// mystery-post and trade-scout removed - replaced by trade-board
+import { TradeBoardView, TradeBoardCreateModal, TradeBoardPostDetail } from '@/features/trade-board'
 import {
   ShopView,
-  SubscriptionModal,
-  StarPurchaseModal,
-  AdRewardModal,
-  DailyBonusModal,
-  InsufficientFundsModal,
 } from '@/features/shop'
 import {
   UserMonetization,
@@ -113,19 +119,14 @@ import {
   SavedUserData,
   SavedCollectionItem,
   AdminMode,
-  createInitialUserData,
   createTestModeData,
   loadAdminMode,
   saveAdminMode,
   addStickersToCollection,
   canPlaceSticker,
   resetAllData,
-  TestUser,
-  TEST_USERS,
-  getCurrentTestUser,
   switchTestUser,
   saveCurrentUserData,
-  loadCurrentUserData,
   createInitialUserDataForTestUser,
 } from '@/utils/persistence'
 import {
@@ -139,12 +140,9 @@ import {
   grantDailyBonusToSupabase,
 } from '@/utils/supabaseSync'
 import { useSupabaseTrade } from '@/hooks'
-import { AdminView } from '@/features/admin'
 import { stickerBookService, type StickerBookPage as SupabaseStickerBookPage } from '@/services/stickerBook'
 import { profileService, statsService, type FollowUserData, type UserStatsFromDB } from '@/services/profile'
-import { mysteryPostService } from '@/services/mysteryPost'
-import { tradeScoutService } from '@/services/tradeScout'
-import { calculateAchievements, type AchievementStats } from '@/services/achievements/achievementService'
+import { calculateAchievements, syncUserAchievements, type AchievementStats } from '@/services/achievements/achievementService'
 import { notificationService } from '@/services/notifications'
 import { STAR_BONUS } from '@/constants/upgradeRanks'
 import {
@@ -166,139 +164,10 @@ import {
   Platform,
 } from '@/services/reviewReward/reviewRewardService'
 import ReviewPromptModal from '@/features/trade/ReviewPromptModal'
+import { getSupabase } from '@/services/supabase'
 
-// キャラクター定義（レアリティ・タイプ・ガチャ重み付き）
-// ★★★★★ (5) もっちも, ウールン, トイラン: レジェンド（排出率: 約1.4%）
-// ★★★★ (4) スタラ, チャックン: スーパーレア（排出率: 約4.7%）
-// ★★★ (3) ドロル, サニたん: レア（排出率: 約14.1%）
-// ★★ (2) コケボ, キノぼう: アンコモン（排出率: 約28.2%）
-// ★ (1) ポフン, ポリ: コモン（排出率: 約51.6%）
-interface CharacterData {
-  id: string
-  name: string
-  folder: string
-  prefix: string
-  rarity: 1 | 2 | 3 | 4 | 5
-  type: 'normal' | 'puffy' | 'sparkle'
-  gachaWeight: number
-  baseRate: number
-}
-
-const characters: CharacterData[] = [
-  // ★★★★★ レジェンド（排出率: 約1.4%）
-  { id: 'mocchimo', name: 'もっちも', folder: 'もっちも', prefix: 'もっちも_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
-  { id: 'woolun', name: 'ウールン', folder: 'ウールン', prefix: 'ウールン_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
-  { id: 'toiran', name: 'トイラン', folder: 'トイラン', prefix: 'トイラン_', rarity: 5, type: 'sparkle', gachaWeight: 1, baseRate: 500 },
-  // ★★★★ スーパーレア（排出率: 約4.7%）
-  { id: 'sutara', name: 'スタラ', folder: 'スタラ', prefix: 'スタラ_', rarity: 4, type: 'puffy', gachaWeight: 5, baseRate: 200 },
-  { id: 'chakkun', name: 'チャックン', folder: 'チャックン', prefix: 'チャックン_', rarity: 4, type: 'puffy', gachaWeight: 5, baseRate: 200 },
-  // ★★★ レア（排出率: 約14.1%）
-  { id: 'dororu', name: 'ドロル', folder: 'ドロル', prefix: 'ドロル_', rarity: 3, type: 'normal', gachaWeight: 15, baseRate: 100 },
-  { id: 'sanitan', name: 'サニたん', folder: 'サニたん', prefix: 'サニたん_', rarity: 3, type: 'normal', gachaWeight: 15, baseRate: 100 },
-  // ★★ アンコモン（排出率: 約28.2%）
-  { id: 'kokebo', name: 'コケボ', folder: 'コケボ', prefix: 'コケボ_', rarity: 2, type: 'normal', gachaWeight: 30, baseRate: 50 },
-  { id: 'kinobou', name: 'キノぼう', folder: 'キノぼう', prefix: 'キノぼう_', rarity: 2, type: 'normal', gachaWeight: 30, baseRate: 50 },
-  // ★ コモン（排出率: 約51.6%）
-  { id: 'pofun', name: 'ポフン', folder: 'ポフン', prefix: 'sticker_', rarity: 1, type: 'normal', gachaWeight: 55, baseRate: 20 },
-  { id: 'pori', name: 'ポリ', folder: 'ポリ', prefix: 'ポリ_', rarity: 1, type: 'normal', gachaWeight: 55, baseRate: 20 },
-]
-
-// 全165枚のシールデータを生成
-// キャラクターごとにレアリティ・タイプ・ガチャ重みが設定されている
-const demoStickers: Sticker[] = characters.flatMap((char) =>
-  Array.from({ length: 15 }, (_, i) => ({
-    id: `${char.id}-${i + 1}`,
-    name: `${char.name} ${i + 1}`,
-    imageUrl: `/stickers/${char.folder}/${char.prefix}${i + 1}.png`,
-    rarity: char.rarity,  // キャラクターのレアリティを使用
-    type: char.type,      // キャラクターのタイプを使用
-    series: char.name,
-    gachaWeight: char.gachaWeight,  // ガチャ排出重み
-    baseRate: char.baseRate,        // 交換レート基準値
-  }))
-)
-
-// デバッグ: demoStickersの最初の数件を確認
-// DemoStickers loaded
-
-// Demo placed stickers (いくつかのシールを配置済み)
-const demoPlacedStickers: PlacedSticker[] = [
-  {
-    id: 'placed-1',
-    stickerId: 'mocchimo-1',
-    sticker: demoStickers[0], // もっちも 1
-    pageId: 'page-1',
-    x: 0.3,
-    y: 0.3,
-    rotation: -5,
-    scale: 1,
-    zIndex: 1,
-    placedAt: new Date().toISOString(),
-  },
-  {
-    id: 'placed-2',
-    stickerId: 'woolun-3',
-    sticker: demoStickers[17], // ウールン 3
-    pageId: 'page-1',
-    x: 0.7,
-    y: 0.5,
-    rotation: 10,
-    scale: 1.1,
-    zIndex: 2,
-    placedAt: new Date().toISOString(),
-  },
-  {
-    id: 'placed-3',
-    stickerId: 'sanitan-5',
-    sticker: demoStickers[64], // サニたん 5
-    pageId: 'page-2',
-    x: 0.5,
-    y: 0.4,
-    rotation: 0,
-    scale: 1.2,
-    zIndex: 1,
-    placedAt: new Date().toISOString(),
-  },
-]
-
-// Demo book pages (initial value)
-const initialDemoPages: BookPage[] = [
-  { id: 'cover', type: 'cover', side: 'right' },
-  { id: 'page-1', type: 'page', side: 'left' },
-  { id: 'page-2', type: 'page', side: 'right' },
-  { id: 'page-3', type: 'page', side: 'left' },
-  { id: 'page-4', type: 'page', side: 'right' },
-  { id: 'back', type: 'back-cover', side: 'left' },
-]
-
-// Demo collection stickers (各キャラクターから数枚ずつ所持)
-const demoCollectionStickers: CollectionSticker[] = demoStickers.map((s, i) => {
-  // キャラクターごとに所持状況を変える
-  const charIndex = Math.floor(i / 15)
-  const stickerIndex = i % 15
-  // 最初の5キャラは多め、後半は少なめに所持
-  const owned = charIndex < 5 ? stickerIndex < 10 : stickerIndex < 5
-  const quantity = owned ? Math.floor(Math.random() * 5) + 1 : 0
-  // キャラクター名を取得（フィルタリング用）
-  const characterName = characters[charIndex]?.name || ''
-
-  return {
-    id: s.id,
-    name: s.name,
-    imageUrl: s.imageUrl,
-    rarity: s.rarity as 1 | 2 | 3 | 4 | 5,
-    type: s.type,
-    series: s.series || 'シールガチャ',
-    character: characterName, // キャラクター名を追加
-    owned,
-    quantity,
-    rank: quantity > 3 ? 3 : quantity > 1 ? 2 : 1,
-    totalAcquired: owned ? Math.floor(Math.random() * 10) + quantity : 0,
-  }
-})
-
-// Demo gacha banners
-const demoBanners: GachaBanner[] = [
+// ガチャバナー（固定マスター）
+const gachaBanners: GachaBanner[] = [
   {
     id: 'banner-1',
     name: 'シールガチャ',
@@ -321,8 +190,8 @@ const demoBanners: GachaBanner[] = [
     name: 'プレミアムガチャ',
     description: 'レアシールが出やすい！',
     type: 'premium',
-    costSingle: 100,
-    costMulti: 900,
+    costSingle: 1,
+    costMulti: 10,
     currency: 'gem',
     // プレミアムガチャの排出レート（高レア確率UP）
     rates: [
@@ -332,75 +201,6 @@ const demoBanners: GachaBanner[] = [
       { stars: 2, rate: '30.0%' },
       { stars: 1, rate: '20.0%' },
     ],
-  },
-]
-
-// Demo user monetization (default state)
-const demoUserMonetization: UserMonetization = DEFAULT_USER_MONETIZATION
-
-// Friends list - will be populated from Supabase
-const demoFriends: Friend[] = []
-
-// Trade history - will be populated from Supabase
-const demoTradeHistory: TradeHistory[] = []
-
-// Demo posts for timeline
-const createDemoPosts = (placedStickers: PlacedSticker[]): Post[] => [
-  {
-    id: 'post-1',
-    userId: 'user-1',
-    userName: 'ゆうき',
-    userAvatarUrl: undefined,
-    // pageImageUrl は使わず、pageData を使用
-    pageData: {
-      placedStickers: [
-        {
-          id: 'demo-placed-1',
-          stickerId: demoStickers[5].id,
-          sticker: demoStickers[5],
-          pageId: 'demo-page',
-          x: 0.3,
-          y: 0.35,
-          rotation: -8,
-          scale: 1,
-          zIndex: 1,
-          placedAt: new Date().toISOString(),
-        },
-        {
-          id: 'demo-placed-2',
-          stickerId: demoStickers[20].id,
-          sticker: demoStickers[20],
-          pageId: 'demo-page',
-          x: 0.7,
-          y: 0.5,
-          rotation: 12,
-          scale: 1.1,
-          zIndex: 2,
-          placedAt: new Date().toISOString(),
-        },
-        {
-          id: 'demo-placed-3',
-          stickerId: demoStickers[45].id,
-          sticker: demoStickers[45],
-          pageId: 'demo-page',
-          x: 0.5,
-          y: 0.7,
-          rotation: 0,
-          scale: 0.9,
-          zIndex: 3,
-          placedAt: new Date().toISOString(),
-        },
-      ],
-    },
-    caption: 'お気に入りのページができました！✨',
-    hashtags: ['かわいい', 'シール帳'],
-    reactions: [
-      { type: 'heart', count: 5, isReacted: false },
-    ],
-    commentCount: 2,
-    createdAt: new Date().toISOString(),
-    isFollowing: false,
-    visibility: 'public',
   },
 ]
 
@@ -430,41 +230,8 @@ function createUserProfile(
   }
 }
 
-// 初期プロフィール
-const demoUserProfile: UserProfile = createUserProfile(INITIAL_TOTAL_EXP)
-
-// Demo user stats
-const demoUserStats: UserStats = {
-  totalStickers: 42,
-  uniqueStickers: 35,
-  completedSeries: 2,
-  totalTrades: 12,
-  friendsCount: 8,
-  followersCount: 156,
-  followingCount: 89,
-  postsCount: 5,
-  reactionsReceived: 24,
-}
-
-// Demo achievements
-const demoAchievements: Achievement[] = [
-  // コレクション系
-  { id: 'collection-1', name: 'はじめの一歩', description: 'はじめてシールをはろう', icon: '⭐', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'collection-2', name: 'コレクター見習い', description: 'シールを10枚あつめよう', icon: '📦', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'collection-3', name: 'コレクターマスター', description: 'シールを50枚あつめよう', icon: '🎨', isUnlocked: false },
-  { id: 'collection-4', name: 'レジェンドゲット', description: '★5シールを手に入れよう', icon: '👑', isUnlocked: false },
-  // 交換系
-  { id: 'trade-1', name: 'はじめてのこうかん', description: 'シールをこうかんしよう', icon: '🤝', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'trade-2', name: 'トレーダー', description: '5回こうかんしよう', icon: '🔄', isUnlocked: false },
-  { id: 'trade-3', name: 'こうかん名人', description: '20回こうかんしよう', icon: '💫', isUnlocked: false },
-  // ソーシャル系
-  { id: 'social-1', name: 'はじめてのフレンド', description: 'フレンドを1人つくろう', icon: '👫', isUnlocked: true, unlockedAt: new Date().toISOString() },
-  { id: 'social-2', name: 'にんきもの', description: 'リアクションを10こもらおう', icon: '💖', isUnlocked: false },
-  { id: 'social-3', name: 'みんなのなかま', description: 'フレンドを10人つくろう', icon: '🌟', isUnlocked: false },
-]
-
-// Demo settings
-const demoSettings: SettingsData = {
+// 設定初期値
+const defaultSettings: SettingsData = {
   notifications: {
     tradeRequests: true,
     friendRequests: true,
@@ -483,269 +250,13 @@ const demoSettings: SettingsData = {
   },
 }
 
-// 架空のユーザーデータ
-const demoPartnerUserData: TradeUser = {
-  id: 'partner-sakura',
-  name: 'さくら',
-  avatarUrl: undefined,
-  level: 12,
-  bio: 'シール集め大好き！✨ もっちもが推しです💕',
-  totalStickers: 156,
-  totalTrades: 28,
-}
-
-// Demo book pages for trade session - 自分のシール帳（表紙・ページ・裏表紙を含む）
-const demoMyTradePages: TradeBookPageFull[] = [
-  {
-    id: 'my-trade-cover',
-    type: 'cover',
-    pageNumber: 0,
-    stickers: [],
-  },
-  {
-    id: 'my-trade-page-1',
-    type: 'page',
-    pageNumber: 1,
-    side: 'left',
-    stickers: [
-      {
-        id: 'my-placed-1',
-        stickerId: demoStickers[0].id,
-        sticker: demoStickers[0],
-        pageId: 'my-trade-page-1',
-        x: 0.25,
-        y: 0.3,
-        rotation: 5,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'my-placed-2',
-        stickerId: demoStickers[15].id,
-        sticker: demoStickers[15],
-        pageId: 'my-trade-page-1',
-        x: 0.7,
-        y: 0.6,
-        rotation: -10,
-        scale: 1,
-        zIndex: 2,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'my-trade-page-2',
-    type: 'page',
-    pageNumber: 2,
-    side: 'right',
-    stickers: [
-      {
-        id: 'my-placed-3',
-        stickerId: demoStickers[30].id,
-        sticker: demoStickers[30],
-        pageId: 'my-trade-page-2',
-        x: 0.5,
-        y: 0.4,
-        rotation: 0,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'my-placed-4',
-        stickerId: demoStickers[35].id,
-        sticker: demoStickers[35],
-        pageId: 'my-trade-page-2',
-        x: 0.3,
-        y: 0.7,
-        rotation: 8,
-        scale: 1,
-        zIndex: 2,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'my-trade-page-3',
-    type: 'page',
-    pageNumber: 3,
-    side: 'left',
-    stickers: [
-      {
-        id: 'my-placed-5',
-        stickerId: demoStickers[50].id,
-        sticker: demoStickers[50],
-        pageId: 'my-trade-page-3',
-        x: 0.4,
-        y: 0.35,
-        rotation: -5,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'my-trade-back',
-    type: 'back-cover',
-    pageNumber: 4,
-    stickers: [],
-  },
-]
-
-// 相手（さくら）のシール帳データ
-const demoPartnerTradePages: TradeBookPageFull[] = [
-  {
-    id: 'partner-trade-cover',
-    type: 'cover',
-    pageNumber: 0,
-    stickers: [],
-    // カバーデザインはTradeSessionFullのpartnerCoverDesignIdで指定
-  },
-  {
-    id: 'partner-trade-page-1',
-    type: 'page',
-    pageNumber: 1,
-    side: 'left',
-    stickers: [
-      {
-        id: 'partner-placed-1',
-        stickerId: demoStickers[45].id,
-        sticker: demoStickers[45],
-        pageId: 'partner-trade-page-1',
-        x: 0.3,
-        y: 0.3,
-        rotation: 8,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'partner-placed-2',
-        stickerId: demoStickers[60].id,
-        sticker: demoStickers[60],
-        pageId: 'partner-trade-page-1',
-        x: 0.7,
-        y: 0.5,
-        rotation: -5,
-        scale: 1,
-        zIndex: 2,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'partner-placed-3',
-        stickerId: demoStickers[10].id,
-        sticker: demoStickers[10],
-        pageId: 'partner-trade-page-1',
-        x: 0.5,
-        y: 0.75,
-        rotation: 12,
-        scale: 1,
-        zIndex: 3,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'partner-trade-page-2',
-    type: 'page',
-    pageNumber: 2,
-    side: 'right',
-    stickers: [
-      {
-        id: 'partner-placed-4',
-        stickerId: demoStickers[75].id,
-        sticker: demoStickers[75],
-        pageId: 'partner-trade-page-2',
-        x: 0.45,
-        y: 0.4,
-        rotation: 0,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'partner-placed-5',
-        stickerId: demoStickers[80].id,
-        sticker: demoStickers[80],
-        pageId: 'partner-trade-page-2',
-        x: 0.25,
-        y: 0.65,
-        rotation: -8,
-        scale: 1,
-        zIndex: 2,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'partner-trade-page-3',
-    type: 'page',
-    pageNumber: 3,
-    side: 'left',
-    stickers: [
-      {
-        id: 'partner-placed-6',
-        stickerId: demoStickers[25].id,
-        sticker: demoStickers[25],
-        pageId: 'partner-trade-page-3',
-        x: 0.5,
-        y: 0.35,
-        rotation: 5,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-      {
-        id: 'partner-placed-7',
-        stickerId: demoStickers[55].id,
-        sticker: demoStickers[55],
-        pageId: 'partner-trade-page-3',
-        x: 0.35,
-        y: 0.7,
-        rotation: -3,
-        scale: 1,
-        zIndex: 2,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'partner-trade-page-4',
-    type: 'page',
-    pageNumber: 4,
-    side: 'right',
-    stickers: [
-      {
-        id: 'partner-placed-8',
-        stickerId: demoStickers[90].id,
-        sticker: demoStickers[90],
-        pageId: 'partner-trade-page-4',
-        x: 0.6,
-        y: 0.45,
-        rotation: 10,
-        scale: 1,
-        zIndex: 1,
-        placedAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'partner-trade-back',
-    type: 'back-cover',
-    pageNumber: 5,
-    stickers: [],
-  },
-]
-
 // シール帳のサイズ定数（BookViewのデフォルトと一致させる）
 const BOOK_WIDTH = 320
 const BOOK_HEIGHT = 480
 
 export default function Home() {
   // Auth state - 実際の認証ユーザーを使用
-  const { user, userCode, isLoading: isAuthLoading, isAccountLinked, linkedProviders, linkGoogle, linkApple } = useAuth()
+  const { user, userCode, isLoading: isAuthLoading, isAccountLinked, linkedProviders, linkGoogle, linkApple, refreshUser } = useAuth()
 
   // 認証ユーザーから現在のユーザー情報を導出
   const currentUser = useMemo(() => {
@@ -759,6 +270,36 @@ export default function Home() {
       color: '#A855F7',
     }
   }, [user, userCode])
+
+  // コレクション報酬の先読み（モーダル表示を速くする）
+  useEffect(() => {
+    if (!currentUser?.supabaseId) return
+    collectionRewardService.prefetch(currentUser.supabaseId)
+      .catch(err => console.error('[CollectionReward] Prefetch error:', err))
+  }, [currentUser?.supabaseId])
+
+  // キャラクター報酬の先読み（表示を速くする）+ 解放済み表紙の取得
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const warm = () => {
+      characterRewardService.getAllCharacterRewardStatus(currentUser.id)
+        .catch(err => console.error('[CharacterReward] Prefetch error:', err))
+      characterRewardService.getUnlockedCoverCharacters(currentUser.id)
+        .then(chars => setUnlockedCoverCharacters(chars))
+        .catch(err => console.error('[CharacterReward] Cover fetch error:', err))
+    }
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      ;(window as any).requestIdleCallback(warm)
+    } else {
+      setTimeout(warm, 0)
+    }
+  }, [currentUser?.id])
+
+  // モデレーション/統計の状態（useEffectで参照するため早めに宣言）
+  const [blockedUsersCount, setBlockedUsersCount] = useState(0)
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
+  const [isStatsUnavailable, setIsStatsUnavailable] = useState(false)
+  const [isAdminUser, setIsAdminUser] = useState(false)
 
   // 通知サービス初期化（ログイン時）
   useEffect(() => {
@@ -774,6 +315,48 @@ export default function Home() {
     }
   }, [currentUser?.id])
 
+  // 通知タップ時の画面遷移
+  useEffect(() => {
+    notificationService.setOnNotificationTap((payload) => {
+      switch (payload.type) {
+        case 'trade_request':
+        case 'trade_accepted':
+        case 'trade_rejected':
+          setActiveTab('trade')
+          setTradeSubTab('trade')
+          break
+        case 'friend_request':
+          setActiveTab('profile')
+          setFollowListInitialTab('followers')
+          setIsFollowListModalOpen(true)
+          break
+        case 'new_sticker':
+          setActiveTab('collection')
+          break
+        case 'contest':
+          setActiveTab('timeline')
+          break
+        case 'level_up':
+          setActiveTab('profile')
+          setIsStatsModalOpen(true)
+          break
+        case 'achievement':
+          setActiveTab('profile')
+          setIsAchievementsModalOpen(true)
+          break
+        case 'daily_bonus':
+          setIsShopOpen(true)
+          break
+        default:
+          break
+      }
+    })
+
+    return () => {
+      notificationService.setOnNotificationTap(undefined)
+    }
+  }, [])
+
   // モデレーション情報を取得（ブロック数、管理者チェック）
   useEffect(() => {
     const fetchModerationInfo = async () => {
@@ -786,6 +369,7 @@ export default function Home() {
         // ブロック中のユーザー数を取得
         const blockedIds = await moderationService.getBlockedUserIds(currentUser.id)
         setBlockedUsersCount(blockedIds.length)
+        setBlockedUserIds(blockedIds)
         // 管理者かどうかチェック
         const isAdmin = await moderationService.isAdmin(currentUser.id)
         setIsAdminUser(isAdmin)
@@ -820,10 +404,10 @@ export default function Home() {
       }
     }
     fetchInvitationAndReviewInfo()
-  }, [currentUser?.supabaseId])
+  }, [currentUser?.supabaseId, blockedUserIds])
 
-  // マスターシールデータ（Supabaseから取得、フォールバックとしてdemoStickers）
-  const [masterStickers, setMasterStickers] = useState<Sticker[]>(demoStickers)
+  // マスターシールデータ（Supabaseから取得）
+  const [masterStickers, setMasterStickers] = useState<Sticker[]>([])
   const [isMasterStickersLoaded, setIsMasterStickersLoaded] = useState(false)
 
   // Tab state
@@ -834,12 +418,14 @@ export default function Home() {
   const bookContainerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [currentPage, setCurrentPage] = useState(0)
-  const [pages, setPages] = useState<BookPage[]>(initialDemoPages)
-  const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>(demoPlacedStickers)
+  const [pages, setPages] = useState<BookPage[]>([])
+  const [placedStickers, setPlacedStickers] = useState<PlacedSticker[]>([])
   const [selectedCharm, setSelectedCharm] = useState<CharmData>(CHARM_LIST[0])
   const [isSpreadView, setIsSpreadView] = useState(true)
   // coverDesignIdを使用（もっちもの表紙を使用）
-  const [coverDesignId, setCoverDesignId] = useState<string>('cover-mochimo')
+  const [coverDesignId, setCoverDesignId] = useState<string>('cover-default')
+  const [unlockedCoverCharacters, setUnlockedCoverCharacters] = useState<string[]>([])
+  const [themeId, setThemeId] = useState<string>(getDefaultThemeId())
 
   // Sticker editing state
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null)
@@ -886,25 +472,30 @@ export default function Home() {
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false)
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false)
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string; userId: string; name: string } | null>(null)
   const [blockTarget, setBlockTarget] = useState<{ id: string; name: string } | null>(null)
   const [isBlockedUsersModalOpen, setIsBlockedUsersModalOpen] = useState(false)
-  const [blockedUsersCount, setBlockedUsersCount] = useState(0)
-  const [isAdminUser, setIsAdminUser] = useState(false)
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
-  const [userProfile, setUserProfile] = useState<UserProfile>(demoUserProfile)
+  const [userProfile, setUserProfile] = useState<UserProfile>(createUserProfile(INITIAL_TOTAL_EXP))
   const [totalExp, setTotalExp] = useState(INITIAL_TOTAL_EXP)
+  const [expDailyCounts, setExpDailyCounts] = useState<DailyActionCounts>(createInitialDailyCounts())
   // totalExpの最新値をrefで保持（クロージャのstale値問題を回避）
   const totalExpRef = useRef(INITIAL_TOTAL_EXP)
+  // デイリーボーナス処理済みフラグ（二重処理防止）
+  const dailyBonusProcessedRef = useRef(false)
   const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState(false)
   const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; rewards: LevelUpReward[] } | null>(null)
   const [isThemeSelectOpen, setIsThemeSelectOpen] = useState(false)
   const [isTutorialOpen, setIsTutorialOpen] = useState(false)
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false)
   const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState(false)
+  const currentTheme = useMemo(() => {
+    return getThemeById(themeId) || getThemeById(getDefaultThemeId()) || defaultThemes[0]
+  }, [themeId])
   const [isDailyMissionsModalOpen, setIsDailyMissionsModalOpen] = useState(false)
   const [isCollectionRewardsModalOpen, setIsCollectionRewardsModalOpen] = useState(false)
   const [isUserSearchModalOpen, setIsUserSearchModalOpen] = useState(false)
@@ -916,7 +507,7 @@ export default function Home() {
   const [selectedUserBookPages, setSelectedUserBookPages] = useState<BookPage[]>([])
   const [selectedUserBookStickers, setSelectedUserBookStickers] = useState<PlacedSticker[]>([])
   const [selectedUserBookDecoItems, setSelectedUserBookDecoItems] = useState<PlacedDecoItem[]>([])
-  const [selectedUserCoverDesignId, setSelectedUserCoverDesignId] = useState<string>('cover-mochimo')
+  const [selectedUserCoverDesignId, setSelectedUserCoverDesignId] = useState<string>('cover-default')
 
   // フォロワー/フォロー数
   const [followCounts, setFollowCounts] = useState<{ followersCount: number; followingCount: number }>({
@@ -925,10 +516,48 @@ export default function Home() {
   })
   // SupabaseからのDB統計情報
   const [dbStats, setDbStats] = useState<UserStatsFromDB | null>(null)
+  const [achievements, setAchievements] = useState<Achievement[]>([])
+  const unlockedAchievementIds = useMemo(
+    () => achievements.filter(a => a.isUnlocked).map(a => a.id),
+    [achievements]
+  )
+  const allAchievementsUnlocked =
+    achievements.length > 0 && unlockedAchievementIds.length === achievements.length
+  const unlockedThemeIds = useMemo(() => {
+    const unlockedSet = new Set(unlockedAchievementIds)
+    const ids = new Set<string>()
+    defaultThemes.forEach(theme => {
+      if (theme.obtainMethod === 'default') {
+        ids.add(theme.id)
+        return
+      }
+      if (theme.obtainMethod === 'achievement') {
+        if (theme.unlockAllAchievements) {
+          if (allAchievementsUnlocked) ids.add(theme.id)
+          return
+        }
+        if (theme.unlockAchievementId && unlockedSet.has(theme.unlockAchievementId)) {
+          ids.add(theme.id)
+        }
+      }
+    })
+    return Array.from(ids)
+  }, [unlockedAchievementIds, allAchievementsUnlocked])
+
+  const ownedThemeIds = useMemo(() => {
+    const ids = new Set(unlockedThemeIds)
+    // いま使っているテーマは常に表示
+    ids.add(themeId)
+    return Array.from(ids)
+  }, [unlockedThemeIds, themeId])
+
   // フォロワー/フォロー一覧
   const [followersList, setFollowersList] = useState<FollowUserData[]>([])
   const [followingList, setFollowingList] = useState<FollowUserData[]>([])
   const [isLoadingFollowList, setIsLoadingFollowList] = useState(false)
+  // 交換用フレンド/履歴（Supabaseから取得）
+  const [friends, setFriends] = useState<Friend[]>([])
+  const [tradeHistory, setTradeHistory] = useState<TradeHistory[]>([])
 
   // Trade state
   const [matchingStatus, setMatchingStatus] = useState<MatchingStatus>('idle')
@@ -936,30 +565,29 @@ export default function Home() {
   const [isTradeSessionOpen, setIsTradeSessionOpen] = useState(false)
   const [tradePartner, setTradePartner] = useState<TradePartner | null>(null)
   const [isAsyncTradeSessionOpen, setIsAsyncTradeSessionOpen] = useState(false)
+  const [tradeBadgeCount, setTradeBadgeCount] = useState(0)
 
-  // ミステリーポスト state
-  const [mysteryPostState, setMysteryPostState] = useState<MysteryPostState>({
-    todayPosted: null,
-    pendingStickers: [],
-    receivedStickers: [], // Supabaseから取得
-    nextDeliveryTime: getNextDeliveryTime(),
-  })
-  const [isPostStickerModalOpen, setIsPostStickerModalOpen] = useState(false)
-  const [isReceivedStickerModalOpen, setIsReceivedStickerModalOpen] = useState(false)
-  const [selectedReceivedSticker, setSelectedReceivedSticker] = useState<ReceivedSticker | null>(null)
-  // トレード画面のサブタブ（交換/ミステリーポスト/スカウト切替）
-  const [tradeSubTab, setTradeSubTab] = useState<'trade' | 'mystery' | 'scout'>('trade')
+  // トレード画面のサブタブ（交換/掲示板切替）
+  const [tradeSubTab, setTradeSubTab] = useState<'trade' | 'board'>('trade')
+  const [isTradeBoardCreateOpen, setIsTradeBoardCreateOpen] = useState(false)
+  const [tradeBoardRefreshKey, setTradeBoardRefreshKey] = useState(0)
+  const [tradeBoardDetailPostId, setTradeBoardDetailPostId] = useState<string | null>(null)
 
-  // トレード・スカウトの状態 - Supabaseから取得
-  const [tradeScoutState, setTradeScoutState] = useState<TradeScoutState>({
-    ...initialTradeScoutState,
-    // matches will be populated from Supabase
-    matches: [],
-  })
-  const [isScoutWantListModalOpen, setIsScoutWantListModalOpen] = useState(false)
-  const [isScoutOfferListModalOpen, setIsScoutOfferListModalOpen] = useState(false)
-  const [isMatchDetailModalOpen, setIsMatchDetailModalOpen] = useState(false)
-  const [selectedScoutMatch, setSelectedScoutMatch] = useState<ScoutMatch | null>(null)
+  // 交換バッジカウントのポーリング
+  useEffect(() => {
+    if (!currentUser?.supabaseId) return
+    const fetchBadge = async () => {
+      try {
+        const count = await asyncTradeService.getTradeBadgeCount(currentUser.supabaseId)
+        setTradeBadgeCount(count)
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchBadge()
+    const interval = setInterval(fetchBadge, 30000)
+    return () => clearInterval(interval)
+  }, [currentUser?.supabaseId])
 
   // 自分のシール帳をTrade用に変換（ホームで編集したシール帳をそのまま交換画面で使用）
   // シールとデコアイテムの両方を含める
@@ -973,7 +601,7 @@ export default function Home() {
   }, [pages, placedStickers, placedDecoItems])
 
   // Monetization state (includes currency)
-  const [userMonetization, setUserMonetization] = useState<UserMonetization>(demoUserMonetization)
+  const [userMonetization, setUserMonetization] = useState<UserMonetization>(DEFAULT_USER_MONETIZATION)
 
   // Derive userCurrency from userMonetization for compatibility with GachaView
   const userCurrency: UserCurrency = useMemo(() => ({
@@ -1016,12 +644,62 @@ export default function Home() {
   const [followingPosts, setFollowingPosts] = useState<Post[]>([])
   const [activeTimelineTab, setActiveTimelineTab] = useState<FeedType>('latest')
   const [postComments, setPostComments] = useState<Comment[]>([])
+  const getLocalFollowStatus = useCallback((targetUserId: string): 'none' | 'following' | 'mutual' | null => {
+    const pickFromPosts = (list: Post[]) => list.find(post => post.userId === targetUserId)?.followStatus
+    const statusFromPosts =
+      pickFromPosts(posts) ||
+      pickFromPosts(followingPosts) ||
+      pickFromPosts(likedPosts)
+    if (statusFromPosts) return statusFromPosts
+
+    const isFollower = followersList.some(user => user.id === targetUserId)
+    const isFollowing = followingList.some(user => user.id === targetUserId)
+    if (isFollower && isFollowing) return 'mutual'
+    if (isFollowing) return 'following'
+    if (isFollower) return 'none'
+
+    if (selectedOtherUser?.id === targetUserId) {
+      const followsYou = isFollower
+      if (selectedOtherUser.isFollowing && followsYou) return 'mutual'
+      if (selectedOtherUser.isFollowing) return 'following'
+    }
+
+    return null
+  }, [posts, followingPosts, likedPosts, followersList, followingList, selectedOtherUser])
+
+  const applyFollowStatsDelta = useCallback((prevStatus: 'none' | 'following' | 'mutual', nextStatus: 'none' | 'following' | 'mutual') => {
+    if (prevStatus === nextStatus) return
+    const followingDelta =
+      prevStatus === 'none' && nextStatus !== 'none' ? 1 :
+      prevStatus !== 'none' && nextStatus === 'none' ? -1 : 0
+    const friendsDelta =
+      prevStatus !== 'mutual' && nextStatus === 'mutual' ? 1 :
+      prevStatus === 'mutual' && nextStatus !== 'mutual' ? -1 : 0
+
+    if (followingDelta !== 0) {
+      setFollowCounts(prev => ({
+        ...prev,
+        followingCount: Math.max(0, prev.followingCount + followingDelta),
+      }))
+    }
+
+    if (followingDelta !== 0 || friendsDelta !== 0) {
+      setDbStats(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          followingCount: Math.max(0, prev.followingCount + followingDelta),
+          friendsCount: Math.max(0, prev.friendsCount + friendsDelta),
+        }
+      })
+    }
+  }, [])
 
   // ガチャ回数トラッキング（実績用）
   const [gachaPulls, setGachaPulls] = useState(0)
 
   // Settings state
-  const [settings, setSettings] = useState<SettingsData>(demoSettings)
+  const [settings, setSettings] = useState<SettingsData>(defaultSettings)
 
   // Invitation system state
   const [invitationStats, setInvitationStats] = useState<InvitationStats | null>(null)
@@ -1035,10 +713,23 @@ export default function Home() {
   // 永続化システム（LocalStorage）
   // ======================
   const [isDataLoaded, setIsDataLoaded] = useState(false)
-  const [currentDataSource, setCurrentDataSource] = useState<'supabase' | 'localStorage'>('localStorage')
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null)
+  const [currentDataSource, setCurrentDataSource] = useState<'supabase' | 'localStorage'>('supabase')
   const [adminMode, setAdminMode] = useState<AdminMode>('production')
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false)
   const [collection, setCollection] = useState<SavedCollectionItem[]>([])
+
+  useEffect(() => {
+    if (!isDataLoaded) return
+    const defaultThemeId = getDefaultThemeId()
+    if (!themeId || themeId === defaultThemeId) return
+    if (!unlockedThemeIds.includes(themeId)) {
+      setThemeId(defaultThemeId)
+      if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+        stickerBookService.updateBookTheme(currentUser.supabaseId, defaultThemeId)
+      }
+    }
+  }, [isDataLoaded, themeId, unlockedThemeIds, currentDataSource, currentUser?.supabaseId])
   // 注: currentTestUser は currentUser (認証ユーザー) に置き換えられました
 
   // Supabase交換システム（Supabase接続時のみ有効）
@@ -1222,12 +913,31 @@ export default function Home() {
       }
     }
 
-    // 3. ソート：シリーズ → キャラクター名 → ランク降順
+    const parseStickerName = (name: string) => {
+      const match = name.match(/^(.*?)(?:\s*#\s*(\d+))?\s*$/)
+      const baseName = match?.[1]?.trim() || name
+      const index = match?.[2] ? parseInt(match[2], 10) : null
+      return { baseName, index }
+    }
+
+    // 3. ソート：シリーズ → キャラクター名 → シール番号 → ランク降順
     results.sort((a, b) => {
       // まずシリーズ名でソート
       const seriesCompare = (a.series || '').localeCompare(b.series || '', 'ja')
       if (seriesCompare !== 0) return seriesCompare
       // 次に名前でソート
+      const characterCompare = (a.character || '').localeCompare(b.character || '', 'ja')
+      if (characterCompare !== 0) return characterCompare
+
+      const aParsed = parseStickerName(a.name)
+      const bParsed = parseStickerName(b.name)
+      const baseCompare = aParsed.baseName.localeCompare(bParsed.baseName, 'ja')
+      if (baseCompare !== 0) return baseCompare
+
+      if (aParsed.index !== null && bParsed.index !== null && aParsed.index !== bParsed.index) {
+        return aParsed.index - bParsed.index
+      }
+
       const nameCompare = a.name.localeCompare(b.name, 'ja')
       if (nameCompare !== 0) return nameCompare
       // 同じシールならランク降順（高ランクが先）
@@ -1317,6 +1027,7 @@ export default function Home() {
     // コレクションからシール数を計算
     const totalStickers = collection.reduce((sum, item) => sum + item.quantity, 0)
     const uniqueStickers = collection.filter(item => item.quantity > 0).length
+    const totalAvailableStickers = masterStickers.length
 
     // コンプリート数はdbStatsから取得（Supabaseで計算済み）
     const completedSeries = dbStats?.completedSeries ?? 0
@@ -1324,18 +1035,20 @@ export default function Home() {
     return {
       totalStickers,
       uniqueStickers,
+      totalAvailableStickers,
       completedSeries,
-      totalTrades: dbStats?.totalTrades ?? 0,
+      totalTrades: dbStats?.successfulTrades ?? dbStats?.totalTrades ?? 0,
       friendsCount: dbStats?.friendsCount ?? 0,
       followersCount: dbStats?.followersCount ?? followCounts.followersCount,
       followingCount: dbStats?.followingCount ?? followCounts.followingCount,
       postsCount: dbStats?.postsCount ?? posts.length,
       reactionsReceived: dbStats?.reactionsReceived ?? 0,
+      statsUnavailable: isStatsUnavailable,
     }
-  }, [collection, posts, followCounts, dbStats])
+  }, [collection, masterStickers, posts, followCounts, dbStats, isStatsUnavailable])
 
-  // 実績を動的に計算
-  const achievements = useMemo(() => {
+  // 実績計算用の統計を用意
+  const achievementStats = useMemo(() => {
     // コレクションから最高レアリティを取得
     const highestRarity = collection.reduce((max, item) => {
       if (item.quantity > 0) {
@@ -1359,9 +1072,33 @@ export default function Home() {
       friendsCount: userStats.friendsCount,
       loginDays: dbStats?.loginDays ?? 1,
     }
-
-    return calculateAchievements(achievementStats)
+    return achievementStats
   }, [collection, placedStickers, gachaPulls, posts, userStats, dbStats])
+
+  // 実績を同期（Supabase優先、ローカルは計算のみ）
+  useEffect(() => {
+    let active = true
+    const run = async () => {
+      if (active) {
+        setAchievements(calculateAchievements(achievementStats))
+      }
+      if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+        const result = await syncUserAchievements(currentUser.supabaseId, achievementStats)
+        if (active) {
+          setAchievements(result)
+        }
+        return
+      }
+      if (active) {
+        setAchievements(calculateAchievements(achievementStats))
+      }
+    }
+
+    run()
+    return () => {
+      active = false
+    }
+  }, [achievementStats, currentDataSource, currentUser?.supabaseId])
 
   // SavedUserData.settingsをSettingsDataに変換
   const convertToSettingsData = useCallback((savedSettings: SavedUserData['settings']): SettingsData => ({
@@ -1385,17 +1122,19 @@ export default function Home() {
 
   // SavedUserDataを構築
   const buildSavedUserData = useCallback((): SavedUserData => ({
-    version: 1,
+    version: 2,
     collection,
     monetization: userMonetization,
     placedStickers,
     placedDecoItems,
     pages,
     coverDesignId,
+    themeId,
     profile: {
       name: userProfile.name,
       bio: userProfile.bio || '',
       totalExp,
+      expDailyCounts,
     },
     settings: {
       soundEnabled: true, // SettingsDataにはsoundEnabledがないためデフォルト値
@@ -1408,15 +1147,16 @@ export default function Home() {
       postsCount: posts.length,
     },
     lastSavedAt: new Date().toISOString(),
-  }), [collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, userProfile, totalExp, settings, posts])
+  }), [collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, themeId, userProfile, totalExp, expDailyCounts, settings, posts])
 
   // データを保存（自動保存）- 認証ユーザーに保存
   const saveData = useCallback(() => {
     if (!isDataLoaded || !currentUser) return // 初期化前または未認証は保存しない
+    if (currentDataSource === 'supabase') return
     const data = buildSavedUserData()
     saveCurrentUserData(data)
     // Data saved
-  }, [isDataLoaded, buildSavedUserData, currentUser])
+  }, [isDataLoaded, buildSavedUserData, currentUser, currentDataSource])
 
   // 初回読み込み（認証完了を待ってからSupabase対応）
   useEffect(() => {
@@ -1426,44 +1166,14 @@ export default function Home() {
       return
     }
 
-    // 認証失敗時はローカルモードで動作
+    // 認証失敗時はローカルへフォールバックせず、再試行を促す
     if (!currentUser) {
-      // Auth failed, using local data
-      const loadData = async () => {
-        const mode = loadAdminMode()
-        setAdminMode(mode)
-
-        let userData = loadCurrentUserData()
-        if (!userData) {
-          // No saved data, creating initial
-          userData = createInitialUserData()
-        }
-
-        // ローカルデータを読み込み
-        setCollection(userData.collection.map(item => ({
-          stickerId: item.stickerId,
-          quantity: item.quantity,
-          totalAcquired: item.totalAcquired,
-          firstAcquiredAt: item.firstAcquiredAt || new Date().toISOString(),
-          upgradeRank: item.upgradeRank ?? 0,  // アップグレードランクを含める
-        })))
-        setPlacedStickers(userData.placedStickers)
-        setPlacedDecoItems(userData.placedDecoItems)
-        setPages(userData.pages)
-        setCoverDesignId(userData.coverDesignId)
-        setUserMonetization(userData.monetization)
-        setTotalExp(userData.profile.totalExp)
-        totalExpRef.current = userData.profile.totalExp // refも更新
-        setSettings(convertToSettingsData(userData.settings))
-
-        // Local data loaded (offline mode)
-        setIsDataLoaded(true)
-      }
-      loadData()
+      setDataLoadError('ネットワークに接続できませんでした。通信状態を確認して再試行してください。')
       return
     }
 
     const loadData = async () => {
+      setDataLoadError(null)
       const mode = loadAdminMode()
       setAdminMode(mode)
 
@@ -1473,15 +1183,20 @@ export default function Home() {
       const dataSource = getDataSource()
       setCurrentDataSource(dataSource)
 
-      let userData = loadCurrentUserData()
+      let userData: SavedUserData | null = null
       let supabaseAvatarUrl: string | null = null // Supabaseから読み込んだアバターURL
-      let loadedMasterStickers: Sticker[] = [] // ロードしたマスターシール（後でスカウト設定の補完に使用）
+      let supabaseFrameId: string | null = null // Supabaseから読み込んだフレームID
+      // loadedMasterStickers removed (scout feature deleted)
 
       // マスターシールデータは常にSupabaseから読み込む（テストモードでも全シールを使えるようにする）
       // 注意: React Strict Modeで2回実行される場合に備え、毎回ロードしてローカル変数に保持する
       if (dataSource === 'supabase') {
         try {
           const supabaseStickers = await loadAllStickersFromSupabase()
+          if (supabaseStickers.length === 0) {
+            setDataLoadError('シールのマスターデータが見つかりません。Supabaseのstickersテーブルを確認してください。')
+            return
+          }
           if (supabaseStickers.length > 0) {
             // Supabaseの型をローカルのSticker型に変換
             const convertedStickers: Sticker[] = supabaseStickers.map(s => ({
@@ -1524,12 +1239,12 @@ export default function Home() {
               setMasterStickers(sortedStickers)
               setIsMasterStickersLoaded(true)
             }
-            loadedMasterStickers = sortedStickers // スカウト設定の補完用に保持（毎回確実に設定）
+            // loadedMasterStickers removed (scout feature deleted)
           }
         } catch (error) {
           console.error('[Supabase] Failed to load master stickers:', error)
           // エラー時はstate変数にフォールバック
-          loadedMasterStickers = masterStickers
+          // loadedMasterStickers removed
         }
       } else {
         // 非Supabaseモードではstate変数を使用
@@ -1549,7 +1264,7 @@ export default function Home() {
           }
 
           // シール帳データ（シール配置 + デコ配置）もSupabaseから読み込み
-          const stickerBook = await stickerBookService.getUserStickerBook(currentUser.supabaseId)
+          const stickerBook = await stickerBookService.createStickerBook(currentUser.supabaseId)
           if (stickerBook && stickerBook.pages.length > 0) {
 
             // Supabaseのページデータをローカル形式に変換
@@ -1557,6 +1272,7 @@ export default function Home() {
               id: page.id,
               type: page.pageType as 'cover' | 'page' | 'back-cover' | 'inner-cover',
               side: page.side as 'left' | 'right' | undefined,
+              theme: page.themeConfig as BookPage['theme'] ?? undefined,
             }))
 
             // Supabaseのシール配置データを収集
@@ -1572,6 +1288,8 @@ export default function Home() {
             userData.pages = supabasePages
             userData.placedStickers = supabasePlacedStickers
             userData.placedDecoItems = supabasePlacedDecoItems
+            userData.coverDesignId = stickerBook.coverDesignId || userData.coverDesignId
+            userData.themeId = stickerBook.themeId || userData.themeId
           }
 
           // プロフィールもSupabaseから読み込み
@@ -1585,9 +1303,11 @@ export default function Home() {
               name: supabaseProfile.displayName || userData.profile.name,
               bio: supabaseProfile.bio || userData.profile.bio,
               totalExp: supabaseProfile.totalExp || userData.profile.totalExp,
+              expDailyCounts: supabaseProfile.expDailyCounts || userData.profile.expDailyCounts || createInitialDailyCounts(),
             }
-            // アバターURLも保持
+            // アバターURLとフレームIDも保持
             supabaseAvatarUrl = supabaseProfile.avatarUrl
+            supabaseFrameId = supabaseProfile.selectedFrameId || null
           }
 
           // フォロワー/フォロー数を取得
@@ -1599,9 +1319,13 @@ export default function Home() {
             const userStatsData = await statsService.getUserStats(currentUser.supabaseId)
             if (userStatsData) {
               setDbStats(userStatsData)
+              setIsStatsUnavailable(false)
+            } else {
+              setIsStatsUnavailable(true)
             }
           } catch (statsError) {
             console.error('[Supabase] Failed to load user stats:', statsError)
+            setIsStatsUnavailable(true)
           }
 
           // 通貨データをSupabaseから読み込み
@@ -1619,131 +1343,11 @@ export default function Home() {
             console.error('[Supabase] Failed to load currency:', currencyError)
           }
 
-          // ミステリーポストデータをSupabaseから読み込み
-          try {
-            const [userPosts, receivedStickers, canPost] = await Promise.all([
-              mysteryPostService.getUserPosts(currentUser.supabaseId),
-              mysteryPostService.getReceivedStickers(currentUser.supabaseId),
-              mysteryPostService.canPostToday(currentUser.supabaseId),
-            ])
-
-            if (userPosts.length > 0 || receivedStickers.length > 0) {
-
-              // 今日投函したシールを取得
-              const today = new Date()
-              today.setHours(0, 0, 0, 0)
-              const todayPost = userPosts.find(p => new Date(p.postedAt) >= today)
-
-              // pending状態のシールを取得
-              const pendingPosts = userPosts.filter(p => p.status === 'pending')
-
-              // 受け取ったシールをドメイン形式に変換
-              const receivedStickersForState: ReceivedSticker[] = receivedStickers.map(r => ({
-                id: r.postId,
-                stickerId: r.stickerId,
-                stickerName: r.stickerName,
-                stickerImageUrl: r.stickerImageUrl,
-                rarity: r.stickerRarity,
-                message: (r.message as PresetMessage) || '大切にしてね！',
-                fromUserName: r.senderName,
-                receivedAt: r.deliveredAt,
-                isOpened: true, // 配達済みなので開封済みとして表示
-              }))
-
-              // 状態を更新するデータを準備
-              setMysteryPostState({
-                todayPosted: todayPost ? {
-                  id: todayPost.id,
-                  stickerId: todayPost.userStickerId,
-                  stickerName: todayPost.stickerName || '',
-                  stickerImageUrl: todayPost.stickerImageUrl || '',
-                  rarity: todayPost.stickerRarity || 1,
-                  message: (todayPost.message as PresetMessage) || '大切にしてね！',
-                  postedAt: todayPost.postedAt,
-                  status: todayPost.status as 'pending' | 'matched' | 'delivered' | 'expired',
-                } : null,
-                pendingStickers: pendingPosts.map(p => ({
-                  id: p.id,
-                  stickerId: p.userStickerId,
-                  stickerName: p.stickerName || '',
-                  stickerImageUrl: p.stickerImageUrl || '',
-                  rarity: p.stickerRarity || 1,
-                  message: (p.message as PresetMessage) || '大切にしてね！',
-                  postedAt: p.postedAt,
-                  status: p.status as 'pending' | 'matched' | 'delivered' | 'expired',
-                })),
-                receivedStickers: receivedStickersForState,
-                nextDeliveryTime: getNextDeliveryTime(),
-              })
-            }
-          } catch (mysteryPostError) {
-            console.error('[Supabase] Failed to load mystery post data:', mysteryPostError)
-          }
-
-          // スカウト設定をSupabaseから読み込み
-          console.log('[Supabase] Loading scout settings for user:', currentUser.supabaseId)
-          try {
-            const [scoutSettings, scoutMatches] = await Promise.all([
-              tradeScoutService.getSettings(currentUser.supabaseId),
-              tradeScoutService.getMatches(currentUser.supabaseId),
-            ])
-
-            if (scoutSettings || scoutMatches.length > 0) {
-              console.log('[Supabase] Loaded scout data:', scoutSettings ? 'settings found' : 'no settings', scoutMatches.length, 'matches')
-
-              // スカウト設定をドメイン形式に変換（loadedMasterStickersから詳細を補完）
-              const wantListForState: ScoutSticker[] = (scoutSettings?.wantList || []).map(w => {
-                const master = loadedMasterStickers.find(s => s.id === w.stickerId)
-                return {
-                  stickerId: w.stickerId,
-                  stickerName: master?.name || '',
-                  stickerImageUrl: master?.imageUrl || '',
-                  rarity: master?.rarity || 1,
-                }
-              })
-
-              const offerListForState: ScoutSticker[] = (scoutSettings?.offerList || []).map(o => {
-                const master = loadedMasterStickers.find(s => s.id === o.stickerId)
-                return {
-                  stickerId: o.stickerId,
-                  stickerName: master?.name || '',
-                  stickerImageUrl: master?.imageUrl || '',
-                  rarity: master?.rarity || 1,
-                }
-              })
-
-              // マッチをドメイン形式に変換
-              const matchesForState: ScoutMatch[] = scoutMatches.map(m => ({
-                id: m.id,
-                user: {
-                  id: m.matchedUserId,
-                  name: m.matchedUserName,
-                  avatarUrl: '',
-                  level: 1, // 後で補完が必要
-                },
-                myOffersTheyWant: [], // 詳細は後で取得
-                theirOffersIWant: [],
-                matchScore: m.matchScore,
-                matchedAt: m.matchedAt,
-                isRead: m.status !== 'found',
-              }))
-
-              setTradeScoutState({
-                settings: {
-                  wantList: wantListForState,
-                  offerList: offerListForState,
-                  isActive: scoutSettings?.isActive || false,
-                  updatedAt: scoutSettings?.updatedAt || new Date().toISOString(),
-                },
-                matches: matchesForState,
-                lastScoutedAt: null,
-              })
-            }
-          } catch (scoutError) {
-            console.error('[Supabase] Failed to load scout data:', scoutError)
-          }
+          // ミステリーポスト・スカウトは削除済み（掲示板に置き換え）
         } catch (error) {
-          console.error('[Supabase] Failed to load from Supabase, falling back to localStorage:', error)
+          console.error('[Supabase] Failed to load from Supabase:', error)
+          setDataLoadError('データの読み込みに失敗しました。再試行してください。')
+          return
         }
       }
 
@@ -1751,7 +1355,6 @@ export default function Home() {
       if (!userData) {
         console.log('[Persistence] No saved data for user:', currentUser.id, ', creating initial data')
         userData = createInitialUserDataForTestUser(currentUser.id)
-        saveCurrentUserData(userData)
       }
 
       // テストモードの場合は全シール所持状態にする
@@ -1767,17 +1370,31 @@ export default function Home() {
       setPlacedDecoItems(userData.placedDecoItems)
       setPages(userData.pages)
       setCoverDesignId(userData.coverDesignId)
-      setTotalExp(userData.profile.totalExp)
-      totalExpRef.current = userData.profile.totalExp // refも更新
+      const defaultThemeId = getDefaultThemeId()
+      const normalizedThemeId = userData.themeId === 'theme-basic-pink'
+        ? defaultThemeId
+        : (userData.themeId || defaultThemeId)
+      if (normalizedThemeId !== userData.themeId) {
+        userData.themeId = normalizedThemeId
+        if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+          await stickerBookService.updateBookTheme(currentUser.supabaseId, normalizedThemeId)
+        }
+      }
+      setThemeId(normalizedThemeId)
+      const profile = userData.profile
+      setTotalExp(profile.totalExp)
+      totalExpRef.current = profile.totalExp // refも更新
+      setExpDailyCounts(profile.expDailyCounts ?? createInitialDailyCounts())
       setUserProfile(prev => ({
         ...prev,
-        name: userData!.profile.name,
-        bio: userData!.profile.bio,
+        name: profile.name,
+        bio: profile.bio,
         avatarUrl: supabaseAvatarUrl || prev.avatarUrl, // Supabaseからのアバター優先
-        level: calculateLevel(userData!.profile.totalExp),
-        exp: getCurrentLevelExp(userData!.profile.totalExp),
-        expToNextLevel: getExpToNextLevel(userData!.profile.totalExp),
-        title: getLevelTitle(calculateLevel(userData!.profile.totalExp)),
+        frameId: supabaseFrameId, // Supabaseから読み込んだフレームID
+        level: calculateLevel(profile.totalExp),
+        exp: getCurrentLevelExp(profile.totalExp),
+        expToNextLevel: getExpToNextLevel(profile.totalExp),
+        title: getLevelTitle(calculateLevel(profile.totalExp)),
       }))
 
       setIsDataLoaded(true)
@@ -1786,6 +1403,20 @@ export default function Home() {
 
     loadData()
   }, [currentUser, isAuthLoading, allStickerIds])
+
+  const handleRetryAuth = useCallback(async () => {
+    setDataLoadError(null)
+    try {
+      const result = await authService.ensureAuthenticated()
+      if (result) {
+        await refreshUser()
+        return
+      }
+    } catch (error) {
+      console.error('[Auth] Retry failed:', error)
+    }
+    setDataLoadError('認証に失敗しました。通信状態を確認して再試行してください。')
+  }, [refreshUser])
 
   // タイムライン投稿をSupabaseから読み込む
   useEffect(() => {
@@ -1814,11 +1445,67 @@ export default function Home() {
             : {}
           console.log('[Timeline] Loaded follow statuses for', Object.keys(followStatuses).length, 'users')
 
-          // 各投稿のpage_idからシール帳ページデータを取得
+          // 各投稿のページデータを取得
+          // page_snapshotがある場合はそれを優先使用（投稿時点の状態を表示）
+          // ない場合は従来通りpage_idからリアルタイム取得（後方互換性）
           const convertedPosts: Post[] = await Promise.all(supabasePosts.map(async (sp) => {
-            // page_idがある場合はシール帳ページデータを取得
             let pageData: Post['pageData'] = undefined
-            if (sp.page_id) {
+
+            // page_snapshotがある場合は投稿時点のスナップショットを使用
+            // 注意: スナップショットはsnake_case (image_url) で保存、フロントはcamelCase (imageUrl) なので変換が必要
+            const snapshot = (sp as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+            if (snapshot) {
+              // スナップショットからpageDataを構築（snake_case → camelCase変換）
+              pageData = {
+                placedStickers: snapshot.placedStickers?.map(s => ({
+                  id: s.id,
+                  stickerId: s.stickerId,
+                  sticker: {
+                    id: s.sticker.id,
+                    name: s.sticker.name,
+                    imageUrl: s.sticker.image_url,  // snake_case → camelCase
+                    rarity: s.sticker.rarity || 1,
+                    type: 'normal' as const,
+                  },
+                  pageId: sp.page_id || '',
+                  x: s.x,
+                  y: s.y,
+                  rotation: s.rotation,
+                  scale: s.scale,
+                  zIndex: s.zIndex,
+                  placedAt: new Date().toISOString(),
+                  upgradeRank: s.upgradeRank,
+                })) || [],
+                placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                  id: d.id,
+                  decoItemId: d.decoItemId,
+                  decoItem: {
+                    id: d.decoItem.id,
+                    name: d.decoItem.name,
+                    imageUrl: d.decoItem.image_url,  // snake_case → camelCase
+                    type: 'stamp' as const,  // default
+                    baseWidth: d.width || 60,
+                    baseHeight: d.height || 60,
+                    rotatable: true,
+                    rarity: 1 as const,
+                    obtainMethod: 'default' as const,
+                  },
+                  pageId: sp.page_id || '',
+                  x: d.x,
+                  y: d.y,
+                  rotation: d.rotation,
+                  scale: d.scale,
+                  width: d.width,
+                  height: d.height,
+                  zIndex: d.zIndex,
+                  placedAt: new Date().toISOString(),
+                })),
+                backgroundColor: snapshot.backgroundColor,
+                themeConfig: snapshot.themeConfig,
+              }
+              console.log('[Timeline] Using snapshot for post:', sp.id, 'stickers:', pageData.placedStickers.length)
+            } else if (sp.page_id) {
+              // スナップショットがない場合は従来通りリアルタイム取得（後方互換性）
               const pageResult = await stickerBookService.getPageById(sp.page_id)
               if (pageResult) {
                 // SupabaseStickerBookPage型からPostPageData型に変換
@@ -1850,8 +1537,9 @@ export default function Home() {
                     zIndex: d.zIndex,
                     placedAt: d.placedAt || new Date().toISOString(),
                   })),
+                  themeConfig: pageResult.themeConfig,
                 }
-                console.log('[Timeline] Page data loaded for post:', sp.id, 'stickers:', pageData.placedStickers.length, 'decos:', pageData.placedDecoItems?.length || 0)
+                console.log('[Timeline] Page data loaded from DB for post:', sp.id, 'stickers:', pageData.placedStickers.length, 'decos:', pageData.placedDecoItems?.length || 0)
               }
             }
 
@@ -1869,6 +1557,8 @@ export default function Home() {
               // profilesテーブルのカラム名は display_name
               userName: sp.author?.display_name || sp.author?.username || 'Unknown',
               userAvatarUrl: sp.author?.avatar_url,
+              userFrameId: (sp.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+              userLevel: calculateLevel(((sp.author as unknown as { total_exp?: number })?.total_exp) || 0),
               pageData,
               caption: sp.caption || '',
               hashtags: sp.hashtags,
@@ -1881,12 +1571,7 @@ export default function Home() {
             }
           })) as unknown as Post[]
 
-          // デモ投稿とマージ（Supabase投稿を先頭に）
-          setPosts(prev => {
-            const demoIds = prev.map(p => p.id)
-            const newPosts = convertedPosts.filter(p => !demoIds.includes(p.id))
-            return [...newPosts, ...prev]
-          })
+          setPosts(convertedPosts)
         }
       } catch (error) {
         console.error('[Timeline] Failed to load posts:', error)
@@ -1896,6 +1581,124 @@ export default function Home() {
     loadTimeline()
   }, [isDataLoaded, currentDataSource, currentUser?.supabaseId])
 
+  // フレンド一覧と交換履歴をSupabaseから読み込む
+  useEffect(() => {
+    if (!currentUser?.supabaseId || currentDataSource !== 'supabase') {
+      setFriends([])
+      setTradeHistory([])
+      return
+    }
+
+    const loadFriendsAndHistory = async () => {
+      try {
+        const [followers, following] = await Promise.all([
+          profileService.getFollowers(currentUser.supabaseId, currentUser.supabaseId),
+          profileService.getFollowing(currentUser.supabaseId, currentUser.supabaseId),
+        ])
+
+        const followingIds = new Set(following.map(f => f.id))
+        const mutuals = followers.filter(f => followingIds.has(f.id))
+
+        setFriends(mutuals.map(f => ({
+          id: f.id,
+          name: f.name,
+          avatarUrl: f.avatarUrl || undefined,
+          frameId: f.frameId || null,
+          isOnline: false,
+        })))
+      } catch (error) {
+        console.error('[Trade] Failed to load friends:', error)
+        setFriends([])
+      }
+
+      try {
+        const supabase = getSupabase()
+        const { data: trades, error } = await supabase
+          .from('trades')
+          .select('id,user1_id,user2_id,completed_at,created_at,status')
+          .or(`user1_id.eq.${currentUser.supabaseId},user2_id.eq.${currentUser.supabaseId}`)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(20)
+
+        if (error || !trades || trades.length === 0) {
+          if (error) {
+            console.error('[Trade] Failed to load trade history:', error)
+          }
+          setTradeHistory([])
+          return
+        }
+
+        const tradeIds = trades.map(t => t.id)
+        const partnerIds = trades
+          .map(t => (t.user1_id === currentUser.supabaseId ? t.user2_id : t.user1_id))
+          .filter(Boolean) as string[]
+
+        const [partnersResult, itemsResult] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, display_name, avatar_url')
+            .in('id', partnerIds),
+          supabase
+            .from('trade_items')
+            .select(`
+              trade_id,
+              user_id,
+              quantity,
+              user_sticker:user_stickers(
+                sticker:stickers(name, rarity)
+              )
+            `)
+            .in('trade_id', tradeIds),
+        ])
+
+        const partners = new Map(
+          (partnersResult.data || []).map(p => [p.id, p])
+        )
+
+        const itemsByTrade = new Map<string, { given: { name: string; rarity: number }[]; received: { name: string; rarity: number }[] }>()
+
+        for (const item of itemsResult.data || []) {
+          const tradeId = item.trade_id as string
+          const quantity = (item as { quantity?: number }).quantity ?? 1
+          const sticker = (item as { user_sticker?: { sticker?: { name?: string; rarity?: number } } }).user_sticker?.sticker
+          if (!sticker?.name) continue
+
+          const bucket = itemsByTrade.get(tradeId) || { given: [], received: [] }
+          const target = item.user_id === currentUser.supabaseId ? bucket.given : bucket.received
+          for (let i = 0; i < quantity; i++) {
+            target.push({
+              name: sticker.name,
+              rarity: sticker.rarity ?? 1,
+            })
+          }
+          itemsByTrade.set(tradeId, bucket)
+        }
+
+        const history = trades.map(t => {
+          const partnerId = t.user1_id === currentUser.supabaseId ? t.user2_id : t.user1_id
+          const partner = partnerId ? partners.get(partnerId) : null
+          const items = itemsByTrade.get(t.id) || { given: [], received: [] }
+          return {
+            id: t.id,
+            partnerName: partner?.display_name || '交換相手',
+            partnerAvatarUrl: partner?.avatar_url || undefined,
+            givenStickers: items.given,
+            receivedStickers: items.received,
+            tradedAt: t.completed_at || t.created_at,
+          }
+        })
+
+        setTradeHistory(history)
+      } catch (error) {
+        console.error('[Trade] Failed to build trade history:', error)
+        setTradeHistory([])
+      }
+    }
+
+    loadFriendsAndHistory()
+  }, [currentUser?.supabaseId, currentDataSource])
+
   // データ変更時に自動保存（デバウンス）
   useEffect(() => {
     if (!isDataLoaded) return
@@ -1903,7 +1706,7 @@ export default function Home() {
       saveData()
     }, 1000) // 1秒後に保存
     return () => clearTimeout(timer)
-  }, [isDataLoaded, collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, totalExp, saveData])
+  }, [isDataLoaded, collection, userMonetization, placedStickers, placedDecoItems, pages, coverDesignId, themeId, totalExp, saveData])
 
   // 管理者モード切替
   const handleChangeAdminMode = useCallback((mode: AdminMode) => {
@@ -2003,21 +1806,80 @@ export default function Home() {
   }, [])
 
   // Handle page turn
-  // 経験値獲得ハンドラー
+  // 経験値獲得ハンドラー（デイリー上限対応）
   // 注: totalExpRefを使用してクロージャのstale値問題を回避
-  const gainExp = useCallback((action: ExpAction) => {
-    // refから最新の経験値を取得（クロージャの古い値を回避）
+  const gainExp = useCallback(async (action: ExpAction, options?: { suppressLevelUpModal?: boolean }) => {
     const currentTotalExp = totalExpRef.current
+    const oldLevel = calculateLevel(currentTotalExp)
     console.log('[Exp] gainExp called:', action, 'current totalExp:', currentTotalExp)
 
-    const result = addExp(currentTotalExp, action)
-    console.log('[Exp] addExp result:', result)
+    if (oldLevel >= MAX_LEVEL) {
+      return {
+        newTotalExp: currentTotalExp,
+        newLevel: oldLevel,
+        oldLevel,
+        leveledUp: false,
+        levelsGained: 0,
+        newTitle: getLevelTitle(oldLevel),
+        expGained: 0,
+        dailyLimitReached: false,
+        remainingToday: null,
+      } as ExpGainResult
+    }
 
-    // 状態とrefの両方を更新
+    // Supabaseモードはサーバー側で日次上限も含めて更新
+    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+      const serverResult = await profileService.applyExpAction(currentUser.supabaseId, action)
+      if (!serverResult || !serverResult.success) {
+        console.error('[Exp] applyExpAction failed')
+        return null
+      }
+
+      const newTotalExp = serverResult.totalExp ?? currentTotalExp
+      const newLevel = calculateLevel(newTotalExp)
+
+      setTotalExp(newTotalExp)
+      totalExpRef.current = newTotalExp
+      setExpDailyCounts(serverResult.dailyCounts || createInitialDailyCounts())
+
+      setUserProfile(prev => ({
+        ...prev,
+        level: newLevel,
+        exp: getCurrentLevelExp(newTotalExp),
+        expToNextLevel: getExpToNextLevel(newTotalExp),
+        title: getLevelTitle(newLevel),
+      }))
+
+      if (newLevel > oldLevel) {
+        const rewards = getLevelUpRewards(newLevel)
+        setLevelUpInfo({ level: newLevel, rewards })
+        // suppressLevelUpModalがtrueの場合はモーダルを開かない（デイリーボーナス等から呼ばれた場合）
+        if (!options?.suppressLevelUpModal) {
+          setIsLevelUpModalOpen(true)
+        }
+      }
+
+      return {
+        newTotalExp,
+        newLevel,
+        oldLevel,
+        leveledUp: newLevel > oldLevel,
+        levelsGained: newLevel - oldLevel,
+        newTitle: getLevelTitle(newLevel),
+        expGained: serverResult.expGained,
+        dailyLimitReached: serverResult.dailyLimitReached,
+        remainingToday: null,
+      } as ExpGainResult
+    }
+
+    // ローカルモードはクライアントで日次上限を処理
+    const result = addExpWithDailyLimit(currentTotalExp, action, expDailyCounts)
+    console.log('[Exp] addExpWithDailyLimit result:', result)
+
     setTotalExp(result.newTotalExp)
     totalExpRef.current = result.newTotalExp
+    setExpDailyCounts(result.newDailyCounts)
 
-    // プロフィールを更新
     setUserProfile(prev => ({
       ...prev,
       level: result.newLevel,
@@ -2026,28 +1888,17 @@ export default function Home() {
       title: result.newTitle,
     }))
 
-    // レベルアップした場合はモーダル表示
     if (result.leveledUp) {
       const rewards = getLevelUpRewards(result.newLevel)
       setLevelUpInfo({ level: result.newLevel, rewards })
-      setIsLevelUpModalOpen(true)
-    }
-
-    // Supabaseモード時は経験値をSupabaseにも保存
-    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
-      profileService.setExp(currentUser.supabaseId, result.newTotalExp)
-        .then(success => {
-          if (success) {
-            console.log('[Exp] Saved to Supabase:', result.newTotalExp)
-          } else {
-            console.error('[Exp] Failed to save to Supabase (returned false)')
-          }
-        })
-        .catch(err => console.error('[Exp] Failed to save to Supabase:', err))
+      // suppressLevelUpModalがtrueの場合はモーダルを開かない（デイリーボーナス等から呼ばれた場合）
+      if (!options?.suppressLevelUpModal) {
+        setIsLevelUpModalOpen(true)
+      }
     }
 
     return result
-  }, [currentDataSource, currentUser?.supabaseId])
+  }, [currentDataSource, currentUser?.supabaseId, expDailyCounts])
 
   const handlePageTurn = useCallback((pageIndex: number) => {
     setCurrentPage(pageIndex)
@@ -2101,7 +1952,7 @@ export default function Home() {
       } else {
         stickerScreenX = containerRect.left + horizontalOffset + (x * BOOK_WIDTH)
       }
-      const stickerScreenY = containerRect.top + 8 + (y * BOOK_HEIGHT)
+      const stickerScreenY = containerRect.top + 16 + (y * BOOK_HEIGHT)
 
       setPlaceEffectPosition({ x: stickerScreenX, y: stickerScreenY })
       setShowPlaceEffect(true)
@@ -2112,14 +1963,15 @@ export default function Home() {
     setIsDragging(false)
 
     // シールを貼ったら経験値獲得 (+5 EXP)
-    gainExp('place_sticker')
+    void gainExp('place_sticker')
 
     // Supabaseモードかつテストモードでない場合、配置をSupabaseに同期
     // テストモードではユーザーが実際にシールを所持していないため、同期をスキップ
     if (currentDataSource === 'supabase' && adminMode !== 'test') {
       (async () => {
         try {
-          // pageIdがUUID形式でない場合、Supabaseからシール帳を初期化
+          // pageIdがUUID形式でない場合、Supabaseからシール帳を初期化して自動で貼りなおす
+          let resolvedPageId = pageId
           if (!isUUID(pageId)) {
             console.warn('[Supabase] Invalid page ID format (not UUID):', pageId)
             console.log('[Supabase] Creating sticker book for user...')
@@ -2141,11 +1993,18 @@ export default function Home() {
               id: page.id,
               type: page.pageType as 'cover' | 'page' | 'back-cover' | 'inner-cover',
               side: page.side as 'left' | 'right' | undefined,
+              theme: page.themeConfig as BookPage['theme'] ?? undefined,
             }))
             setPages(supabasePages)
 
-            console.log('[Supabase] Sticker book initialized, please try placing the sticker again')
-            return
+            const localIndex = pages.findIndex(p => p.id === pageId)
+            const targetIndex = localIndex >= 0 ? localIndex : currentPage
+            resolvedPageId = stickerBook.pages[targetIndex]?.id || stickerBook.pages[0]?.id || pageId
+
+            // ローカルの配置も新しいページIDに合わせる
+            setPlacedStickers(prev => prev.map(s =>
+              s.id === newPlacedSticker.id ? { ...s, pageId: resolvedPageId } : s
+            ))
           }
 
           // user_sticker_idを取得
@@ -2160,7 +2019,7 @@ export default function Home() {
 
           // Supabaseに配置を追加
           const placementId = await stickerBookService.addPlacement({
-            pageId,
+            pageId: resolvedPageId,
             userStickerId,
             x,
             y,
@@ -2174,6 +2033,7 @@ export default function Home() {
             setPlacedStickers(prev => prev.map(s =>
               s.id === newPlacedSticker.id ? { ...s, id: placementId } : s
             ))
+            setEditingSticker(prev => prev && prev.id === newPlacedSticker.id ? { ...prev, id: placementId } : prev)
             console.log('[Supabase] Placement synced:', placementId)
 
             // ミッション進捗を記録（シール帳保存）
@@ -2192,10 +2052,25 @@ export default function Home() {
         }
       })()
     }
-  }, [selectedSticker, placedStickers, gainExp, isSpreadView, pages, collection, currentDataSource, currentUser, adminMode])
+  }, [selectedSticker, placedStickers, gainExp, isSpreadView, pages, currentPage, collection, currentDataSource, currentUser, adminMode])
 
   // 編集中シールのページサイド（見開き時に左右どちらか）
   const [editingStickerPageSide, setEditingStickerPageSide] = useState<'left' | 'right'>('left')
+
+  // 操作中は背景のアニメだけ一時停止（見た目は維持、操作は軽く）
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const shouldPause = Boolean((selectedSticker && isDragging) || editingSticker || editingDecoItem)
+    const className = 'drag-optimizing'
+    if (shouldPause) {
+      document.body.classList.add(className)
+    } else {
+      document.body.classList.remove(className)
+    }
+    return () => {
+      document.body.classList.remove(className)
+    }
+  }, [selectedSticker, isDragging, editingSticker, editingDecoItem])
 
   // Handle sticker edit（ペリペリエフェクト付き）
   const handleEditSticker = useCallback((sticker: PlacedSticker) => {
@@ -2216,7 +2091,7 @@ export default function Home() {
       } else {
         stickerScreenX = containerRect.left + horizontalOffset + (sticker.x * BOOK_WIDTH)
       }
-      const stickerScreenY = containerRect.top + 8 + (sticker.y * BOOK_HEIGHT)
+      const stickerScreenY = containerRect.top + 16 + (sticker.y * BOOK_HEIGHT)
 
       setPeelEffectPosition({ x: stickerScreenX, y: stickerScreenY })
       setPeelEffectImageUrl(sticker.sticker.imageUrl)
@@ -2237,12 +2112,8 @@ export default function Home() {
 
   // Handle sticker update (位置のリアルタイム更新用 - 編集モードは継続)
   const handleEditingDrag = useCallback((x: number, y: number) => {
-    if (!editingSticker) return
-    setPlacedStickers(prev => prev.map(s =>
-      s.id === editingSticker.id ? { ...s, x, y } : s
-    ))
-    setEditingSticker(prev => prev ? { ...prev, x, y } : null)
-  }, [editingSticker])
+    setEditingSticker(prev => prev ? { ...prev, x, y } : prev)
+  }, [])
 
   // Handle page side change during editing drag
   const handleEditingPageSideChange = useCallback((newSide: 'left' | 'right') => {
@@ -2265,19 +2136,13 @@ export default function Home() {
         : (currentPageData?.id || '')
     }
 
-    setPlacedStickers(prev => prev.map(s =>
-      s.id === editingSticker.id ? { ...s, pageId: newPageId } : s
-    ))
-    setEditingSticker(prev => prev ? { ...prev, pageId: newPageId } : null)
+    setEditingSticker(prev => prev ? { ...prev, pageId: newPageId } : prev)
   }, [editingSticker, currentPage, pages])
 
   // Handle sticker rotation (回転のみ更新 - 編集モード継続)
   const handleEditingRotate = useCallback((rotation: number) => {
-    if (!editingSticker) return
-    const updated = { ...editingSticker, rotation }
-    setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
-    setEditingSticker(updated)
-  }, [editingSticker])
+    setEditingSticker(prev => prev ? { ...prev, rotation } : prev)
+  }, [])
 
   // 編集中シールの重なり順情報を計算（デコアイテムも含めた統一レイヤー）
   const getLayerInfo = useCallback(() => {
@@ -2383,29 +2248,44 @@ export default function Home() {
 
   // Handle sticker update (完全な更新 - 編集モード終了)
   const handleUpdateSticker = useCallback((updated: PlacedSticker) => {
-    setPlacedStickers(prev => prev.map(s => s.id === updated.id ? updated : s))
+    const clamped = (() => {
+      const stickerSize = 60 * (updated.scale ?? 1)
+      const halfW = stickerSize / 2 / BOOK_WIDTH
+      const halfH = stickerSize / 2 / BOOK_HEIGHT
+      const minX = Math.max(0, halfW)
+      const maxX = Math.min(1, 1 - halfW)
+      const minY = Math.max(0, halfH)
+      const maxY = Math.min(1, 1 - halfH)
+      return {
+        ...updated,
+        x: Math.max(minX, Math.min(maxX, updated.x)),
+        y: Math.max(minY, Math.min(maxY, updated.y)),
+      }
+    })()
+
+    setPlacedStickers(prev => prev.map(s => s.id === clamped.id ? clamped : s))
     setEditingSticker(null)
 
     // Supabaseモードの場合、配置をSupabaseに同期
-    if (currentDataSource === 'supabase') {
-      stickerBookService.updatePlacement(updated.id, {
-        x: updated.x,
-        y: updated.y,
-        rotation: updated.rotation,
-        scale: updated.scale,
-        zIndex: updated.zIndex,
-        pageId: updated.pageId,
+    if (currentDataSource === 'supabase' && adminMode !== 'test' && isUUID(clamped.id)) {
+      stickerBookService.updatePlacement(clamped.id, {
+        x: clamped.x,
+        y: clamped.y,
+        rotation: clamped.rotation,
+        scale: clamped.scale,
+        zIndex: clamped.zIndex,
+        pageId: clamped.pageId,
       })
         .then(success => {
           if (success) {
-            console.log('[Supabase] Placement updated:', updated.id)
+            console.log('[Supabase] Placement updated:', clamped.id)
           }
         })
         .catch(error => {
           console.error('[Supabase] Failed to update placement:', error)
         })
     }
-  }, [currentDataSource])
+  }, [currentDataSource, adminMode])
 
   // Handle sticker delete
   const handleDeleteSticker = useCallback((stickerId: string) => {
@@ -2507,7 +2387,7 @@ export default function Home() {
       } else {
         screenX = containerRect.left + horizontalOffset + (x * BOOK_WIDTH)
       }
-      const screenY = containerRect.top + 8 + (y * BOOK_HEIGHT)
+      const screenY = containerRect.top + 16 + (y * BOOK_HEIGHT)
 
       setPlaceEffectPosition({ x: screenX, y: screenY })
       setShowPlaceEffect(true)
@@ -2542,21 +2422,13 @@ export default function Home() {
 
   // デコアイテム位置更新ハンドラー（ドラッグ中）
   const handleEditingDecoDrag = useCallback((x: number, y: number) => {
-    if (!editingDecoItem) return
-    setPlacedDecoItems(prev => prev.map(d =>
-      d.id === editingDecoItem.id ? { ...d, x, y } : d
-    ))
-    setEditingDecoItem(prev => prev ? { ...prev, x, y } : null)
-  }, [editingDecoItem])
+    setEditingDecoItem(prev => prev ? { ...prev, x, y } : prev)
+  }, [])
 
   // デコアイテムサイズ更新ハンドラー（リサイズ中）
   const handleEditingDecoResize = useCallback((width: number, height: number) => {
-    if (!editingDecoItem) return
-    setPlacedDecoItems(prev => prev.map(d =>
-      d.id === editingDecoItem.id ? { ...d, width, height } : d
-    ))
-    setEditingDecoItem(prev => prev ? { ...prev, width, height } : null)
-  }, [editingDecoItem])
+    setEditingDecoItem(prev => prev ? { ...prev, width, height } : prev)
+  }, [])
 
   // デコアイテムページ移動ハンドラー（見開き時に左右を跨いだ場合）
   const handleEditingDecoPageSideChange = useCallback((newSide: 'left' | 'right') => {
@@ -2577,20 +2449,13 @@ export default function Home() {
         : (currentPageData?.id || '')
     }
 
-    setPlacedDecoItems(prev => prev.map(d =>
-      d.id === editingDecoItem.id ? { ...d, pageId: newPageId } : d
-    ))
-    setEditingDecoItem(prev => prev ? { ...prev, pageId: newPageId } : null)
+    setEditingDecoItem(prev => prev ? { ...prev, pageId: newPageId } : prev)
   }, [editingDecoItem, currentPage, pages])
 
   // デコアイテム回転更新ハンドラー（回転ハンドル操作中）
   const handleEditingDecoRotate = useCallback((rotation: number) => {
-    if (!editingDecoItem) return
-    setPlacedDecoItems(prev => prev.map(d =>
-      d.id === editingDecoItem.id ? { ...d, rotation } : d
-    ))
-    setEditingDecoItem(prev => prev ? { ...prev, rotation } : null)
-  }, [editingDecoItem])
+    setEditingDecoItem(prev => prev ? { ...prev, rotation } : prev)
+  }, [])
 
   // デコアイテム更新ハンドラー（編集完了時にSupabaseに保存）
   const handleUpdateDecoItem = useCallback((updated: PlacedDecoItem) => {
@@ -2873,313 +2738,6 @@ export default function Home() {
     }
   }, [matchedUser, dataSource, supabaseTradeActions])
 
-  // ミステリーポスト ハンドラー
-  const handlePostSticker = useCallback(async (stickerId: string, message: PresetMessage) => {
-    const sticker = collectionStickers.find(s => s.id === stickerId)
-    if (!sticker) return
-
-    const newPosted: PostedSticker = {
-      id: `posted-${Date.now()}`,
-      stickerId: sticker.id,
-      stickerName: sticker.name,
-      stickerImageUrl: sticker.imageUrl || '',
-      rarity: sticker.rarity,
-      message,
-      postedAt: new Date().toISOString(),
-      status: 'pending',
-    }
-
-    setMysteryPostState(prev => ({
-      ...prev,
-      todayPosted: newPosted,
-      pendingStickers: [...prev.pendingStickers, newPosted],
-      nextDeliveryTime: getNextDeliveryTime(),
-    }))
-
-    // Supabaseモードの場合、DBにも保存
-    if (currentDataSource === 'supabase') {
-      // stickerId を使って user_stickers テーブルから該当シールを探す必要がある
-      // ここでは stickerId をそのまま渡す（サービス側で解決）
-      if (!currentUser?.supabaseId) return
-      mysteryPostService.postSticker(currentUser.supabaseId, stickerId, message)
-        .then(async result => {
-          if (result.success) {
-            console.log('[MysteryPost] Posted to Supabase:', result.postId)
-            // IDをSupabaseのIDに更新
-            if (result.postId) {
-              setMysteryPostState(prev => ({
-                ...prev,
-                todayPosted: prev.todayPosted ? { ...prev.todayPosted, id: result.postId! } : null,
-                pendingStickers: prev.pendingStickers.map(p =>
-                  p.id === newPosted.id ? { ...p, id: result.postId! } : p
-                ),
-              }))
-            }
-
-            // ポスト成功後、マッチングと配達を実行
-            try {
-              console.log('[MysteryPost] Running matching...')
-              await mysteryPostService.runMatching()
-              console.log('[MysteryPost] Running delivery...')
-              await mysteryPostService.runDelivery()
-              console.log('[MysteryPost] Matching and delivery completed')
-
-              // 受信したシールを再取得して更新
-              const receivedStickers = await mysteryPostService.getReceivedStickers(currentUser.supabaseId)
-              setMysteryPostState(prev => ({
-                ...prev,
-                receivedStickers: receivedStickers.map(rs => ({
-                  id: rs.postId,
-                  stickerId: rs.stickerId,
-                  stickerName: rs.stickerName,
-                  stickerImageUrl: rs.stickerImageUrl,
-                  rarity: rs.stickerRarity,
-                  message: (rs.message as PresetMessage) || '大切にしてね！',
-                  fromUserName: rs.senderName,
-                  receivedAt: rs.deliveredAt,
-                  isOpened: false, // デフォルトは未開封
-                })),
-              }))
-            } catch (error) {
-              console.error('[MysteryPost] Failed to run matching/delivery:', error)
-            }
-          } else {
-            console.error('[MysteryPost] Failed to post to Supabase:', result.error)
-          }
-        })
-    }
-
-    // 投函したら経験値獲得
-    gainExp('place_sticker')
-  }, [gainExp, currentDataSource, currentUser, collectionStickers])
-
-  const handleOpenReceivedSticker = useCallback((sticker: ReceivedSticker) => {
-    setSelectedReceivedSticker(sticker)
-    setIsReceivedStickerModalOpen(true)
-  }, [])
-
-  const handleStickerOpened = useCallback((stickerId: string) => {
-    setMysteryPostState(prev => ({
-      ...prev,
-      receivedStickers: prev.receivedStickers.map(s =>
-        s.id === stickerId ? { ...s, isOpened: true } : s
-      ),
-    }))
-    // 開封したら経験値獲得
-    gainExp('place_sticker')
-  }, [gainExp])
-
-  const handleCancelPost = useCallback((postId: string) => {
-    setMysteryPostState(prev => ({
-      ...prev,
-      pendingStickers: prev.pendingStickers.filter(s => s.id !== postId),
-      todayPosted: prev.todayPosted?.id === postId ? null : prev.todayPosted,
-    }))
-  }, [])
-
-  // Trade Scout handlers
-  const handleToggleScoutActive = useCallback((active: boolean) => {
-    setTradeScoutState(prev => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        isActive: active,
-        updatedAt: new Date().toISOString(),
-      },
-    }))
-
-    // Supabaseモードの場合、DBにも保存
-    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
-      tradeScoutService.setActive(currentUser.supabaseId, active)
-        .then(success => {
-          if (success) {
-            console.log('[TradeScout] Saved active state to Supabase:', active)
-          } else {
-            console.error('[TradeScout] Failed to save active state to Supabase')
-          }
-        })
-    }
-  }, [currentDataSource, currentUser])
-
-  const handleSaveWantList = useCallback((stickers: ScoutSticker[]) => {
-    setTradeScoutState(prev => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        wantList: stickers,
-        updatedAt: new Date().toISOString(),
-      },
-    }))
-
-    // Supabaseモードの場合、DBにも保存
-    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
-      const wantListData = stickers.map(s => ({ stickerId: s.stickerId, priority: 1 }))
-      tradeScoutService.updateWantList(currentUser.supabaseId, wantListData)
-        .then(async success => {
-          if (success) {
-            console.log('[TradeScout] Saved want list to Supabase:', stickers.length, 'items')
-
-            // リスト更新後、マッチング検索を実行
-            try {
-              console.log('[TradeScout] Running matching...')
-              const matches = await tradeScoutService.findMatches(currentUser.supabaseId)
-              console.log('[TradeScout] Found', matches.length, 'matches')
-
-              // マッチ結果をstateに反映
-              setTradeScoutState(prev => ({
-                ...prev,
-                matches: matches.map(m => ({
-                  id: m.id,
-                  user: {
-                    id: m.matchedUserId,
-                    name: m.matchedUserName,
-                    avatarUrl: '',
-                    level: 1,
-                  },
-                  myOffersTheyWant: m.offersMatched.map(sid => {
-                    const sticker = masterStickers.find(s => s.id === sid)
-                    return {
-                      stickerId: sid,
-                      stickerName: sticker?.name || 'Unknown',
-                      stickerImageUrl: sticker?.imageUrl || '',
-                      rarity: sticker?.rarity || 1,
-                    }
-                  }),
-                  theirOffersIWant: m.wantsMatched.map(sid => {
-                    const sticker = masterStickers.find(s => s.id === sid)
-                    return {
-                      stickerId: sid,
-                      stickerName: sticker?.name || 'Unknown',
-                      stickerImageUrl: sticker?.imageUrl || '',
-                      rarity: sticker?.rarity || 1,
-                    }
-                  }),
-                  matchScore: m.matchScore,
-                  matchedAt: m.matchedAt,
-                  isRead: m.status === 'viewed',
-                })),
-              }))
-            } catch (error) {
-              console.error('[TradeScout] Failed to find matches:', error)
-            }
-          } else {
-            console.error('[TradeScout] Failed to save want list to Supabase')
-          }
-        })
-    }
-  }, [currentDataSource, currentUser, masterStickers])
-
-  const handleSaveOfferList = useCallback((stickers: ScoutSticker[]) => {
-    setTradeScoutState(prev => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        offerList: stickers,
-        updatedAt: new Date().toISOString(),
-      },
-    }))
-
-    // Supabaseモードの場合、DBにも保存
-    if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
-      const offerListData = stickers.map(s => ({ stickerId: s.stickerId }))
-      tradeScoutService.updateOfferList(currentUser.supabaseId, offerListData)
-        .then(async success => {
-          if (success) {
-            console.log('[TradeScout] Saved offer list to Supabase:', stickers.length, 'items')
-
-            // リスト更新後、マッチング検索を実行
-            try {
-              console.log('[TradeScout] Running matching...')
-              const matches = await tradeScoutService.findMatches(currentUser.supabaseId)
-              console.log('[TradeScout] Found', matches.length, 'matches')
-
-              // マッチ結果をstateに反映
-              setTradeScoutState(prev => ({
-                ...prev,
-                matches: matches.map(m => ({
-                  id: m.id,
-                  user: {
-                    id: m.matchedUserId,
-                    name: m.matchedUserName,
-                    avatarUrl: '',
-                    level: 1,
-                  },
-                  myOffersTheyWant: m.offersMatched.map(sid => {
-                    const sticker = masterStickers.find(s => s.id === sid)
-                    return {
-                      stickerId: sid,
-                      stickerName: sticker?.name || 'Unknown',
-                      stickerImageUrl: sticker?.imageUrl || '',
-                      rarity: sticker?.rarity || 1,
-                    }
-                  }),
-                  theirOffersIWant: m.wantsMatched.map(sid => {
-                    const sticker = masterStickers.find(s => s.id === sid)
-                    return {
-                      stickerId: sid,
-                      stickerName: sticker?.name || 'Unknown',
-                      stickerImageUrl: sticker?.imageUrl || '',
-                      rarity: sticker?.rarity || 1,
-                    }
-                  }),
-                  matchScore: m.matchScore,
-                  matchedAt: m.matchedAt,
-                  isRead: m.status === 'viewed',
-                })),
-              }))
-            } catch (error) {
-              console.error('[TradeScout] Failed to find matches:', error)
-            }
-          } else {
-            console.error('[TradeScout] Failed to save offer list to Supabase')
-          }
-        })
-    }
-  }, [currentDataSource, currentUser, masterStickers])
-
-  const handleViewScoutMatch = useCallback((match: ScoutMatch) => {
-    setSelectedScoutMatch(match)
-    setIsMatchDetailModalOpen(true)
-    // 既読にする
-    setTradeScoutState(prev => ({
-      ...prev,
-      matches: prev.matches.map(m =>
-        m.id === match.id ? { ...m, isRead: true } : m
-      ),
-    }))
-
-    // Supabaseモードの場合、DBも更新
-    if (currentDataSource === 'supabase' && !match.isRead) {
-      tradeScoutService.updateMatchStatus(match.id, 'viewed')
-        .then(success => {
-          if (success) {
-            console.log('[TradeScout] Match marked as viewed in Supabase:', match.id)
-          }
-        })
-    }
-  }, [currentDataSource])
-
-  const handleStartTradeFromScout = useCallback((match: ScoutMatch) => {
-    // マッチしたユーザーとトレードを開始
-    setTradePartner({
-      id: match.user.id,
-      name: match.user.name,
-      avatarUrl: match.user.avatarUrl,
-      level: match.user.level,
-    })
-    setIsTradeSessionOpen(true)
-    setIsMatchDetailModalOpen(false)
-
-    // Supabaseモードの場合、マッチのステータスを更新
-    if (currentDataSource === 'supabase') {
-      tradeScoutService.updateMatchStatus(match.id, 'trade_started')
-        .then(success => {
-          if (success) {
-            console.log('[TradeScout] Match marked as trade_started in Supabase:', match.id)
-          }
-        })
-    }
-  }, [currentDataSource])
 
   // Handle gacha
   // 重み付きランダム抽選関数
@@ -3201,13 +2759,13 @@ export default function Home() {
 
   // ガチャ実行の内部処理（通貨チェック済み、どろっぷ使用フラグ付き）
   const executeGachaPull = useCallback(async (bannerId: string, count: number, useDrops: boolean = false) => {
-    const banner = demoBanners.find(b => b.id === bannerId)
+    const banner = gachaBanners.find(b => b.id === bannerId)
     if (!banner) return
 
     const cost = count === 1 ? banner.costSingle : banner.costMulti
 
-    // Supabase同期の場合は先に通貨を消費
-    if (currentDataSource === 'supabase' && currentUser?.id) {
+    // Supabase同期の場合は先に通貨を消費（テストモードはスキップ）
+    if (currentDataSource === 'supabase' && currentUser?.id && adminMode !== 'test') {
       console.log('[Gacha] Deducting currency via Supabase, useDrops:', useDrops)
 
       // 通貨タイプに応じてコスト計算（どろっぷでの代替コスト）
@@ -3243,12 +2801,13 @@ export default function Home() {
       }
 
       // ローカル状態も更新
-      if (deductResult.newBalance) {
+      const newBalance = deductResult.newBalance
+      if (newBalance) {
         setUserMonetization(prev => ({
           ...prev,
-          tickets: deductResult.newBalance!.tickets,
-          gems: deductResult.newBalance!.gems,
-          stars: deductResult.newBalance!.stars,
+          tickets: newBalance.tickets,
+          gems: newBalance.gems,
+          stars: newBalance.stars,
         }))
       }
     } else {
@@ -3295,6 +2854,7 @@ export default function Home() {
     setGachaPulls(prev => prev + count) // ガチャ回数をトラッキング
 
     // コレクションにシールを追加（ローカル）
+    const hadNoStickers = collection.length === 0
     const { collection: newCollection, newStickers } = addStickersToCollection(collection, pulledStickerIds)
     setCollection(newCollection)
     console.log('[Gacha] Added stickers to collection:', pulledStickerIds.length, 'total, new:', newStickers.length)
@@ -3321,13 +2881,18 @@ export default function Home() {
       })
     }
 
+    // 初めてのシールをゲットした時のボーナス
+    if (hadNoStickers && newStickers.length > 0) {
+      void gainExp('first_sticker')
+    }
+
     // 経験値獲得（1回引く: +10 EXP, 10連: +100 EXP）
-    gainExp(count === 1 ? 'gacha_single' : 'gacha_ten')
-  }, [gainExp, collection, currentDataSource, currentUser, userMonetization, weightedRandomPull])
+    void gainExp(count === 1 ? 'gacha_single' : 'gacha_ten')
+  }, [gainExp, collection, currentDataSource, currentUser, userMonetization, weightedRandomPull, adminMode])
 
   // ガチャを引く（通貨チェック付き）
   const handlePullGacha = useCallback((bannerId: string, count: number) => {
-    const banner = demoBanners.find(b => b.id === bannerId)
+    const banner = gachaBanners.find(b => b.id === bannerId)
     if (!banner) return
 
     const cost = count === 1 ? banner.costSingle : banner.costMulti
@@ -3412,6 +2977,14 @@ export default function Home() {
         }).catch(error => {
           console.error('[Timeline] Failed to record mission progress:', error)
         })
+
+        // 投稿者に経験値を付与（いいね受け取り）
+        const postAuthorId = currentPost?.userId
+        if (dbType === 'like' && currentUser.supabaseId && postAuthorId && postAuthorId !== currentUser.supabaseId) {
+          profileService.awardPostLikeExp(postId, currentUser.supabaseId).catch(error => {
+            console.error('[Timeline] Failed to award like exp:', error)
+          })
+        }
       }
     } catch (error) {
       console.error('[Timeline] リアクション保存エラー:', error)
@@ -3434,18 +3007,51 @@ export default function Home() {
   }, [currentUser, posts])
 
   // Handle report
-  const handleReport = useCallback((input: CreateReportInput) => {
-    console.log('Report submitted:', input)
-    setIsReportModalOpen(false)
-    setReportTarget(null)
-  }, [])
+  const handleReport = useCallback(async (input: CreateReportInput) => {
+    if (!currentUser?.supabaseId) {
+      setIsReportModalOpen(false)
+      setReportTarget(null)
+      return
+    }
+    try {
+      await moderationService.createReport(
+        currentUser.supabaseId,
+        input.targetType,
+        input.targetId,
+        input.category,
+        input.comment
+      )
+    } catch (error) {
+      console.error('[Moderation] Report submit error:', error)
+    } finally {
+      setIsReportModalOpen(false)
+      setReportTarget(null)
+    }
+  }, [currentUser?.supabaseId])
 
   // Handle block
-  const handleBlock = useCallback((input: CreateBlockInput) => {
-    console.log('Block submitted:', input)
-    setIsBlockModalOpen(false)
-    setBlockTarget(null)
-  }, [])
+  const handleBlock = useCallback(async (input: CreateBlockInput) => {
+    if (!currentUser?.supabaseId) {
+      setIsBlockModalOpen(false)
+      setBlockTarget(null)
+      return
+    }
+    try {
+      const success = await moderationService.blockUser(currentUser.supabaseId, input.blockedId, input.reason)
+      if (success) {
+        setBlockedUserIds(prev => {
+          if (prev.includes(input.blockedId)) return prev
+          return [...prev, input.blockedId]
+        })
+        setBlockedUsersCount(prev => (blockedUserIds.includes(input.blockedId) ? prev : prev + 1))
+      }
+    } catch (error) {
+      console.error('[Moderation] Block submit error:', error)
+    } finally {
+      setIsBlockModalOpen(false)
+      setBlockTarget(null)
+    }
+  }, [currentUser?.supabaseId])
 
   // ==================== Shop Handlers ====================
   // Open shop
@@ -3537,10 +3143,21 @@ export default function Home() {
     setIsShopOpen(true)
   }, [handleCloseInsufficientFunds])
 
-  // Check and collect daily bonus on mount
+  // Check and collect daily bonus when user is authenticated
   useEffect(() => {
+    // Supabaseモードでユーザーがまだ設定されていない場合は待機
+    if (currentDataSource === 'supabase' && !currentUser?.id) {
+      return
+    }
+
+    // 既に処理済みの場合はスキップ
+    if (dailyBonusProcessedRef.current) {
+      return
+    }
+
     const processDailyBonus = async () => {
-      if (!needsDailyReset(userMonetization.lastDailyReset)) return
+      // 処理開始前にフラグを立てる（二重実行防止）
+      dailyBonusProcessedRef.current = true
 
       // Calculate bonus amounts
       const plan = userMonetization.subscription === 'none'
@@ -3552,16 +3169,27 @@ export default function Home() {
       const totalTickets = baseTickets + plan.dailyBonusTickets + adSkipTickets
       const totalStars = plan.dailyStars
 
-      // Supabase同期の場合はDBに付与
+      // Supabase同期の場合はDBで重複チェック
       if (currentDataSource === 'supabase' && currentUser?.id) {
+        // まずデイリーログインを記録して、既にログイン済みかを確認
+        const loginResult = await statsService.recordDailyLogin(currentUser.id)
+        console.log('[DailyBonus] recordDailyLogin result:', loginResult)
+
+        if (loginResult.alreadyLoggedIn) {
+          // 今日は既にログインボーナスを受け取っている
+          console.log('[DailyBonus] Already logged in today, skipping bonus modal')
+          return
+        }
+
         console.log('[DailyBonus] Granting to Supabase:', { totalTickets, totalStars })
         const result = await grantDailyBonusToSupabase(currentUser.id, totalTickets, totalStars)
-        if (result.success && result.newBalance) {
+        const grantedBalance = result.newBalance
+        if (result.success && grantedBalance) {
           setUserMonetization(prev => ({
             ...prev,
-            tickets: result.newBalance!.tickets,
-            gems: result.newBalance!.gems,
-            stars: result.newBalance!.stars,
+            tickets: grantedBalance.tickets,
+            gems: grantedBalance.gems,
+            stars: grantedBalance.stars,
             lastDailyReset: new Date().toISOString().split('T')[0],
             dailyTicketsCollected: true,
             dailyStarsCollected: true,
@@ -3569,14 +3197,10 @@ export default function Home() {
             adsWatchedToday: 0,
           }))
 
-          // デイリーログインを記録（ミッション進捗も更新）
-          statsService.recordDailyLogin(currentUser.id).then(result => {
-            if (result.success) {
-              console.log('[DailyBonus] Daily login recorded, streak:', result.loginStreak)
-            }
-          }).catch(error => {
-            console.error('[DailyBonus] Failed to record daily login:', error)
-          })
+          console.log('[DailyBonus] Daily login recorded, streak:', loginResult.loginStreak)
+
+          // デイリーログインEXP（レベルアップモーダルはデイリーボーナスモーダル閉じた後に表示）
+          void gainExp('daily_login', { suppressLevelUpModal: true })
         } else {
           // フォールバック：ローカルのみ更新
           setUserMonetization(prev => {
@@ -3586,34 +3210,48 @@ export default function Home() {
             return state
           })
         }
+
+        setDailyBonusReceived({
+          tickets: totalTickets,
+          stars: totalStars,
+        })
+        setIsDailyBonusModalOpen(true)
       } else {
-        // ローカルのみの場合は従来通り
+        // ローカルのみの場合は従来通り（localStorageベースのチェック）
+        if (!needsDailyReset(userMonetization.lastDailyReset)) return
+
         setUserMonetization(prev => {
           let state: UserMonetization = { ...prev, lastDailyReset: new Date().toISOString().split('T')[0], dailyTicketsCollected: false, dailyStarsCollected: false, completedMissions: [] as string[], adsWatchedToday: 0 }
           state = collectDailyTickets(state)
           state = collectDailyStars(state)
           return state
         })
-      }
+        // デイリーログインEXP（レベルアップモーダルはデイリーボーナスモーダル閉じた後に表示）
+        void gainExp('daily_login', { suppressLevelUpModal: true })
 
-      setDailyBonusReceived({
-        tickets: totalTickets,
-        stars: totalStars,
-      })
-      setIsDailyBonusModalOpen(true)
+        setDailyBonusReceived({
+          tickets: totalTickets,
+          stars: totalStars,
+        })
+        setIsDailyBonusModalOpen(true)
+      }
     }
 
     processDailyBonus()
-  }, []) // Run only once on mount
+  }, [currentDataSource, currentUser?.id]) // Run when user is authenticated
 
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
       case 'home':
-        // 現在のページが裏表紙かどうかを判定
-        const isBackCover = pages[currentPage]?.type === 'back-cover'
+        // 現在のページが表紙/裏表紙かどうかを判定
+        const currentPageData = pages[currentPage]
+        const isBackCover = currentPageData?.type === 'back-cover'
+        // シール選択中に表紙/裏表紙にいる場合は、ページがめくられるので見開き状態として扱う
+        // これにより、flipNext()後もbounds計算が正しく行われる
+        const isOnCoverOrBack = (currentPageData?.type === 'cover' || currentPageData?.type === 'back-cover') && !selectedSticker
         // シール操作中かどうか（貼り付け中または編集中）
-        const isStickerOperating = (selectedSticker && isDragging) || editingSticker
+        const isStickerOperating = !!(selectedSticker && isDragging) || !!editingSticker
         // デコ編集中かどうか
         const isDecoEditing = !!editingDecoItem
         // UIを隠すべきかどうか（モーダル表示中またはシール操作中またはデコ編集中またはレイヤーパネル表示中またはショップ表示中）
@@ -3701,6 +3339,7 @@ export default function Home() {
                   onPageChange={handlePageTurn}
                   onStickerLongPress={handleEditSticker}
                   onDecoItemLongPress={handleEditDecoItem}
+                  bookTheme={currentTheme}
                   coverDesignId={coverDesignId}
                   editingStickerId={editingSticker?.id}
                   editingDecoItemId={editingDecoItem?.id}
@@ -3713,42 +3352,58 @@ export default function Home() {
                   onPlace={(x, y, rotation) => {
                     // 見開きモードかつ表紙・裏表紙でない場合、左右ページを判定
                     const currentPageData = pages[currentPage]
-                    const isOnCoverOrBack = currentPageData?.type === 'cover' || currentPageData?.type === 'back-cover'
+                    const actualIsOnCoverOrBack = currentPageData?.type === 'cover' || currentPageData?.type === 'back-cover'
+
+                    // シール選択中は表紙/裏表紙からめくられているはずなので、見開き表示として扱う
+                    // これにより、アニメーション完了前にドロップしても正しいページに配置される
+                    const isOnCoverOrBack = actualIsOnCoverOrBack && !selectedSticker
+
+                    // 表紙/裏表紙からシールを選択した場合、最初のコンテンツページに配置
+                    let targetPageIndex = currentPage
+                    if (actualIsOnCoverOrBack && selectedSticker) {
+                      // 表紙からなら次のページ（通常page 1）、裏表紙からなら前のページ
+                      if (currentPageData?.type === 'cover') {
+                        targetPageIndex = 1 // 表紙の次のページ
+                      } else if (currentPageData?.type === 'back-cover') {
+                        targetPageIndex = pages.length - 2 // 裏表紙の前のページ
+                      }
+                    }
+                    const targetPageData = pages[targetPageIndex]
 
                     if (isSpreadView && !isOnCoverOrBack) {
                       // 見開きモードでは、x座標が0.5未満なら左ページ、0.5以上なら右ページ
-                      // 現在のページが左か右かを確認
-                      const isCurrentPageLeft = currentPageData?.side === 'left'
+                      // 現在のページ（または表紙/裏表紙からめくった後のターゲットページ）が左か右かを確認
+                      const isTargetPageLeft = targetPageData?.side === 'left'
 
                       // 左右のページインデックスを計算
                       let leftPageIndex: number
                       let rightPageIndex: number
 
-                      if (isCurrentPageLeft) {
-                        leftPageIndex = currentPage
-                        rightPageIndex = currentPage + 1
+                      if (isTargetPageLeft) {
+                        leftPageIndex = targetPageIndex
+                        rightPageIndex = targetPageIndex + 1
                       } else {
-                        leftPageIndex = currentPage - 1
-                        rightPageIndex = currentPage
+                        leftPageIndex = targetPageIndex - 1
+                        rightPageIndex = targetPageIndex
                       }
 
                       // ドロップ位置に基づいて配置先ページを決定
                       if (x >= 0.5) {
                         // 右ページに配置
-                        const rightPageId = pages[rightPageIndex]?.id || currentPageData?.id || ''
+                        const rightPageId = pages[rightPageIndex]?.id || targetPageData?.id || ''
                         // x座標を0-1に正規化（0.5-1 → 0-1）
                         const adjustedX = (x - 0.5) * 2
                         handlePlaceSticker(rightPageId, adjustedX, y, rotation)
                       } else {
                         // 左ページに配置
-                        const leftPageId = pages[leftPageIndex]?.id || currentPageData?.id || ''
+                        const leftPageId = pages[leftPageIndex]?.id || targetPageData?.id || ''
                         // x座標を0-1に正規化（0-0.5 → 0-1）
                         const adjustedX = x * 2
                         handlePlaceSticker(leftPageId, adjustedX, y, rotation)
                       }
                     } else {
                       // 単ページモードまたは表紙・裏表紙の場合はそのまま
-                      const pageId = currentPageData?.id || ''
+                      const pageId = targetPageData?.id || ''
                       handlePlaceSticker(pageId, x, y, rotation)
                     }
                   }}
@@ -3760,6 +3415,7 @@ export default function Home() {
                   bookWidth={BOOK_WIDTH}
                   bookHeight={BOOK_HEIGHT}
                   isSpreadView={isSpreadView}
+                  isSinglePage={isOnCoverOrBack}
                   scrollContainerRef={scrollContainerRef}
                 />
               )}
@@ -3786,7 +3442,7 @@ export default function Home() {
                     sticker={editingSticker}
                     onRotate={handleEditingRotate}
                     onRemove={() => handleDeleteSticker(editingSticker.id)}
-                    onClose={() => setEditingSticker(null)}
+                    onClose={() => handleUpdateSticker(editingSticker)}
                     onBringToFront={handleBringToFront}
                     onSendToBack={handleSendToBack}
                     layerPosition={layerInfo.layerPosition}
@@ -3937,6 +3593,10 @@ export default function Home() {
                       </div>
 
                       {/* 重なり順と削除 */}
+                      <div className="text-center text-[11px] mb-2" style={{ color: '#9CA3AF' }}>
+                        {Math.round(editingDecoItem.width ?? editingDecoItem.decoItem.baseWidth ?? 60)} × {Math.round(editingDecoItem.height ?? editingDecoItem.decoItem.baseHeight ?? 60)}
+                        ・ {Math.round(editingDecoItem.rotation ?? 0)}°
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleDecoSendToBack}
@@ -3993,27 +3653,27 @@ export default function Home() {
                 )
               })()}
             </div>
-            {/* StickerTray - シール操作中は非表示 */}
-            {!shouldHideUI && (
-              <div className="flex-shrink-0">
-                <StickerTray
-                  stickers={placeableStickers}
-                  onStickerSelect={(sticker) => {
-                    // 表紙・裏表紙の場合は自動でページをめくる
-                    const currentPageType = pages[currentPage]?.type
-                    if (currentPageType === 'cover') {
-                      bookRef.current?.flipNext()
-                    } else if (currentPageType === 'back-cover') {
-                      bookRef.current?.flipPrev()
-                    }
-                    setSelectedSticker(sticker)
-                    setIsDragging(true)
-                    // デコ選択を解除
-                    setSelectedDecoItem(null)
-                  }}
-                />
-              </div>
-            )}
+            {/* StickerTray - シール操作中は非表示（状態は維持） */}
+            <div className="flex-shrink-0">
+              <StickerTray
+                stickers={placeableStickers}
+                hidden={shouldHideUI}
+                onStickerSelect={(sticker) => {
+                  // 表紙・裏表紙の場合は自動でページをめくる
+                  const currentPageType = pages[currentPage]?.type
+                  if (currentPageType === 'cover') {
+                    bookRef.current?.flipNext()
+                  } else if (currentPageType === 'back-cover') {
+                    bookRef.current?.flipPrev()
+                  }
+                  setSelectedSticker(sticker)
+                  setIsDragging(true)
+                  // デコ選択を解除
+                  setSelectedDecoItem(null)
+                }}
+                onGoGacha={() => setActiveTab('gacha')}
+              />
+            </div>
             {/* デコ・ドロワー - シール操作中は非表示 */}
             {!shouldHideUI && (
               <DecoDrawer
@@ -4069,23 +3729,16 @@ export default function Home() {
                   className="absolute inset-0 w-full h-full object-contain"
                   draggable={false}
                 />
-                <span
-                  className="relative z-10 text-base font-bold text-white"
-                  style={{
-                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                  }}
-                >
-                  {(() => {
-                    const currentPageData = pages[currentPage]
-                    // 表紙の場合
-                    if (currentPageData?.type === 'cover') {
-                      return 'ひょうし'
-                    }
+                {(() => {
+                  const currentPageData = pages[currentPage]
+                  let label = ''
+                  // 表紙の場合
+                  if (currentPageData?.type === 'cover') {
+                    label = 'ひょうし'
+                  } else if (currentPageData?.type === 'back-cover') {
                     // 裏表紙の場合
-                    if (currentPageData?.type === 'back-cover') {
-                      return 'うら'
-                    }
+                    label = 'うら'
+                  } else {
                     // 通常ページの場合：表紙と裏表紙を除いたページ番号を計算
                     const regularPages = pages.filter(p => p.type === 'page')
                     const pageIndex = regularPages.findIndex(p => p.id === currentPageData?.id)
@@ -4095,14 +3748,34 @@ export default function Home() {
                       if (isSpreadView && currentPageData?.side === 'left') {
                         const rightPageNum = pageIndex + 2
                         if (rightPageNum <= totalRegularPages) {
-                          return `${pageIndex + 1}-${rightPageNum}`
+                          label = `${pageIndex + 1}-${rightPageNum}`
+                        } else {
+                          label = `${pageIndex + 1}/${totalRegularPages}`
                         }
+                      } else {
+                        label = `${pageIndex + 1}/${totalRegularPages}`
                       }
-                      return `${pageIndex + 1}/${totalRegularPages}`
                     }
-                    return ''
-                  })()}
-                </span>
+                  }
+
+                  const isLong = label.length >= 4
+                  return (
+                    <span
+                      className="relative z-10 font-bold text-white"
+                      style={{
+                        fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                        textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                        fontSize: isLong ? '12px' : '14px',
+                        lineHeight: 1,
+                        whiteSpace: 'nowrap',
+                        textAlign: 'center',
+                        transform: 'translateY(1px)',
+                      }}
+                    >
+                      {label}
+                    </span>
+                  )
+                })()}
               </div>
               {/* 右ページボタン */}
               <button
@@ -4195,18 +3868,21 @@ export default function Home() {
               setSelectedCollectionSticker(sticker)
               setIsStickerDetailModalOpen(true)
             }}
+            onGoGacha={() => setActiveTab('gacha')}
           />
         )
 
       case 'gacha':
         return (
-          <GachaView
-            banners={demoBanners}
+          <LazyGachaView
+            banners={gachaBanners}
             userCurrency={userCurrency}
             onPullSingle={(bannerId) => handlePullGacha(bannerId, 1)}
             onPullMulti={(bannerId) => handlePullGacha(bannerId, 10)}
             onOpenShop={handleOpenShop}
             onInsufficientFunds={handleInsufficientFunds}
+            onWatchAd={handleOpenAdReward}
+            remainingAdWatches={getRemainingAdWatches(userMonetization)}
           />
         )
 
@@ -4235,40 +3911,16 @@ export default function Home() {
                 🤝 こうかん
               </button>
               <button
-                onClick={() => setTradeSubTab('mystery')}
-                className="flex-1 py-3 font-bold text-sm transition-all relative"
+                onClick={() => setTradeSubTab('board')}
+                className="flex-1 py-3 font-bold text-sm transition-all"
                 style={{
                   fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                  color: tradeSubTab === 'mystery' ? '#8B5A2B' : '#C4A484',
-                  borderBottom: tradeSubTab === 'mystery' ? '3px solid #8B5A2B' : '3px solid transparent',
+                  color: tradeSubTab === 'board' ? '#8B5A2B' : '#C4A484',
+                  borderBottom: tradeSubTab === 'board' ? '3px solid #8B5A2B' : '3px solid transparent',
                   marginBottom: '-3px',
                 }}
               >
-                📮 ポスト
-                {/* 未開封バッジ */}
-                {mysteryPostState.receivedStickers.filter(s => !s.isOpened).length > 0 && (
-                  <span className="absolute -top-1 right-2 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: '#D4764A' }}>
-                    {mysteryPostState.receivedStickers.filter(s => !s.isOpened).length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setTradeSubTab('scout')}
-                className="flex-1 py-3 font-bold text-sm transition-all relative"
-                style={{
-                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                  color: tradeSubTab === 'scout' ? '#8B5A2B' : '#C4A484',
-                  borderBottom: tradeSubTab === 'scout' ? '3px solid #8B5A2B' : '3px solid transparent',
-                  marginBottom: '-3px',
-                }}
-              >
-                🔍 スカウト
-                {/* マッチングバッジ */}
-                {tradeScoutState.matches.filter(m => !m.isRead).length > 0 && (
-                  <span className="absolute -top-1 right-2 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: '#7DAF72' }}>
-                    {tradeScoutState.matches.filter(m => !m.isRead).length}
-                  </span>
-                )}
+                📋 けいじばん
               </button>
             </div>
 
@@ -4277,11 +3929,11 @@ export default function Home() {
               {tradeSubTab === 'trade' && (
                 <TradeView
                   userId={currentUser?.supabaseId}
-                  friends={demoFriends}
-                  history={demoTradeHistory}
+                  friends={friends}
+                  history={tradeHistory}
                   onStartMatching={handleStartMatching}
                   onTradeWithFriend={(friendId) => {
-                    const friend = demoFriends.find(f => f.id === friendId)
+                    const friend = friends.find(f => f.id === friendId)
                     if (friend) {
                       setTradePartner({
                         id: friend.id,
@@ -4293,6 +3945,7 @@ export default function Home() {
                     }
                   }}
                   onViewHistory={(historyId) => console.log('View history:', historyId)}
+                  onTradeCompleted={() => void gainExp('trade_complete')}
                   // 非同期交換で TradeSessionFull に渡すデータ
                   myUser={currentUser ? {
                     id: currentUser.supabaseId,
@@ -4306,25 +3959,71 @@ export default function Home() {
                   myPages={myTradePages}
                   myCoverDesignId={coverDesignId}
                   onAsyncSessionChange={setIsAsyncTradeSessionOpen}
+                  asyncBadgeCount={tradeBadgeCount}
                 />
               )}
-              {tradeSubTab === 'mystery' && (
-                <MysteryPostView
-                  state={mysteryPostState}
-                  onOpenPostModal={() => setIsPostStickerModalOpen(true)}
-                  onOpenReceived={handleOpenReceivedSticker}
-                  onCancelPost={handleCancelPost}
-                />
-              )}
-              {tradeSubTab === 'scout' && (
-                <TradeScoutView
-                  state={tradeScoutState}
-                  onOpenWantListEdit={() => setIsScoutWantListModalOpen(true)}
-                  onOpenOfferListEdit={() => setIsScoutOfferListModalOpen(true)}
-                  onToggleActive={handleToggleScoutActive}
-                  onViewMatch={handleViewScoutMatch}
-                  onStartTrade={handleStartTradeFromScout}
-                />
+              {tradeSubTab === 'board' && (
+                tradeBoardDetailPostId ? (
+                  <TradeBoardPostDetail
+                    postId={tradeBoardDetailPostId}
+                    userId={currentUser?.supabaseId}
+                    onBack={() => setTradeBoardDetailPostId(null)}
+                    onStartDirectTrade={async (partnerId) => {
+                      if (!currentUser?.supabaseId) return
+                      try {
+                        const session = await asyncTradeService.inviteToTrade(currentUser.supabaseId, partnerId)
+                        if (session) {
+                          return { success: true, message: 'こうかんにさそいました！' }
+                        } else {
+                          return { success: true, message: 'すでにこうかん中です！' }
+                        }
+                      } catch (e) {
+                        console.error('[TradeBoard] 交換招待エラー:', e)
+                        return { success: false, message: 'エラーが発生しました' }
+                      }
+                    }}
+                    onViewProfile={async (userId) => {
+                      try {
+                        const profileData = await profileService.getOtherUserProfile(userId, currentUser?.id)
+                        if (!profileData) return
+                        const stickerBook = await stickerBookService.getUserStickerBook(userId)
+                        const otherProfile: OtherUserProfile = {
+                          id: profileData.id,
+                          name: profileData.name,
+                          avatarUrl: profileData.avatarUrl || undefined,
+                          frameId: profileData.frameId,
+                          level: profileData.level,
+                          title: profileData.title,
+                          bio: profileData.bio,
+                          isFollowing: profileData.isFollowing,
+                          stats: profileData.stats,
+                        }
+                        const bookPages: BookPage[] = stickerBook?.pages.map(p => ({ id: p.id, pageNumber: p.pageNumber, type: p.pageType, side: p.side })) || []
+                        const bookStickers: PlacedSticker[] = stickerBook?.pages.flatMap(p => p.stickers) || []
+                        const bookDecoItems: PlacedDecoItem[] = stickerBook?.pages.flatMap(p => p.decoItems || []) || []
+                        const stickerBookPreviews: StickerBookPreview[] = stickerBook?.pages
+                          .filter(p => p.pageType === 'page')
+                          .map(p => ({ pageId: p.id, pageNumber: p.pageNumber, stickerCount: p.stickers.length })) || []
+                        setSelectedOtherUser(otherProfile)
+                        setSelectedUserStickerBook(stickerBookPreviews)
+                        setSelectedUserBookPages(bookPages)
+                        setSelectedUserBookStickers(bookStickers)
+                        setSelectedUserBookDecoItems(bookDecoItems)
+                        setSelectedUserCoverDesignId(stickerBook?.coverDesignId || 'cover-default')
+                        setIsOtherUserProfileOpen(true)
+                      } catch (e) {
+                        console.error('[TradeBoard] プロフィール取得エラー:', e)
+                      }
+                    }}
+                  />
+                ) : (
+                  <TradeBoardView
+                    key={tradeBoardRefreshKey}
+                    userId={currentUser?.supabaseId}
+                    onOpenCreate={() => setIsTradeBoardCreateOpen(true)}
+                    onOpenDetail={(postId) => setTradeBoardDetailPostId(postId)}
+                  />
+                )
               )}
             </div>
           </div>
@@ -4362,10 +4061,62 @@ export default function Home() {
                     ? await profileService.getFollowStatusBatch(currentUser.supabaseId, otherUserIds)
                     : {}
 
-                  // Post形式に変換（シール帳ページデータも取得）
+                  // Post形式に変換（page_snapshotを優先使用）
                   const formattedPosts: Post[] = await Promise.all(followingData.map(async (p) => {
                     let pageData: Post['pageData'] = undefined
-                    if (p.page_id) {
+
+                    // page_snapshotがある場合は投稿時点のスナップショットを使用
+                    // 注意: スナップショットはsnake_case (image_url) で保存、フロントはcamelCase (imageUrl) なので変換が必要
+                    const snapshot = (p as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+                    if (snapshot) {
+                      pageData = {
+                        placedStickers: snapshot.placedStickers?.map(s => ({
+                          id: s.id,
+                          stickerId: s.stickerId,
+                          sticker: {
+                            id: s.sticker.id,
+                            name: s.sticker.name,
+                            imageUrl: s.sticker.image_url,  // snake_case → camelCase
+                            rarity: s.sticker.rarity || 1,
+                            type: 'normal' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: s.x,
+                          y: s.y,
+                          rotation: s.rotation,
+                          scale: s.scale,
+                          zIndex: s.zIndex,
+                          placedAt: new Date().toISOString(),
+                          upgradeRank: s.upgradeRank,
+                        })) || [],
+                        placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                          id: d.id,
+                          decoItemId: d.decoItemId,
+                          decoItem: {
+                            id: d.decoItem.id,
+                            name: d.decoItem.name,
+                            imageUrl: d.decoItem.image_url,  // snake_case → camelCase
+                            type: 'stamp' as const,  // default
+                            baseWidth: d.width || 60,
+                            baseHeight: d.height || 60,
+                            rotatable: true,
+                            rarity: 1 as const,
+                            obtainMethod: 'default' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: d.x,
+                          y: d.y,
+                          rotation: d.rotation,
+                          scale: d.scale,
+                          width: d.width,
+                          height: d.height,
+                          zIndex: d.zIndex,
+                          placedAt: new Date().toISOString(),
+                        })),
+                        backgroundColor: snapshot.backgroundColor,
+                      }
+                    } else if (p.page_id) {
+                      // スナップショットがない場合は従来通りリアルタイム取得
                       const pageResult = await stickerBookService.getPageById(p.page_id)
                       if (pageResult) {
                         pageData = {
@@ -4405,6 +4156,8 @@ export default function Home() {
                       userId: p.user_id,
                       userName: p.author?.display_name || p.author?.username || '名無し',
                       userAvatarUrl: p.author?.avatar_url || undefined,
+                      userFrameId: (p.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+                      userLevel: calculateLevel(((p.author as unknown as { total_exp?: number })?.total_exp) || 0),
                       pageImageUrl: p.image_url || undefined,
                       pageData,
                       caption: p.caption || '',
@@ -4445,11 +4198,63 @@ export default function Home() {
                     : {}
                   console.log('[Timeline/Liked] Loaded follow statuses for', Object.keys(followStatuses).length, 'users')
 
-                  // Post形式に変換（シール帳ページデータも取得）
+                  // Post形式に変換（page_snapshotを優先使用）
                   const formattedPosts: Post[] = await Promise.all(likedData.map(async (p) => {
-                    // page_idがある場合はシール帳ページデータを取得
                     let pageData: Post['pageData'] = undefined
-                    if (p.page_id) {
+
+                    // page_snapshotがある場合は投稿時点のスナップショットを使用
+                    // 注意: スナップショットはsnake_case (image_url) で保存、フロントはcamelCase (imageUrl) なので変換が必要
+                    const snapshot = (p as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+                    if (snapshot) {
+                      pageData = {
+                        placedStickers: snapshot.placedStickers?.map(s => ({
+                          id: s.id,
+                          stickerId: s.stickerId,
+                          sticker: {
+                            id: s.sticker.id,
+                            name: s.sticker.name,
+                            imageUrl: s.sticker.image_url,  // snake_case → camelCase
+                            rarity: s.sticker.rarity || 1,
+                            type: 'normal' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: s.x,
+                          y: s.y,
+                          rotation: s.rotation,
+                          scale: s.scale,
+                          zIndex: s.zIndex,
+                          placedAt: new Date().toISOString(),
+                          upgradeRank: s.upgradeRank,
+                        })) || [],
+                        placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                          id: d.id,
+                          decoItemId: d.decoItemId,
+                          decoItem: {
+                            id: d.decoItem.id,
+                            name: d.decoItem.name,
+                            imageUrl: d.decoItem.image_url,  // snake_case → camelCase
+                            type: 'stamp' as const,  // default
+                            baseWidth: d.width || 60,
+                            baseHeight: d.height || 60,
+                            rotatable: true,
+                            rarity: 1 as const,
+                            obtainMethod: 'default' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: d.x,
+                          y: d.y,
+                          rotation: d.rotation,
+                          scale: d.scale,
+                          width: d.width,
+                          height: d.height,
+                          zIndex: d.zIndex,
+                          placedAt: new Date().toISOString(),
+                        })),
+                        backgroundColor: snapshot.backgroundColor,
+                      }
+                      console.log('[Timeline/Liked] Using snapshot for post:', p.id)
+                    } else if (p.page_id) {
+                      // スナップショットがない場合は従来通りリアルタイム取得
                       const pageResult = await stickerBookService.getPageById(p.page_id)
                       if (pageResult) {
                         pageData = {
@@ -4481,7 +4286,7 @@ export default function Home() {
                             placedAt: d.placedAt || new Date().toISOString(),
                           })),
                         }
-                        console.log('[Timeline/Liked] Page data loaded for post:', p.id, 'stickers:', pageData.placedStickers.length)
+                        console.log('[Timeline/Liked] Page data loaded from DB for post:', p.id)
                       }
                     }
 
@@ -4490,6 +4295,8 @@ export default function Home() {
                       userId: p.user_id,
                       userName: p.author?.display_name || p.author?.username || '名無し',
                       userAvatarUrl: p.author?.avatar_url || undefined,
+                      userFrameId: (p.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+                      userLevel: calculateLevel(((p.author as unknown as { total_exp?: number })?.total_exp) || 0),
                       pageImageUrl: p.image_url || undefined,
                       pageData,
                       caption: p.caption || '',
@@ -4530,6 +4337,8 @@ export default function Home() {
                     content: c.content,
                     createdAt: c.created_at,
                     isOwner: c.user.id === currentUser?.id,
+                    parentId: c.parent_id,
+                    replyCount: c.reply_count || 0,
                   }))
                   setPostComments(formattedComments)
                 } catch (error) {
@@ -4559,6 +4368,7 @@ export default function Home() {
                   id: profileData.id,
                   name: profileData.name,
                   avatarUrl: profileData.avatarUrl || undefined,
+                  frameId: profileData.frameId,  // キャラクター報酬フレーム
                   level: profileData.level,
                   title: profileData.title,
                   bio: profileData.bio,
@@ -4595,7 +4405,7 @@ export default function Home() {
                 setSelectedUserBookPages(bookPages)
                 setSelectedUserBookStickers(bookStickers)
                 setSelectedUserBookDecoItems(bookDecoItems)
-                setSelectedUserCoverDesignId(stickerBook?.themeId || 'cover-mochimo')
+                setSelectedUserCoverDesignId(stickerBook?.coverDesignId || 'cover-default')
                 setIsOtherUserProfileOpen(true)
 
                 console.log('[Timeline] ユーザープロフィール表示:', userProfile.name)
@@ -4606,11 +4416,14 @@ export default function Home() {
             onFollow={async (userId) => {
               if (!currentUser) return
               try {
+                const prevStatus = getLocalFollowStatus(userId)
                 // フォロー実行
                 const success = await profileService.toggleFollow(currentUser.id, userId)
                 if (success) {
                   // フォロー状態を取得して投稿を更新
                   const newStatus = await profileService.getFollowStatus(currentUser.id, userId)
+                  const resolvedPrev = prevStatus ?? (newStatus === 'none' ? 'following' : 'none')
+                  applyFollowStatsDelta(resolvedPrev, newStatus)
                   setPosts(prev => prev.map(post =>
                     post.userId === userId
                       ? { ...post, followStatus: newStatus, isFollowing: newStatus !== 'none' }
@@ -4647,8 +4460,263 @@ export default function Home() {
               setBlockTarget({ id: userId, name: userName })
               setIsBlockModalOpen(true)
             }}
-            blockedUserIds={[]}
+            blockedUserIds={blockedUserIds}
             onOpenSearch={() => setIsUserSearchModalOpen(true)}
+            onRefresh={async () => {
+              // プルトゥリフレッシュ：現在のタブに応じてデータを再取得
+              console.log('[Timeline] プルトゥリフレッシュ開始:', activeTimelineTab)
+              try {
+                if (activeTimelineTab === 'liked' && currentUser?.supabaseId) {
+                  // いいねした投稿を再取得（PostWithDetails形式で返ってくる）
+                  const likedPostsData = await timelineService.getLikedPosts(currentUser.supabaseId)
+                  if (likedPostsData) {
+                    const formatted: Post[] = await Promise.all(likedPostsData.map(async (p) => {
+                      const followStatuses = currentUser.supabaseId && p.user_id !== currentUser.supabaseId
+                        ? await profileService.getFollowStatusBatch(currentUser.supabaseId, [p.user_id])
+                        : {}
+
+                      const snapshot = (p as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+                      let pageData: Post['pageData'] = undefined
+
+                      if (snapshot) {
+                        pageData = {
+                          placedStickers: snapshot.placedStickers?.map(s => ({
+                            id: s.id,
+                            stickerId: s.stickerId,
+                            sticker: {
+                              id: s.sticker.id,
+                              name: s.sticker.name,
+                              imageUrl: s.sticker.image_url,
+                              rarity: s.sticker.rarity || 1,
+                              type: 'normal' as const,
+                            },
+                            pageId: p.page_id || '',
+                            x: s.x,
+                            y: s.y,
+                            rotation: s.rotation,
+                            scale: s.scale,
+                            zIndex: s.zIndex,
+                            placedAt: new Date().toISOString(),
+                            upgradeRank: s.upgradeRank,
+                          })) || [],
+                          placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                            id: d.id,
+                            decoItemId: d.decoItemId,
+                            decoItem: {
+                              id: d.decoItem.id,
+                              name: d.decoItem.name,
+                              imageUrl: d.decoItem.image_url,
+                              type: 'stamp' as const,
+                              baseWidth: d.width || 60,
+                              baseHeight: d.height || 60,
+                              rotatable: true,
+                              rarity: 1 as const,
+                              obtainMethod: 'default' as const,
+                            },
+                            pageId: p.page_id || '',
+                            x: d.x,
+                            y: d.y,
+                            rotation: d.rotation,
+                            scale: d.scale,
+                            width: d.width,
+                            height: d.height,
+                            zIndex: d.zIndex,
+                            placedAt: new Date().toISOString(),
+                          })) || [],
+                          backgroundColor: snapshot.backgroundColor,
+                        }
+                      }
+
+                      return {
+                        id: p.id,
+                        userId: p.user_id,
+                        userName: p.author?.display_name || p.author?.username || 'ユーザー',
+                        userAvatarUrl: p.author?.avatar_url || undefined,
+                        userFrameId: (p.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+                      userLevel: calculateLevel(((p.author as unknown as { total_exp?: number })?.total_exp) || 0),
+                        pageId: p.page_id,
+                        imageUrl: p.image_url || undefined,
+                        caption: p.caption || '',
+                        hashtags: p.hashtags || [],
+                        createdAt: p.created_at || new Date().toISOString(),
+                        reactions: [{
+                          type: 'heart' as const,
+                          count: p.like_count || 0,
+                          isReacted: true
+                        }],
+                        commentCount: p.comment_count || 0,
+                        isFollowing: p.isFollowing || followStatuses[p.user_id] === 'following',
+                        pageData,
+                      }
+                    }))
+                    setLikedPosts(formatted)
+                  }
+                } else if (activeTimelineTab === 'following' && currentUser?.supabaseId) {
+                  // フォロー中タブの投稿を再取得
+                  const followingData = await timelineService.getFollowingTimeline(currentUser.supabaseId)
+                  const otherUserIds = [...new Set(followingData.map(p => p.user_id).filter(id => id !== currentUser.supabaseId))]
+                  const followStatuses = otherUserIds.length > 0 && currentUser.supabaseId
+                    ? await profileService.getFollowStatusBatch(currentUser.supabaseId, otherUserIds)
+                    : {}
+
+                  const formattedPosts: Post[] = await Promise.all(followingData.map(async (p) => {
+                    const snapshot = (p as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+                    let pageData: Post['pageData'] = undefined
+
+                    if (snapshot) {
+                      pageData = {
+                        placedStickers: snapshot.placedStickers?.map(s => ({
+                          id: s.id,
+                          stickerId: s.stickerId,
+                          sticker: {
+                            id: s.sticker.id,
+                            name: s.sticker.name,
+                            imageUrl: s.sticker.image_url,
+                            rarity: s.sticker.rarity || 1,
+                            type: 'normal' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: s.x,
+                          y: s.y,
+                          rotation: s.rotation,
+                          scale: s.scale,
+                          zIndex: s.zIndex,
+                          placedAt: new Date().toISOString(),
+                          upgradeRank: s.upgradeRank,
+                        })) || [],
+                        placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                          id: d.id,
+                          decoItemId: d.decoItemId,
+                          decoItem: {
+                            id: d.decoItem.id,
+                            name: d.decoItem.name,
+                            imageUrl: d.decoItem.image_url,
+                            type: 'stamp' as const,
+                            baseWidth: d.width || 60,
+                            baseHeight: d.height || 60,
+                            rotatable: true,
+                            rarity: 1 as const,
+                            obtainMethod: 'default' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: d.x,
+                          y: d.y,
+                          rotation: d.rotation,
+                          scale: d.scale,
+                          width: d.width,
+                          height: d.height,
+                          zIndex: d.zIndex,
+                          placedAt: new Date().toISOString(),
+                        })) || [],
+                        backgroundColor: snapshot.backgroundColor,
+                      }
+                    }
+
+                    return {
+                      id: p.id,
+                      userId: p.user_id,
+                      userName: p.author?.display_name || p.author?.username || 'ユーザー',
+                      userAvatarUrl: p.author?.avatar_url || undefined,
+                      userFrameId: (p.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+                      userLevel: calculateLevel(((p.author as unknown as { total_exp?: number })?.total_exp) || 0),
+                      pageId: p.page_id,
+                      imageUrl: p.image_url || undefined,
+                      caption: p.caption || '',
+                      hashtags: p.hashtags || [],
+                      createdAt: p.created_at || new Date().toISOString(),
+                      reactions: (p.reactions || []).map(r => ({ type: 'heart' as const, count: r.count, isReacted: r.isReacted })),
+                      commentCount: p.comment_count || 0,
+                      isFollowing: p.isFollowing || followStatuses[p.user_id] === 'following',
+                      pageData,
+                    }
+                  }))
+                  setFollowingPosts(formattedPosts)
+                } else {
+                  // 最新タブ/にんきタブの投稿を再取得
+                  const postsData = await timelineService.getPublicTimeline(currentUser?.supabaseId || null)
+                  const otherUserIds = [...new Set(postsData.map(p => p.user_id).filter(id => id !== currentUser?.supabaseId))]
+                  const followStatuses = otherUserIds.length > 0 && currentUser?.supabaseId
+                    ? await profileService.getFollowStatusBatch(currentUser.supabaseId, otherUserIds)
+                    : {}
+
+                  const formattedPosts: Post[] = await Promise.all(postsData.map(async (p) => {
+                    const snapshot = (p as unknown as { page_snapshot?: PageSnapshot | null }).page_snapshot
+                    let pageData: Post['pageData'] = undefined
+
+                    if (snapshot) {
+                      pageData = {
+                        placedStickers: snapshot.placedStickers?.map(s => ({
+                          id: s.id,
+                          stickerId: s.stickerId,
+                          sticker: {
+                            id: s.sticker.id,
+                            name: s.sticker.name,
+                            imageUrl: s.sticker.image_url,
+                            rarity: s.sticker.rarity || 1,
+                            type: 'normal' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: s.x,
+                          y: s.y,
+                          rotation: s.rotation,
+                          scale: s.scale,
+                          zIndex: s.zIndex,
+                          placedAt: new Date().toISOString(),
+                          upgradeRank: s.upgradeRank,
+                        })) || [],
+                        placedDecoItems: snapshot.placedDecoItems?.map(d => ({
+                          id: d.id,
+                          decoItemId: d.decoItemId,
+                          decoItem: {
+                            id: d.decoItem.id,
+                            name: d.decoItem.name,
+                            imageUrl: d.decoItem.image_url,
+                            type: 'stamp' as const,
+                            baseWidth: d.width || 60,
+                            baseHeight: d.height || 60,
+                            rotatable: true,
+                            rarity: 1 as const,
+                            obtainMethod: 'default' as const,
+                          },
+                          pageId: p.page_id || '',
+                          x: d.x,
+                          y: d.y,
+                          rotation: d.rotation,
+                          scale: d.scale,
+                          width: d.width,
+                          height: d.height,
+                          zIndex: d.zIndex,
+                          placedAt: new Date().toISOString(),
+                        })) || [],
+                        backgroundColor: snapshot.backgroundColor,
+                      }
+                    }
+
+                    return {
+                      id: p.id,
+                      userId: p.user_id,
+                      userName: p.author?.display_name || p.author?.username || 'ユーザー',
+                      userAvatarUrl: p.author?.avatar_url || undefined,
+                      userFrameId: (p.author as unknown as { selected_frame_id?: string })?.selected_frame_id || null,
+                      userLevel: calculateLevel(((p.author as unknown as { total_exp?: number })?.total_exp) || 0),
+                      pageId: p.page_id,
+                      imageUrl: p.image_url || undefined,
+                      caption: p.caption || '',
+                      hashtags: p.hashtags || [],
+                      createdAt: p.created_at || new Date().toISOString(),
+                      reactions: (p.reactions || []).map(r => ({ type: 'heart' as const, count: r.count, isReacted: r.isReacted })),
+                      commentCount: p.comment_count || 0,
+                      isFollowing: p.isFollowing || followStatuses[p.user_id] === 'following',
+                      pageData,
+                    }
+                  }))
+                  setPosts(formattedPosts)
+                }
+                console.log('[Timeline] プルトゥリフレッシュ完了')
+              } catch (error) {
+                console.error('[Timeline] プルトゥリフレッシュエラー:', error)
+              }
+            }}
           />
         )
 
@@ -4734,11 +4802,7 @@ export default function Home() {
     isReportModalOpen ||
     isBlockModalOpen ||
     isThemeSelectOpen ||
-    isPostStickerModalOpen ||
-    isReceivedStickerModalOpen ||
-    isScoutWantListModalOpen ||
-    isScoutOfferListModalOpen ||
-    isMatchDetailModalOpen ||
+    isTradeBoardCreateOpen ||
     isStatsModalOpen ||
     isAchievementsModalOpen ||
     isFollowListModalOpen ||
@@ -4751,28 +4815,43 @@ export default function Home() {
     isPageEditModalOpen
   // プロフィールタブは独自ヘッダーがあるのでTopBarを非表示
   // 交換セッション中もTopBarを非表示
-  const shouldHideTopBar = activeTab === 'profile' || isTradeSessionOpen || isAsyncTradeSessionOpen
+  // ガチャ演出中もTopBarを非表示
+  const shouldHideTopBar = activeTab === 'profile' || isTradeSessionOpen || isAsyncTradeSessionOpen || isGachaResultModalOpen
 
-  // 認証中またはデータ読み込み中はローディング画面を表示
-  if (isAuthLoading || !isDataLoaded) {
+  if (dataLoadError) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center px-6"
         style={{
           background: 'linear-gradient(180deg, #FDF2F8 0%, #F5F3FF 100%)',
         }}
       >
-        <div className="text-center">
-          <div className="text-6xl mb-4 animate-bounce">🎫</div>
+        <div className="text-center max-w-md">
+          <div className="text-5xl mb-4">⚠️</div>
           <p
-            className="text-lg font-bold text-purple-700"
+            className="text-base font-bold text-purple-700 mb-3"
             style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
           >
-            読み込み中...
+            {dataLoadError}
           </p>
+          <button
+            onClick={handleRetryAuth}
+            className="px-6 py-3 rounded-full font-bold text-white"
+            style={{
+              background: 'linear-gradient(90deg, #7C3AED 0%, #EC4899 100%)',
+              boxShadow: '0 6px 16px rgba(124, 58, 237, 0.35)',
+            }}
+          >
+            再試行
+          </button>
         </div>
       </div>
     )
+  }
+
+  // 認証中またはデータ読み込み中はローディング画面を表示
+  if (isAuthLoading || !isDataLoaded) {
+    return <FullScreenLoading />
   }
 
   return (
@@ -4783,36 +4862,55 @@ export default function Home() {
       showTopBar={!shouldHideTopBar}
       currency={userCurrency}
       onOpenShop={handleOpenShop}
+      tabBadgeCounts={tradeBadgeCount > 0 ? { trade: tradeBadgeCount } : undefined}
     >
       {renderTabContent()}
 
       {/* Modals */}
       {isPageEditModalOpen && (
-        <PageEditModal
+        <LazyPageEditModal
           isOpen={isPageEditModalOpen}
           pages={pages}
           placedStickers={placedStickers}
           currentCoverId={coverDesignId}
-          availableCovers={defaultCoverDesigns}
-          currentCharmId={selectedCharm.id}
-          availableCharms={CHARM_LIST.map(c => ({
-            id: c.id,
-            name: c.name,
-            emoji: c.emoji,
-            isOwned: true,
-          }))}
+          availableCovers={
+            defaultCoverDesigns
+              .map(c => ({
+                ...c,
+                isOwned: c.obtainMethod === 'default' || unlockedCoverCharacters.includes(c.name),
+              }))
+              .sort((a, b) => (a.isOwned === b.isOwned ? 0 : a.isOwned ? -1 : 1))
+          }
           onClose={() => setIsPageEditModalOpen(false)}
-          onPagesChange={setPages}
-          onCoverChange={(coverId) => setCoverDesignId(coverId)}
-          onCharmChange={(charmId) => {
-            const charm = CHARM_LIST.find(c => c.id === charmId)
-            if (charm) setSelectedCharm(charm)
+          onPagesChange={(newPages) => {
+            // テーマ変更をSupabaseに保存
+            if (currentDataSource === 'supabase') {
+              const prevPages = pages
+              for (const newPage of newPages) {
+                const oldPage = prevPages.find(p => p.id === newPage.id)
+                const oldTheme = JSON.stringify(oldPage?.theme || null)
+                const newTheme = JSON.stringify(newPage.theme || null)
+                if (oldTheme !== newTheme) {
+                  stickerBookService.updatePageThemeConfig(
+                    newPage.id,
+                    (newPage.theme as Record<string, unknown>) || null
+                  )
+                }
+              }
+            }
+            setPages(newPages)
+          }}
+          onCoverChange={async (coverId) => {
+            setCoverDesignId(coverId)
+            if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+              await stickerBookService.updateCoverDesign(currentUser.supabaseId, coverId)
+            }
           }}
         />
       )}
 
       {isStickerDetailModalOpen && selectedCollectionSticker && (
-        <StickerDetailModal
+        <LazyStickerDetailModal
           sticker={selectedCollectionSticker}
           isOpen={isStickerDetailModalOpen}
           onClose={() => {
@@ -4830,7 +4928,7 @@ export default function Home() {
       )}
 
       {isUpgradeModalOpen && selectedUpgradeStickerId && currentUser?.supabaseId && currentDataSource === 'supabase' && (
-        <UpgradeModal
+        <LazyUpgradeModal
           isOpen={isUpgradeModalOpen}
           onClose={() => {
             setIsUpgradeModalOpen(false)
@@ -4852,7 +4950,7 @@ export default function Home() {
       )}
 
       {isGachaResultModalOpen && (
-        <GachaResultModal
+        <LazyGachaResultModal
           isOpen={isGachaResultModalOpen}
           results={gachaResults}
           onClose={() => {
@@ -4862,7 +4960,7 @@ export default function Home() {
           onContinue={() => {
             // 確認ダイアログを開く
             if (lastGachaPull) {
-              const banner = demoBanners.find(b => b.id === lastGachaPull.bannerId)
+              const banner = gachaBanners.find(b => b.id === lastGachaPull.bannerId)
               if (banner) {
                 const cost = lastGachaPull.count === 1 ? banner.costSingle : banner.costMulti
                 setContinueConfirmDialog({
@@ -4923,7 +5021,7 @@ export default function Home() {
       />
 
       {matchingStatus !== 'idle' && (
-        <MatchingModal
+        <LazyMatchingModal
           isOpen={true}
           status={matchingStatus}
           matchedUser={matchedUser ?? undefined}
@@ -4934,7 +5032,7 @@ export default function Home() {
       )}
 
       {isTradeSessionOpen && tradePartner && currentUser && (
-        <TradeSessionFull
+        <LazyTradeSessionFull
           myUser={{
             id: currentUser.supabaseId, // Supabase UUIDを使用
             name: currentUser.name,
@@ -4964,7 +5062,7 @@ export default function Home() {
                   stickers: page.stickers,
                   decoItems: page.decoItems || [],
                 }))
-              : demoPartnerTradePages
+              : []
           }
           partnerCoverDesignId="cover-mochimo"
           onTradeComplete={(myOffers, partnerOffers) => {
@@ -5022,7 +5120,7 @@ export default function Home() {
       )}
 
       {isCreatePostModalOpen && (
-        <CreatePostModal
+        <LazyCreatePostModal
           isOpen={isCreatePostModalOpen}
           pages={pages.filter(p => p.type === 'page').map((p, index) => ({
             id: p.id,
@@ -5030,16 +5128,58 @@ export default function Home() {
             // 各ページに貼られたシールとデコを渡す
             placedStickers: placedStickers.filter(s => s.pageId === p.id),
             placedDecoItems: placedDecoItems.filter(d => d.pageId === p.id),
+            themeConfig: p.theme ? (p.theme as Record<string, unknown>) : undefined,
           }))}
           onClose={() => setIsCreatePostModalOpen(false)}
           onSubmit={async (data) => {
             if (!currentUser?.supabaseId) return
-            // Supabaseに投稿を保存
+
+            // pageDataからページスナップショットを作成（投稿時点の状態を保存）
+            const pageSnapshot = data.pageData ? {
+              placedStickers: data.pageData.placedStickers.map(s => ({
+                id: s.id,
+                stickerId: s.stickerId,
+                sticker: {
+                  id: s.sticker.id,
+                  name: s.sticker.name,
+                  image_url: s.sticker.imageUrl || '',  // camelCase → snake_case
+                  rarity: s.sticker.rarity,
+                  character: (s.sticker as unknown as { character?: string }).character,
+                },
+                x: s.x,
+                y: s.y,
+                rotation: s.rotation,
+                scale: s.scale,
+                zIndex: s.zIndex,
+                upgradeRank: s.upgradeRank,
+              })),
+              placedDecoItems: data.pageData.placedDecoItems?.map(d => ({
+                id: d.id,
+                decoItemId: d.decoItemId,
+                decoItem: {
+                  id: d.decoItem.id,
+                  name: d.decoItem.name,
+                  image_url: d.decoItem.imageUrl || '',  // camelCase → snake_case
+                },
+                x: d.x,
+                y: d.y,
+                rotation: d.rotation,
+                scale: d.scale,
+                width: d.width,
+                height: d.height,
+                zIndex: d.zIndex,
+              })),
+              backgroundColor: data.pageData.backgroundColor,
+              themeConfig: data.pageData.themeConfig,
+            } : undefined
+
+            // Supabaseに投稿を保存（スナップショット付き）
             const savedPost = await timelineService.createPost(currentUser.supabaseId, {
               pageId: data.pageId,
               caption: data.caption,
               hashtags: data.hashtags,
               visibility: data.visibility,
+              pageSnapshot,  // 投稿時点のページ状態を保存
             })
 
             if (savedPost) {
@@ -5050,6 +5190,8 @@ export default function Home() {
                 userId: currentUser.supabaseId,
                 userName: currentUser.name,
                 userAvatarUrl: userProfile.avatarUrl,
+                userFrameId: userProfile.frameId,
+                userLevel: userProfile.level,
                 // pageData を使用してシール帳ページを表示
                 pageData: data.pageData,
                 caption: data.caption,
@@ -5081,6 +5223,8 @@ export default function Home() {
                 userId: currentUser.supabaseId,
                 userName: currentUser.name,
                 userAvatarUrl: userProfile.avatarUrl,
+                userFrameId: userProfile.frameId,
+                userLevel: userProfile.level,
                 pageData: data.pageData,
                 caption: data.caption,
                 hashtags: data.hashtags,
@@ -5096,14 +5240,14 @@ export default function Home() {
             }
             setIsCreatePostModalOpen(false)
 
-            // 投稿したら経験値獲得 (+20 EXP)
-            gainExp('post_create')
+            // 投稿したら経験値獲得
+            void gainExp('post_create')
           }}
         />
       )}
 
       {isCommentModalOpen && selectedPost && (
-        <CommentModal
+        <LazyCommentModal
           isOpen={isCommentModalOpen}
           postId={selectedPost.id}
           comments={postComments}
@@ -5126,6 +5270,8 @@ export default function Home() {
                   content: result.content,
                   createdAt: result.created_at,
                   isOwner: true,
+                  parentId: null,
+                  replyCount: 0,
                 }
                 setPostComments(prev => [...prev, newComment])
                 // 投稿のコメント数を更新
@@ -5135,6 +5281,7 @@ export default function Home() {
                 setLikedPosts(prev => prev.map(p =>
                   p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p
                 ))
+                void gainExp('comment_create')
               }
             } catch (error) {
               console.error('[Timeline] コメント追加エラー:', error)
@@ -5159,6 +5306,108 @@ export default function Home() {
               }
             } catch (error) {
               console.error('[Timeline] コメント削除エラー:', error)
+            }
+          }}
+          onAddReply={async (postId, content, parentId) => {
+            if (!currentUser?.supabaseId) return
+            try {
+              const result = await timelineService.addReply(postId, currentUser.supabaseId, content, parentId)
+              if (result) {
+                // 新しい返信をリストに追加
+                const newReply: Comment = {
+                  id: result.id,
+                  userId: currentUser.supabaseId,
+                  userName: currentUser.name,
+                  userAvatarUrl: userProfile.avatarUrl,
+                  content: result.content,
+                  createdAt: result.created_at,
+                  isOwner: true,
+                  parentId: result.parent_id,
+                  replyCount: 0,
+                }
+                setPostComments(prev => {
+                  // 返信を追加
+                  const updated = [...prev, newReply]
+                  // 親コメントのreplyCountを更新
+                  return updated.map(c =>
+                    c.id === parentId ? { ...c, replyCount: c.replyCount + 1 } : c
+                  )
+                })
+                // 投稿のコメント数を更新
+                setPosts(prev => prev.map(p =>
+                  p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p
+                ))
+                setLikedPosts(prev => prev.map(p =>
+                  p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p
+                ))
+                void gainExp('comment_create')
+              }
+            } catch (error) {
+              console.error('[Timeline] 返信追加エラー:', error)
+            }
+          }}
+          onUserClick={async (userId) => {
+            // コメントのユーザープロフィールを表示
+            try {
+              console.log('[Comment] ユーザープロフィール取得開始:', userId)
+
+              // プロフィール取得
+              const profileData = await profileService.getOtherUserProfile(userId, currentUser?.id)
+              if (!profileData) {
+                console.error('[Comment] プロフィール取得失敗:', userId)
+                return
+              }
+
+              // シール帳データ取得
+              const stickerBook = await stickerBookService.getUserStickerBook(userId)
+
+              // OtherUserProfile形式に変換
+              const otherUserProfile: OtherUserProfile = {
+                id: profileData.id,
+                name: profileData.name,
+                avatarUrl: profileData.avatarUrl || undefined,
+                frameId: profileData.frameId,
+                level: profileData.level,
+                title: profileData.title,
+                bio: profileData.bio,
+                isFollowing: profileData.isFollowing,
+                stats: profileData.stats,
+              }
+
+              // シール帳ページとシールを整形
+              const bookPages: BookPage[] = stickerBook?.pages
+                .map(p => ({
+                  id: p.id,
+                  pageNumber: p.pageNumber,
+                  type: p.pageType,
+                  side: p.side,
+                })) || []
+
+              const bookStickers: PlacedSticker[] = stickerBook?.pages
+                .flatMap(p => p.stickers) || []
+
+              const bookDecoItems: PlacedDecoItem[] = stickerBook?.pages
+                .flatMap(p => p.decoItems || []) || []
+
+              const stickerBookPreviews: StickerBookPreview[] = stickerBook?.pages
+                .filter(p => p.pageType === 'page')
+                .map(p => ({
+                  pageId: p.id,
+                  pageNumber: p.pageNumber,
+                  stickerCount: p.stickers.length,
+                })) || []
+
+              setSelectedOtherUser(otherUserProfile)
+              setSelectedUserStickerBook(stickerBookPreviews)
+              setSelectedUserBookPages(bookPages)
+              setSelectedUserBookStickers(bookStickers)
+              setSelectedUserBookDecoItems(bookDecoItems)
+              setSelectedUserCoverDesignId(stickerBook?.coverDesignId || 'cover-default')
+              setIsOtherUserProfileOpen(true)
+
+              console.log('[Comment] ユーザープロフィール表示:', otherUserProfile.name)
+            } catch (error) {
+              console.error('[Comment] ユーザープロフィール取得エラー:', error)
             }
           }}
         />
@@ -5201,19 +5450,26 @@ export default function Home() {
             <div className="w-12" />
           </div>
           <div className="h-[calc(100%-60px)] overflow-auto pb-8">
-            <SettingsView
+            <LazySettingsView
               settings={settings}
               onSettingsChange={(newSettings) => {
                 setSettings(newSettings)
                 // 通知設定を同期
                 notificationService.updateSettings(newSettings.notifications)
               }}
-              onLogout={() => {
+              onLogout={async () => {
                 setIsSettingsOpen(false)
-                setIsAuthOpen(true)
+                try {
+                  await authService.signOut()
+                  await authService.ensureAuthenticated()
+                  await refreshUser()
+                } catch (error) {
+                  console.error('[Auth] Logout failed:', error)
+                  setDataLoadError('認証の更新に失敗しました。再試行してください。')
+                }
               }}
               onDeleteAccount={() => console.log('Delete account requested')}
-              onContactSupport={() => console.log('Contact support')}
+              onContactSupport={() => setIsContactFormOpen(true)}
               onViewTerms={() => console.log('View terms')}
               onViewPrivacy={() => console.log('View privacy')}
               userName={user?.profile?.display_name || 'ゲスト'}
@@ -5248,12 +5504,13 @@ export default function Home() {
               onClaimInviterReward={async (invitationId) => {
                 if (!currentUser?.supabaseId) return false
                 const result = await claimInviterReward(currentUser.supabaseId, invitationId)
-                if (result.success && result.rewards) {
+                const inviterRewards = result.rewards
+                if (result.success && inviterRewards) {
                   // 通貨を更新
                   setUserMonetization(prev => ({
                     ...prev,
-                    tickets: prev.tickets + result.rewards!.tickets,
-                    gems: prev.gems + result.rewards!.gems,
+                    tickets: prev.tickets + inviterRewards.tickets,
+                    gems: prev.gems + inviterRewards.gems,
                   }))
                   // 招待リストを更新
                   const newList = await getInvitationList(currentUser.supabaseId)
@@ -5276,12 +5533,13 @@ export default function Home() {
               onClaimInviteeReward={async () => {
                 if (!currentUser?.supabaseId) return false
                 const result = await claimInviteeReward(currentUser.supabaseId)
-                if (result.success && result.rewards) {
+                const inviteeRewards = result.rewards
+                if (result.success && inviteeRewards) {
                   // 通貨を更新
                   setUserMonetization(prev => ({
                     ...prev,
-                    tickets: prev.tickets + result.rewards!.tickets,
-                    gems: prev.gems + result.rewards!.gems,
+                    tickets: prev.tickets + inviteeRewards.tickets,
+                    gems: prev.gems + inviteeRewards.gems,
                   }))
                   // 招待統計を更新
                   const newStats = await getInvitationStats(currentUser.supabaseId)
@@ -5295,11 +5553,12 @@ export default function Home() {
               onClaimReviewReward={async (platform) => {
                 if (!currentUser?.supabaseId) return false
                 const result = await claimReviewReward(currentUser.supabaseId, platform)
-                if (result.success && result.rewards) {
+                const reviewRewards = result.rewards
+                if (result.success && reviewRewards) {
                   // 通貨を更新
                   setUserMonetization(prev => ({
                     ...prev,
-                    tickets: prev.tickets + result.rewards!.tickets,
+                    tickets: prev.tickets + reviewRewards.tickets,
                   }))
                   // レビュー報酬状態を更新
                   const newStatus = await getReviewRewardStatus(currentUser.supabaseId)
@@ -5349,7 +5608,7 @@ export default function Home() {
       )}
 
       {isReportModalOpen && reportTarget && (
-        <ReportModal
+        <LazyReportModal
           isOpen={isReportModalOpen}
           targetType={reportTarget.type}
           targetId={reportTarget.id}
@@ -5364,48 +5623,75 @@ export default function Home() {
       )}
 
       {isBlockModalOpen && blockTarget && (
-        <BlockModal
+        <LazyBlockModal
           isOpen={isBlockModalOpen}
           userId={blockTarget.id}
           userName={blockTarget.name}
-          isBlocked={false}
+          isBlocked={blockedUserIds.includes(blockTarget.id)}
           onClose={() => {
             setIsBlockModalOpen(false)
             setBlockTarget(null)
           }}
           onBlock={handleBlock}
-          onUnblock={(userId) => console.log('Unblock:', userId)}
+          onUnblock={async (userId) => {
+            if (!currentUser?.supabaseId) return
+            const success = await moderationService.unblockUser(currentUser.supabaseId, userId)
+            if (success) {
+              setBlockedUserIds(prev => prev.filter(id => id !== userId))
+              setBlockedUsersCount(prev => Math.max(0, prev - 1))
+            }
+          }}
         />
       )}
 
       {/* ブロック中ユーザー一覧モーダル */}
       {isBlockedUsersModalOpen && currentUser?.id && (
-        <BlockedUsersModal
+        <LazyBlockedUsersModal
           isOpen={isBlockedUsersModalOpen}
           onClose={() => {
             setIsBlockedUsersModalOpen(false)
             // ブロック解除後にカウントを更新
             moderationService.getBlockedUserIds(currentUser.id).then(ids => {
               setBlockedUsersCount(ids.length)
+              setBlockedUserIds(ids)
             })
           }}
           userId={currentUser.id}
         />
       )}
 
+      {/* お問い合わせフォームモーダル */}
+      <ContactFormModal
+        isOpen={isContactFormOpen}
+        onClose={() => setIsContactFormOpen(false)}
+        onSubmit={async (data: ContactFormData) => {
+          const result = await contactService.submitInquiry(
+            data,
+            currentUser?.supabaseId,
+            userCode || undefined
+          )
+          return result.success
+        }}
+        userEmail={user?.email}
+        userCode={userCode || undefined}
+      />
+
       {isThemeSelectOpen && (
-        <ThemeSelectModal
+        <LazyThemeSelectModal
           isOpen={isThemeSelectOpen}
-          currentThemeId="default"
-          ownedThemeIds={['default', 'pastel']}
-          userStarPoints={100}
+          currentThemeId={themeId}
+          ownedThemeIds={ownedThemeIds}
+          userStarPoints={userMonetization.stars}
           onClose={() => setIsThemeSelectOpen(false)}
-          onSelectTheme={(themeId) => {
-            console.log('Theme selected:', themeId)
+          onSelectTheme={async (nextThemeId) => {
+            setThemeId(nextThemeId)
             setIsThemeSelectOpen(false)
+            if (currentDataSource === 'supabase' && currentUser?.supabaseId) {
+              await stickerBookService.updateBookTheme(currentUser.supabaseId, nextThemeId)
+            }
           }}
-          onPurchaseTheme={(themeId) => {
-            console.log('Theme purchased:', themeId)
+          onPurchaseTheme={(nextThemeId) => {
+            console.log('Theme purchased:', nextThemeId)
           }}
         />
       )}
@@ -5425,11 +5711,12 @@ export default function Home() {
         onClaimReward={async (platform) => {
           if (!currentUser?.supabaseId) return false
           const result = await claimReviewReward(currentUser.supabaseId, platform)
-          if (result.success && result.rewards) {
+          const claimedRewards = result.rewards
+          if (result.success && claimedRewards) {
             // 通貨を更新
             setUserMonetization(prev => ({
               ...prev,
-              tickets: prev.tickets + result.rewards!.tickets,
+              tickets: prev.tickets + claimedRewards.tickets,
             }))
             // レビュー報酬状態を更新
             const newStatus = await getReviewRewardStatus(currentUser.supabaseId)
@@ -5442,7 +5729,7 @@ export default function Home() {
       />
 
       {/* プロフィール編集モーダル */}
-      <ProfileEditModal
+      <LazyProfileEditModal
         isOpen={isProfileEditOpen}
         onClose={() => setIsProfileEditOpen(false)}
         profile={userProfile}
@@ -5453,6 +5740,7 @@ export default function Home() {
             name: updates.name,
             bio: updates.bio,
             avatarUrl: updates.avatarUrl || prev.avatarUrl,
+            frameId: updates.frameId !== undefined ? updates.frameId : prev.frameId,
           }))
           setIsProfileEditOpen(false)
 
@@ -5462,6 +5750,7 @@ export default function Home() {
               displayName: updates.name,
               bio: updates.bio,
               avatarUrl: updates.avatarUrl,
+              selectedFrameId: updates.frameId,
             })
             if (success) {
               console.log('[Profile] Saved to Supabase')
@@ -5473,14 +5762,14 @@ export default function Home() {
       />
 
       {/* 統計詳細モーダル */}
-      <StatsModal
+      <LazyStatsModal
         isOpen={isStatsModalOpen}
         onClose={() => setIsStatsModalOpen(false)}
         stats={userStats}
       />
 
       {/* 実績一覧モーダル */}
-      <AchievementsModal
+      <LazyAchievementsModal
         isOpen={isAchievementsModalOpen}
         onClose={() => setIsAchievementsModalOpen(false)}
         achievements={achievements}
@@ -5488,7 +5777,7 @@ export default function Home() {
 
       {/* デイリーミッションモーダル */}
       {currentUser && (
-        <DailyMissionsModal
+        <LazyDailyMissionsModal
           isOpen={isDailyMissionsModalOpen}
           onClose={() => setIsDailyMissionsModalOpen(false)}
           userId={currentUser.id}
@@ -5527,7 +5816,7 @@ export default function Home() {
 
       {/* コレクション報酬モーダル */}
       {currentUser && (
-        <CollectionRewardsModal
+        <LazyCollectionRewardsModal
           isOpen={isCollectionRewardsModalOpen}
           onClose={() => setIsCollectionRewardsModalOpen(false)}
           userId={currentUser.id}
@@ -5556,7 +5845,7 @@ export default function Home() {
       )}
 
       {/* ユーザー検索モーダル */}
-      <UserSearchModal
+      <LazyUserSearchModal
         isOpen={isUserSearchModalOpen}
         onClose={() => setIsUserSearchModalOpen(false)}
         currentUserId={currentUser?.id}
@@ -5580,6 +5869,7 @@ export default function Home() {
               id: profileData.id,
               name: profileData.name,
               avatarUrl: profileData.avatarUrl || undefined,
+              frameId: profileData.frameId,  // キャラクター報酬フレーム
               level: profileData.level,
               title: profileData.title,
               bio: profileData.bio,
@@ -5616,7 +5906,7 @@ export default function Home() {
             setSelectedUserBookPages(bookPages)
             setSelectedUserBookStickers(bookStickers)
             setSelectedUserBookDecoItems(bookDecoItems)
-            setSelectedUserCoverDesignId(stickerBook?.themeId || 'cover-mochimo')
+            setSelectedUserCoverDesignId(stickerBook?.coverDesignId || 'cover-default')
             setIsUserSearchModalOpen(false)
             setIsOtherUserProfileOpen(true)
 
@@ -5628,13 +5918,16 @@ export default function Home() {
         onFollow={async (userId) => {
           if (!currentUser) return
           try {
+            const prevStatus = getLocalFollowStatus(userId)
             const success = await profileService.toggleFollow(currentUser.id, userId)
             if (success) {
               // フォロー数を更新
-              const newCounts = await profileService.getFollowCounts(currentUser.id)
-              setFollowCounts(newCounts)
               // タイムライン投稿のフォロー状態も更新
               const newStatus = await profileService.getFollowStatus(currentUser.id, userId)
+              const resolvedPrev = prevStatus ?? (newStatus === 'none' ? 'following' : 'none')
+              applyFollowStatsDelta(resolvedPrev, newStatus)
+              const newCounts = await profileService.getFollowCounts(currentUser.id)
+              setFollowCounts(newCounts)
               setPosts(prev => prev.map(post =>
                 post.userId === userId
                   ? { ...post, followStatus: newStatus, isFollowing: newStatus !== 'none' }
@@ -5649,7 +5942,7 @@ export default function Home() {
       />
 
       {/* レベルアップモーダル */}
-      <LevelUpModal
+      <LazyLevelUpModal
         isOpen={isLevelUpModalOpen}
         onClose={() => {
           setIsLevelUpModalOpen(false)
@@ -5660,7 +5953,7 @@ export default function Home() {
       />
 
       {/* フォロー・フォロワー一覧モーダル */}
-      <FollowListModal
+      <LazyFollowListModal
         isOpen={isFollowListModalOpen}
         onClose={() => setIsFollowListModalOpen(false)}
         initialTab={followListInitialTab}
@@ -5668,6 +5961,7 @@ export default function Home() {
           id: f.id,
           name: f.name,
           avatarUrl: f.avatarUrl ?? undefined,
+          frameId: f.frameId,
           level: f.level,
           title: f.title,
           isFollowing: f.isFollowing,
@@ -5676,6 +5970,7 @@ export default function Home() {
           id: f.id,
           name: f.name,
           avatarUrl: f.avatarUrl ?? undefined,
+          frameId: f.frameId,
           level: f.level,
           title: f.title,
           isFollowing: f.isFollowing,
@@ -5690,6 +5985,7 @@ export default function Home() {
                 id: userProfile.id,
                 name: userProfile.name,
                 avatarUrl: userProfile.avatarUrl || undefined,
+                frameId: userProfile.frameId,  // キャラクター報酬フレーム
                 level: userProfile.level,
                 title: userProfile.title,
                 bio: userProfile.bio,
@@ -5726,8 +6022,12 @@ export default function Home() {
         onFollowToggle={async (userId, _isFollowing) => {
           if (!currentUser) return
           try {
+            const prevStatus = getLocalFollowStatus(userId)
             const success = await profileService.toggleFollow(currentUser.id, userId)
             if (success) {
+              const newStatus = await profileService.getFollowStatus(currentUser.id, userId)
+              const resolvedPrev = prevStatus ?? (newStatus === 'none' ? 'following' : 'none')
+              applyFollowStatsDelta(resolvedPrev, newStatus)
               // フォロー数を更新
               const newCounts = await profileService.getFollowCounts(currentUser.id)
               setFollowCounts(newCounts)
@@ -5747,7 +6047,7 @@ export default function Home() {
       />
 
       {/* 他ユーザープロフィールモーダル */}
-      <OtherUserProfileModal
+      <LazyOtherUserProfileModal
         isOpen={isOtherUserProfileOpen}
         onClose={() => {
           setIsOtherUserProfileOpen(false)
@@ -5762,10 +6062,13 @@ export default function Home() {
         onFollowToggle={async (userId, _isFollowing) => {
           if (!currentUser) return
           try {
+            const prevStatus = getLocalFollowStatus(userId)
             const success = await profileService.toggleFollow(currentUser.id, userId)
             if (success) {
               // フォロー状態を取得して更新
               const newStatus = await profileService.getFollowStatus(currentUser.id, userId)
+              const resolvedPrev = prevStatus ?? (newStatus === 'none' ? 'following' : 'none')
+              applyFollowStatsDelta(resolvedPrev, newStatus)
               if (selectedOtherUser) {
                 setSelectedOtherUser({
                   ...selectedOtherUser,
@@ -5819,78 +6122,31 @@ export default function Home() {
           }
         }}
         onReport={(userId) => {
-          console.log('Report user:', userId)
-          // TODO: 通報モーダルを開く
+          const name = selectedOtherUser?.name || 'ユーザー'
+          setReportTarget({ type: 'user', id: userId, userId, name })
+          setIsReportModalOpen(true)
         }}
         onBlock={(userId) => {
-          console.log('Block user:', userId)
-          // TODO: ブロック確認モーダルを開く
+          const name = selectedOtherUser?.name || 'ユーザー'
+          setBlockTarget({ id: userId, name })
+          setIsBlockModalOpen(true)
         }}
       />
 
-      {/* ミステリーポスト: 投函モーダル */}
-      <PostStickerModal
-        isOpen={isPostStickerModalOpen}
-        onClose={() => setIsPostStickerModalOpen(false)}
-        duplicateStickers={duplicateStickers}
-        onPost={handlePostSticker}
-      />
+      {/* 交換掲示板: 投稿作成モーダル */}
+      {currentUser?.supabaseId && (
+        <TradeBoardCreateModal
+          isOpen={isTradeBoardCreateOpen}
+          onClose={() => setIsTradeBoardCreateOpen(false)}
+          userId={currentUser.supabaseId}
+          pages={pages}
+          placedStickers={placedStickers}
+          placedDecoItems={placedDecoItems}
+          coverDesignId={coverDesignId}
+          onCreated={() => setTradeBoardRefreshKey(k => k + 1)}
+        />
+      )}
 
-      {/* ミステリーポスト: 開封モーダル */}
-      <ReceivedStickerModal
-        isOpen={isReceivedStickerModalOpen}
-        onClose={() => {
-          setIsReceivedStickerModalOpen(false)
-          setSelectedReceivedSticker(null)
-        }}
-        sticker={selectedReceivedSticker}
-        onOpened={handleStickerOpened}
-      />
-
-      {/* トレード・スカウト: ほしいシール編集モーダル */}
-      <ScoutListEditModal
-        isOpen={isScoutWantListModalOpen}
-        onClose={() => setIsScoutWantListModalOpen(false)}
-        listType="want"
-        currentList={tradeScoutState.settings.wantList}
-        availableStickers={collectionStickers.map(s => ({
-          id: s.id,
-          name: s.name,
-          imageUrl: s.imageUrl || '',
-          rarity: s.rarity,
-          owned: s.owned,
-          quantity: s.quantity,
-        }))}
-        onSave={handleSaveWantList}
-      />
-
-      {/* トレード・スカウト: だせるシール編集モーダル */}
-      <ScoutListEditModal
-        isOpen={isScoutOfferListModalOpen}
-        onClose={() => setIsScoutOfferListModalOpen(false)}
-        listType="offer"
-        currentList={tradeScoutState.settings.offerList}
-        availableStickers={collectionStickers.map(s => ({
-          id: s.id,
-          name: s.name,
-          imageUrl: s.imageUrl || '',
-          rarity: s.rarity,
-          owned: s.owned,
-          quantity: s.quantity,
-        }))}
-        onSave={handleSaveOfferList}
-      />
-
-      {/* トレード・スカウト: マッチング詳細モーダル */}
-      <MatchDetailModal
-        isOpen={isMatchDetailModalOpen}
-        onClose={() => {
-          setIsMatchDetailModalOpen(false)
-          setSelectedScoutMatch(null)
-        }}
-        match={selectedScoutMatch}
-        onStartTrade={handleStartTradeFromScout}
-      />
 
       {/* ペリペリエフェクト（シール剥がし演出） */}
       <PeelEffect
@@ -5947,29 +6203,31 @@ export default function Home() {
       {/* ==================== Shop Modals ==================== */}
       {/* ショップ画面モーダル */}
       {isShopOpen && (
-        <div className="fixed inset-0 z-[100] bg-white">
-          <div className="h-full overflow-y-auto">
-            <div
-              className="sticky top-0 z-10 px-4 flex items-center justify-between"
-              style={{
-                backgroundImage: 'url(/images/Header_UI.png)',
-                backgroundSize: '100% 100%',
-                backgroundPosition: 'center top',
-                backgroundRepeat: 'no-repeat',
-                minHeight: '52px',
-                paddingTop: '8px',
-                paddingBottom: '12px',
-              }}
-            >
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+          {/* 固定ヘッダー */}
+          <div
+            className="flex-shrink-0"
+            style={{
+              backgroundImage: 'url(/images/Header_UI.png)',
+              backgroundSize: '100% 100%',
+              backgroundPosition: 'center top',
+              backgroundRepeat: 'no-repeat',
+              minHeight: '56px',
+              paddingTop: '8px',
+              paddingBottom: '10px',
+            }}
+          >
+            {/* 上段: 戻るボタンとタイトル */}
+            <div className="flex items-center justify-between px-4 mb-1">
               <button
                 onClick={handleCloseShop}
-                className="w-9 h-9 rounded-full flex items-center justify-center"
+                className="w-8 h-8 rounded-full flex items-center justify-center"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.8)',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                   <path d="M15 18L9 12L15 6" stroke="#9D4C6C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
@@ -5978,49 +6236,71 @@ export default function Home() {
                 style={{
                   fontFamily: "'M PLUS Rounded 1c', sans-serif",
                   color: '#FFFFFF',
-                  textShadow: '0 1px 3px rgba(157, 76, 108, 0.6), 0 0 8px rgba(255, 255, 255, 0.3)',
+                  textShadow: '0 2px 4px rgba(157, 76, 108, 0.7)',
                 }}
               >
-                🛒 ショップ
+                ショップ
               </h1>
-              {/* 通貨表示 */}
-              <div className="flex items-center gap-1">
-                {/* シルチケ */}
-                <div className="flex items-center gap-0.5 bg-white/30 rounded-full px-1.5 py-0.5">
-                  <span className="text-xs">🎫</span>
-                  <span className="text-white font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
-                    {userMonetization.tickets}
-                  </span>
-                </div>
-                {/* プレシル */}
-                <div className="flex items-center gap-0.5 bg-white/30 rounded-full px-1.5 py-0.5">
-                  <span className="text-xs">💎</span>
-                  <span className="text-white font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
-                    {userMonetization.gems}
-                  </span>
-                </div>
-                {/* どろっぷ */}
-                <div className="flex items-center gap-0.5 bg-white/30 rounded-full px-1.5 py-0.5">
-                  <span className="text-xs">💧</span>
-                  <span className="text-white font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
-                    {userMonetization.stars.toLocaleString()}
-                  </span>
-                </div>
+              <div className="w-8" />
+            </div>
+
+            {/* 下段: 通貨表示 */}
+            <div className="flex items-center justify-center gap-2 px-4">
+              {/* シルチケ */}
+              <div
+                className="flex items-center gap-1 rounded-full px-2 py-0.5"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,247,237,0.9) 100%)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                <CurrencyIcon type="ticket" size="sm" />
+                <span className="font-bold text-sm text-amber-700">
+                  {userMonetization.tickets}
+                </span>
+              </div>
+              {/* プレシルチケ */}
+              <div
+                className="flex items-center gap-1 rounded-full px-2 py-0.5"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(243,232,255,0.9) 100%)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                <CurrencyIcon type="gem" size="sm" />
+                <span className="font-bold text-sm text-purple-700">
+                  {userMonetization.gems}
+                </span>
+              </div>
+              {/* どろっぷ */}
+              <div
+                className="flex items-center gap-1 rounded-full px-2 py-0.5"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(233,213,255,0.9) 100%)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                <CurrencyIcon type="star" size="sm" />
+                <span className="font-bold text-sm text-violet-700">
+                  {userMonetization.stars.toLocaleString()}
+                </span>
               </div>
             </div>
-            <ShopView
-              userMonetization={userMonetization}
-              onPurchaseStars={handlePurchaseStars}
-              onSubscribe={handleSubscribe}
-              onWatchAd={handleOpenAdReward}
-              onOpenSubscriptionModal={() => {}}
-            />
           </div>
+
+          {/* ShopView（flex-1で残りの高さを使用） */}
+          <ShopView
+            userMonetization={userMonetization}
+            onPurchaseStars={handlePurchaseStars}
+            onSubscribe={handleSubscribe}
+            onWatchAd={handleOpenAdReward}
+            onOpenSubscriptionModal={() => {}}
+          />
         </div>
       )}
 
       {/* 残高不足モーダル */}
-      <InsufficientFundsModal
+      <LazyInsufficientFundsModal
         isOpen={insufficientFundsModal.isOpen}
         fundType={insufficientFundsModal.fundType}
         required={insufficientFundsModal.required}
@@ -6036,7 +6316,7 @@ export default function Home() {
       />
 
       {/* 広告視聴モーダル */}
-      <AdRewardModal
+      <LazyAdRewardModal
         isOpen={isAdRewardModalOpen}
         adsWatchedToday={userMonetization.adsWatchedToday}
         onWatchAd={handleWatchAd}
@@ -6045,7 +6325,7 @@ export default function Home() {
 
       {/* デイリーボーナスモーダル */}
       {dailyBonusReceived && (
-        <DailyBonusModal
+        <LazyDailyBonusModal
           isOpen={isDailyBonusModalOpen}
           userMonetization={userMonetization}
           ticketsReceived={dailyBonusReceived.tickets}
@@ -6053,13 +6333,17 @@ export default function Home() {
           onClose={() => {
             setIsDailyBonusModalOpen(false)
             setDailyBonusReceived(null)
+            // デイリーボーナスでレベルアップしていた場合、ここでモーダルを表示
+            if (levelUpInfo) {
+              setIsLevelUpModalOpen(true)
+            }
           }}
         />
       )}
 
       {/* 管理者パネル */}
       {isAdminPanelOpen && currentUser && (
-        <AdminView
+        <LazyAdminView
           adminMode={adminMode}
           userData={buildSavedUserData()}
           allStickers={masterStickers}
@@ -6082,7 +6366,7 @@ export default function Home() {
       )}
 
       {/* シール帳シェアモーダル */}
-      <BookShareModal
+      <LazyBookShareModal
         isOpen={isBookShareModalOpen}
         onClose={() => setIsBookShareModalOpen(false)}
         bookContainerRef={shareBookContainerRef}
@@ -6090,3 +6374,6 @@ export default function Home() {
     </AppLayout>
   )
 }
+
+
+

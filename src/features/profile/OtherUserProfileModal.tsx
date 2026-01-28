@@ -5,12 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { UserStats } from './ProfileView'
 import { BookView, BookPage, PlacedSticker } from '@/features/sticker-book'
 import type { PlacedDecoItem } from '@/domain/decoItems'
+import { Avatar } from '@/components/ui/Avatar'
 
 // 他ユーザーのプロフィール情報
 export interface OtherUserProfile {
   id: string
   name: string
   avatarUrl?: string
+  frameId?: string | null  // キャラクター報酬で解放したフレーム
   level: number
   title?: string
   bio?: string
@@ -280,14 +282,14 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
               zIndex: 1001,
             }}
           >
-            {/* ヘッダー */}
+            {/* ヘッダー - 交換タブと同じ背景 */}
             <div
               style={{
                 padding: '12px 20px 16px',
-                backgroundImage: 'url(/images/Header_UI.png)',
-                backgroundSize: '100% 100%',
-                backgroundPosition: 'center top',
-                backgroundRepeat: 'no-repeat',
+                backgroundImage: 'url(/images/bg_trade_pattern.gif)',
+                backgroundSize: 'auto',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'repeat',
                 position: 'relative',
                 minHeight: '52px',
               }}
@@ -407,30 +409,13 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
               {/* プロフィール情報 */}
               <div style={{ textAlign: 'center', paddingTop: '8px' }}>
                 {/* アバター */}
-                <div
-                  style={{
-                    width: '80px',
-                    height: '80px',
-                    margin: '0 auto 12px',
-                    borderRadius: '50%',
-                    border: '3px solid white',
-                    background: 'linear-gradient(135deg, #E9D5FF 0%, #FBCFE8 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  }}
-                >
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <UserIcon size={60} />
-                  )}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                  <Avatar
+                    src={user.avatarUrl}
+                    alt={user.name}
+                    size="lg"
+                    frameId={user.frameId}
+                  />
                 </div>
 
                 {/* 名前とレベル */}
@@ -439,9 +424,9 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                     style={{
                       fontSize: '20px',
                       fontWeight: 'bold',
-                      color: 'white',
+                      color: '#5D3A1A',
                       fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                      textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      textShadow: '0 1px 2px rgba(255,255,255,0.5)',
                     }}
                   >
                     {user.name}
@@ -450,10 +435,11 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                     style={{
                       fontSize: '12px',
                       color: 'white',
-                      background: 'rgba(255,255,255,0.2)',
+                      background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
                       padding: '2px 8px',
                       borderRadius: '12px',
                       fontWeight: 'bold',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                     }}
                   >
                     Lv.{user.level}
@@ -465,9 +451,10 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                   <p
                     style={{
                       fontSize: '12px',
-                      color: 'rgba(255,255,255,0.9)',
+                      color: '#8B5A2B',
                       marginTop: '4px',
                       fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                      textShadow: '0 1px 1px rgba(255,255,255,0.3)',
                     }}
                   >
                     {user.title}
@@ -573,12 +560,6 @@ export const OtherUserProfileModal: React.FC<OtherUserProfileModalProps> = ({
                   value={user.stats.totalStickers}
                   label="シール"
                   color="#FF6B6B"
-                />
-                <MiniStatCard
-                  icon={<BookIcon />}
-                  value={user.stats.completedSeries}
-                  label="コンプ"
-                  color="#4ADE80"
                 />
                 <MiniStatCard
                   icon={<FollowersIcon />}

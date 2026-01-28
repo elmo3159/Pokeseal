@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { collectionRewardService } from '@/services/collectionRewards'
 import type { CollectionReward, UnclaimedReward } from '@/services/collectionRewards/collectionRewardService'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 interface CollectionRewardPanelProps {
   userId: string
@@ -29,8 +30,10 @@ export const CollectionRewardPanel: React.FC<CollectionRewardPanelProps> = ({
   const [claimingId, setClaimingId] = useState<string | null>(null)
 
   // データを取得
-  const loadData = async () => {
-    setLoading(true)
+  const loadData = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true)
+    }
 
     const [allRewards, unclaimed, rate] = await Promise.all([
       collectionRewardService.getAllRewards(),
@@ -46,7 +49,16 @@ export const CollectionRewardPanel: React.FC<CollectionRewardPanelProps> = ({
 
   useEffect(() => {
     if (userId) {
-      loadData()
+      const cached = collectionRewardService.getCachedSnapshot(userId)
+      if (cached.rewards) setRewards(cached.rewards)
+      if (cached.unclaimed) setUnclaimedRewards(cached.unclaimed)
+      if (cached.completionRate !== null) setCompletionRate(cached.completionRate)
+
+      const hasCached = Boolean(cached.rewards || cached.unclaimed || cached.completionRate !== null)
+      if (hasCached) {
+        setLoading(false)
+      }
+      loadData(!hasCached)
     }
   }, [userId])
 
@@ -87,13 +99,13 @@ export const CollectionRewardPanel: React.FC<CollectionRewardPanelProps> = ({
   }
 
   // 報酬アイコンを取得
-  const getRewardIcon = (rewardType: string): string => {
-    if (rewardType === 'tickets') return '🎟️'
-    if (rewardType === 'gems') return '💎'
-    if (rewardType === 'gacha_ticket') return '⭐'
-    if (rewardType === 'theme') return '🎨'
-    if (rewardType === 'badge') return '🏆'
-    return '🎁'
+  const getRewardIcon = (rewardType: string): React.ReactNode => {
+    if (rewardType === 'tickets') return <CurrencyIcon type="ticket" size="lg" />
+    if (rewardType === 'gems') return <CurrencyIcon type="gem" size="lg" />
+    if (rewardType === 'gacha_ticket') return <span style={{ fontSize: '32px' }}>⭐</span>
+    if (rewardType === 'theme') return <span style={{ fontSize: '32px' }}>🎨</span>
+    if (rewardType === 'badge') return <span style={{ fontSize: '32px' }}>🏆</span>
+    return <span style={{ fontSize: '32px' }}>🎁</span>
   }
 
   if (loading) {
@@ -355,9 +367,9 @@ export const CollectionRewardPanel: React.FC<CollectionRewardPanelProps> = ({
                   borderRadius: '8px',
                   marginBottom: status === 'available' ? '12px' : 0
                 }}>
-                  <span style={{ fontSize: compact ? '16px' : '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
                     {getRewardIcon(reward.reward_type)}
-                  </span>
+                  </div>
                   <span style={{
                     flex: 1,
                     color: status === 'locked' ? '#9CA3AF' : '#8B5A3C',
@@ -365,7 +377,7 @@ export const CollectionRewardPanel: React.FC<CollectionRewardPanelProps> = ({
                     fontWeight: 'bold'
                   }}>
                     {reward.reward_type === 'tickets' && `シルチケ ×${reward.reward_amount}`}
-                    {reward.reward_type === 'gems' && `プレシル ×${reward.reward_amount}`}
+                    {reward.reward_type === 'gems' && `プレシルチケ ×${reward.reward_amount}`}
                     {reward.reward_type === 'gacha_ticket' && '★5確定ガチャチケット'}
                     {reward.reward_type === 'theme' && '限定カバーデザイン'}
                     {reward.reward_type === 'badge' && `バッジ: ${reward.badge_title}`}

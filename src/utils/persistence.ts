@@ -7,6 +7,7 @@
 import { UserMonetization, DEFAULT_USER_MONETIZATION } from '@/domain/monetization'
 import { PlacedSticker, BookPage } from '@/features/sticker-book'
 import { PlacedDecoItem } from '@/domain/decoItems'
+import { createInitialDailyCounts, type DailyActionCounts } from '@/domain/levelSystem'
 
 // ストレージキー
 const STORAGE_KEYS = {
@@ -35,7 +36,7 @@ export const TEST_USERS: TestUser[] = [
 ]
 
 // データバージョン（マイグレーション用）
-const CURRENT_DATA_VERSION = 1
+const CURRENT_DATA_VERSION = 3
 
 // 管理者モード
 export type AdminMode = 'production' | 'test'
@@ -64,12 +65,14 @@ export interface SavedUserData {
   placedDecoItems: PlacedDecoItem[]
   pages: BookPage[]
   coverDesignId: string
+  themeId: string
 
   // プロフィール
   profile: {
     name: string
     bio: string
     totalExp: number
+    expDailyCounts: DailyActionCounts
   }
 
   // 設定
@@ -106,11 +109,13 @@ export function createInitialUserData(): SavedUserData {
       { id: 'page-4', type: 'page', side: 'right' },
       { id: 'back', type: 'back-cover', side: 'left' },
     ],
-    coverDesignId: 'cover-mochimo',
+    coverDesignId: 'cover-default',
+    themeId: 'theme-basic-white',
     profile: {
       name: 'ゲスト',
       bio: '',
       totalExp: 0, // レベル1からスタート
+      expDailyCounts: createInitialDailyCounts(),
     },
     settings: {
       soundEnabled: true,
@@ -164,11 +169,13 @@ export function createTestModeData(allStickerIds: string[]): SavedUserData {
       { id: 'page-4', type: 'page', side: 'right' },
       { id: 'back', type: 'back-cover', side: 'left' },
     ],
-    coverDesignId: 'cover-mochimo',
+    coverDesignId: 'cover-default',
+    themeId: 'theme-basic-white',
     profile: {
       name: '管理者テスト',
       bio: 'テストモードで実行中',
       totalExp: 10000, // 高レベル
+      expDailyCounts: createInitialDailyCounts(),
     },
     settings: {
       soundEnabled: true,
@@ -223,8 +230,17 @@ export function loadUserData(): SavedUserData | null {
 // データマイグレーション（将来用）
 function migrateData(oldData: SavedUserData): SavedUserData {
   // 現在はバージョン1のみなのでそのまま返す
+  const normalizedThemeId = oldData.themeId === 'theme-basic-pink'
+    ? 'theme-basic-white'
+    : oldData.themeId
+
   return {
     ...oldData,
+    themeId: normalizedThemeId || 'theme-basic-white',
+    profile: {
+      ...oldData.profile,
+      expDailyCounts: oldData.profile.expDailyCounts || createInitialDailyCounts(),
+    },
     version: CURRENT_DATA_VERSION,
   }
 }
@@ -289,29 +305,74 @@ export function addStickersToCollection(
   newStickers: string[]  // 初めて入手したシールID
   duplicateStickers: string[] // 既に持っていたシールID
 } {
+  // コレクションが複合ID形式（stickerId:rank）かどうかを判定
+  const hasCompositeIds = currentCollection.some(item => item.stickerId.includes(':') || typeof item.upgradeRank === 'number')
+
+  const parseCompositeId = (compositeId: string): { baseId: string; rank: number } => {
+    const lastColonIndex = compositeId.lastIndexOf(':')
+    if (lastColonIndex === -1) {
+      return { baseId: compositeId, rank: 0 }
+    }
+    const potentialRank = compositeId.substring(lastColonIndex + 1)
+    const parsedRank = parseInt(potentialRank, 10)
+    if (!isNaN(parsedRank) && potentialRank === String(parsedRank)) {
+      return { baseId: compositeId.substring(0, lastColonIndex), rank: parsedRank }
+    }
+    return { baseId: compositeId, rank: 0 }
+  }
+
+  const normalizeStickerId = (stickerId: string): { normalizedId: string; rank: number } => {
+    const { baseId, rank } = parseCompositeId(stickerId)
+    if (hasCompositeIds) {
+      return { normalizedId: `${baseId}:${rank}`, rank }
+    }
+    return { normalizedId: baseId, rank }
+  }
+
   const collectionMap = new Map<string, SavedCollectionItem>()
-  currentCollection.forEach(item => collectionMap.set(item.stickerId, { ...item }))
+  currentCollection.forEach(item => {
+    const { normalizedId, rank } = normalizeStickerId(item.stickerId)
+    const existing = collectionMap.get(normalizedId)
+    if (existing) {
+      existing.quantity += item.quantity || 0
+      existing.totalAcquired += item.totalAcquired || 0
+      if (!existing.firstAcquiredAt && item.firstAcquiredAt) {
+        existing.firstAcquiredAt = item.firstAcquiredAt
+      }
+      return
+    }
+    collectionMap.set(normalizedId, {
+      ...item,
+      stickerId: normalizedId,
+      upgradeRank: item.upgradeRank ?? rank,
+      firstAcquiredAt: item.firstAcquiredAt ?? null,
+      quantity: item.quantity ?? 0,
+      totalAcquired: item.totalAcquired ?? 0,
+    })
+  })
 
   const newStickers: string[] = []
   const duplicateStickers: string[] = []
   const now = new Date().toISOString()
 
   newStickerIds.forEach(stickerId => {
-    const existing = collectionMap.get(stickerId)
+    const { normalizedId, rank } = normalizeStickerId(stickerId)
+    const existing = collectionMap.get(normalizedId)
     if (existing) {
       // 既存シール: 枚数を増やす
       existing.quantity += 1
       existing.totalAcquired += 1
-      duplicateStickers.push(stickerId)
+      duplicateStickers.push(normalizedId)
     } else {
       // 新規シール
-      collectionMap.set(stickerId, {
-        stickerId,
+      collectionMap.set(normalizedId, {
+        stickerId: normalizedId,
         quantity: 1,
         totalAcquired: 1,
         firstAcquiredAt: now,
+        upgradeRank: hasCompositeIds ? rank : undefined,
       })
-      newStickers.push(stickerId)
+      newStickers.push(normalizedId)
     }
   })
 
@@ -328,13 +389,35 @@ export function canPlaceSticker(
   stickerId: string,
   currentPlacements: PlacedSticker[]
 ): { canPlace: boolean; remainingCount: number } {
-  const item = collection.find(c => c.stickerId === stickerId)
+  const parseCompositeId = (compositeId: string): { baseId: string; rank: number } => {
+    const lastColonIndex = compositeId.lastIndexOf(':')
+    if (lastColonIndex === -1) {
+      return { baseId: compositeId, rank: 0 }
+    }
+    const potentialRank = compositeId.substring(lastColonIndex + 1)
+    const parsedRank = parseInt(potentialRank, 10)
+    if (!isNaN(parsedRank) && potentialRank === String(parsedRank)) {
+      return { baseId: compositeId.substring(0, lastColonIndex), rank: parsedRank }
+    }
+    return { baseId: compositeId, rank: 0 }
+  }
+
+  const { baseId } = parseCompositeId(stickerId)
+  const fallbackCompositeId = `${baseId}:0`
+
+  const item =
+    collection.find(c => c.stickerId === stickerId) ||
+    collection.find(c => c.stickerId === baseId) ||
+    collection.find(c => c.stickerId === fallbackCompositeId)
   if (!item) {
     return { canPlace: false, remainingCount: 0 }
   }
 
   // 既に配置されている数をカウント
-  const placedCount = currentPlacements.filter(p => p.stickerId === stickerId).length
+  const usesComposite = item.stickerId.includes(':')
+  const placedCount = usesComposite
+    ? currentPlacements.filter(p => p.stickerId === item.stickerId).length
+    : currentPlacements.filter(p => parseCompositeId(p.stickerId).baseId === baseId).length
   const remainingCount = item.quantity - placedCount
 
   return {
@@ -443,6 +526,7 @@ export function createInitialUserDataForTestUser(userId: string): SavedUserData 
       name: baseName,
       bio: '',
       totalExp: 0,
+      expDailyCounts: createInitialDailyCounts(),
     },
   }
 }

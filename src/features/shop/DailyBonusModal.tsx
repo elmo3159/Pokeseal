@@ -8,6 +8,7 @@ import {
   MAX_AD_WATCHES_PER_DAY,
   DAILY_MISSIONS,
 } from '@/domain/monetization'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 interface DailyBonusModalProps {
   isOpen: boolean
@@ -73,7 +74,7 @@ export function DailyBonusModal({
               }}
             >
               <div className="flex items-center gap-2">
-                <span className="text-2xl">🎫</span>
+                <CurrencyIcon type="ticket" size="lg" />
                 <span className="font-bold text-amber-800">シルチケ</span>
               </div>
               <span className="text-xl font-bold text-amber-600">
@@ -90,7 +91,7 @@ export function DailyBonusModal({
                 }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">★</span>
+                  <CurrencyIcon type="star" size="lg" />
                   <span className="font-bold text-purple-800">どろっぷ</span>
                 </div>
                 <span className="text-xl font-bold text-purple-600">

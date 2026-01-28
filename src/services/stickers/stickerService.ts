@@ -1,6 +1,7 @@
 // シールサービス - シール関連のデータ操作
 import { getSupabase } from '@/services/supabase'
 import type { Sticker, UserSticker } from '@/types/database'
+// Note: シール図鑑はuser_stickersテーブルで管理するため、seriesRewardServiceは不要
 
 // ユーザーシールとマスターデータを結合した型
 export interface UserStickerWithDetails extends UserSticker {
@@ -192,6 +193,9 @@ export const stickerService = {
         })
         return null
       }
+
+      // Note: 図鑑記録はuser_stickersテーブルで自動的に管理される
+      // characterRewardServiceはuser_stickersを参照してキャラクター別進捗を計算
 
       return {
         ...created,

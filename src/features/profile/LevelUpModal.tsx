@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -45,7 +45,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            zIndex: 100,
+            zIndex: 5000,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -133,15 +133,30 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({
               <motion.div
                 style={{
                   position: 'absolute',
-                  top: '-32px',
+                  top: '-34px',
                   left: '50%',
                   transform: 'translateX(-50%)',
+                  width: '72px',
+                  height: '72px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.3, type: 'spring' }}
               >
-                <span style={{ fontSize: '48px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' }}>👑</span>
+                <span
+                  style={{
+                    fontSize: '48px',
+                    lineHeight: 1,
+                    display: 'block',
+                    textAlign: 'center',
+                    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))',
+                  }}
+                >
+                  👑
+                </span>
               </motion.div>
 
               {/* LEVEL UP! テキスト */}

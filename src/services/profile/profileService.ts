@@ -1,6 +1,7 @@
 // プロフィールサービス - Supabaseでプロフィール・経験値を管理
 import { getSupabase } from '@/services/supabase'
-import { calculateLevel, getLevelTitle } from '@/domain/levelSystem'
+import { calculateLevel, getLevelTitle, type DailyActionCounts, createInitialDailyCounts, MAX_TOTAL_EXP, MAX_LEVEL } from '@/domain/levelSystem'
+import type { Json } from '@/types/database'
 
 
 // プロフィールデータ型
@@ -10,8 +11,10 @@ export interface ProfileData {
   userCode: string | null // 6桁ユーザーコード
   displayName: string
   avatarUrl: string | null
+  selectedFrameId: string | null // キャラクター報酬で解放したフレーム
   bio: string | null
   totalExp: number
+  expDailyCounts: DailyActionCounts
   starPoints: number
   totalStickers: number
   totalTrades: number
@@ -22,6 +25,7 @@ export interface ProfileData {
 export interface ProfileUpdateData {
   displayName?: string
   avatarUrl?: string | null
+  selectedFrameId?: string | null
   bio?: string | null
 }
 
@@ -51,14 +55,21 @@ export const profileService = {
       return null
     }
 
+    const rawDailyCounts = (data as any).exp_daily_counts as DailyActionCounts | null | undefined
+    const normalizedDailyCounts = rawDailyCounts && typeof rawDailyCounts === 'object' && (rawDailyCounts as any).date
+      ? rawDailyCounts
+      : createInitialDailyCounts()
+
     return {
       id: data.id,
       username: data.username,
       userCode: data.user_code,
       displayName: data.display_name || data.username || 'ゲスト',
       avatarUrl: data.avatar_url,
+      selectedFrameId: (data as any).selected_frame_id || null, // マイグレーション038で追加
       bio: data.bio,
       totalExp: data.total_exp || 0,
+      expDailyCounts: normalizedDailyCounts,
       starPoints: data.star_points || 0,
       totalStickers: data.total_stickers || 0,
       totalTrades: data.total_trades || 0,
@@ -75,6 +86,7 @@ export const profileService = {
     const updateData: Record<string, unknown> = {}
     if (updates.displayName !== undefined) updateData.display_name = updates.displayName
     if (updates.avatarUrl !== undefined) updateData.avatar_url = updates.avatarUrl
+    if (updates.selectedFrameId !== undefined) updateData.selected_frame_id = updates.selectedFrameId
     if (updates.bio !== undefined) updateData.bio = updates.bio
 
     const { error } = await supabase
@@ -110,8 +122,18 @@ export const profileService = {
     }
 
     const currentExp = profile.total_exp || 0
-    const newTotalExp = currentExp + expAmount
     const oldLevel = calculateLevel(currentExp)
+    if (oldLevel >= MAX_LEVEL) {
+      return {
+        newTotalExp: currentExp,
+        oldLevel,
+        newLevel: oldLevel,
+        leveledUp: false,
+      }
+    }
+
+    const cappedExp = Math.min(expAmount, Math.max(0, MAX_TOTAL_EXP - currentExp))
+    const newTotalExp = currentExp + cappedExp
     const newLevel = calculateLevel(newTotalExp)
 
     // 経験値を更新
@@ -153,6 +175,100 @@ export const profileService = {
 
     console.log('[ProfileService] Exp set to:', totalExp)
     return true
+  },
+
+  /**
+   * 経験値を行動タイプで追加（デイリー上限も含む）
+   */
+  async applyExpAction(
+    userId: string,
+    actionType: string
+  ): Promise<{
+    success: boolean
+    expGained: number
+    totalExp: number
+    dailyLimitReached: boolean
+    dailyCounts: DailyActionCounts
+  } | null> {
+    const supabase = getSupabase()
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('apply_exp_action', {
+        p_user_id: userId,
+        p_action_type: actionType,
+      })
+
+      if (error || !data) {
+        console.error('[ProfileService] apply_exp_action error:', error)
+        return null
+      }
+
+      const result = data as Record<string, unknown>
+      return {
+        success: Boolean(result.success),
+        expGained: Number(result.exp_gained || 0),
+        totalExp: Number(result.total_exp || 0),
+        dailyLimitReached: Boolean(result.daily_limit_reached),
+        dailyCounts: (result.daily_counts as DailyActionCounts) || createInitialDailyCounts(),
+      }
+    } catch (err) {
+      console.error('[ProfileService] apply_exp_action exception:', err)
+      return null
+    }
+  },
+
+  /**
+   * 経験値とデイリーカウントを同時に更新（フォールバック）
+   */
+  async setExpAndDailyCounts(
+    userId: string,
+    totalExp: number,
+    expDailyCounts: DailyActionCounts
+  ): Promise<boolean> {
+    const supabase = getSupabase()
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        total_exp: totalExp,
+        exp_daily_counts: expDailyCounts as unknown as Json,
+      })
+      .eq('id', userId)
+
+    if (error) {
+      console.error('[ProfileService] Set exp & daily counts error:', error)
+      return false
+    }
+
+    return true
+  },
+
+  /**
+   * 投稿へのいいねで、投稿者に経験値を付与（サーバー側で判定）
+   */
+  async awardPostLikeExp(
+    postId: string,
+    actorId: string
+  ): Promise<boolean> {
+    const supabase = getSupabase()
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('award_post_like_exp', {
+        p_post_id: postId,
+        p_actor_id: actorId,
+      })
+
+      if (error) {
+        console.error('[ProfileService] award_post_like_exp error:', error)
+        return false
+      }
+
+      const result = data as Record<string, unknown>
+      return Boolean(result.success)
+    } catch (err) {
+      console.error('[ProfileService] award_post_like_exp exception:', err)
+      return false
+    }
   },
 
   /**
@@ -277,6 +393,7 @@ export const profileService = {
       followingResult,
       followCheckResult,
       stickersResult,
+      stickerCatalogResult,
     ] = await Promise.all([
       // プロフィール基本情報
       supabase.from('profiles').select('*').eq('id', userId).single(),
@@ -290,6 +407,8 @@ export const profileService = {
         : Promise.resolve({ data: null }),
       // 所持シール数（sticker_idでユニーク数も計算可能）
       supabase.from('user_stickers').select('sticker_id').eq('user_id', userId),
+      // シールマスター（シリーズ集計用）
+      supabase.from('stickers').select('id, series'),
     ])
 
     const endTime = performance.now()
@@ -310,6 +429,33 @@ export const profileService = {
     const totalStickers = stickersData.length
     const uniqueStickers = new Set(stickersData.map(s => s.sticker_id)).size
 
+    const catalog = stickerCatalogResult.data || []
+    const seriesTotals = new Map<string, number>()
+    const stickerSeriesMap = new Map<string, string>()
+    for (const sticker of catalog) {
+      if (!sticker.series) continue
+      stickerSeriesMap.set(sticker.id, sticker.series)
+      seriesTotals.set(sticker.series, (seriesTotals.get(sticker.series) ?? 0) + 1)
+    }
+
+    const seriesOwnedMap = new Map<string, Set<string>>()
+    for (const owned of stickersData) {
+      const series = stickerSeriesMap.get(owned.sticker_id)
+      if (!series) continue
+      if (!seriesOwnedMap.has(series)) {
+        seriesOwnedMap.set(series, new Set())
+      }
+      seriesOwnedMap.get(series)!.add(owned.sticker_id)
+    }
+
+    let completedSeries = 0
+    seriesTotals.forEach((total, series) => {
+      const ownedCount = seriesOwnedMap.get(series)?.size ?? 0
+      if (ownedCount > 0 && ownedCount === total) {
+        completedSeries += 1
+      }
+    })
+
     const level = calculateLevel(profile.total_exp || 0)
     const title = getLevelTitle(level)
 
@@ -318,6 +464,7 @@ export const profileService = {
       name: profile.display_name || profile.username || 'ゲスト',
       userCode: profile.user_code,
       avatarUrl: profile.avatar_url,
+      frameId: (profile as any).selected_frame_id || null,
       level,
       title,
       bio: profile.bio || '',
@@ -325,7 +472,7 @@ export const profileService = {
       stats: {
         totalStickers: totalStickers || profile.total_stickers || 0,
         uniqueStickers,
-        completedSeries: 0, // TODO: シリーズコンプリート計算
+        completedSeries,
         followersCount,
         followingCount,
       },
@@ -349,14 +496,21 @@ export const profileService = {
       return null
     }
 
+    const rawDailyCounts = (data as any).exp_daily_counts as DailyActionCounts | null | undefined
+    const normalizedDailyCounts = rawDailyCounts && typeof rawDailyCounts === 'object' && (rawDailyCounts as any).date
+      ? rawDailyCounts
+      : createInitialDailyCounts()
+
     return {
       id: data.id,
       username: data.username,
       userCode: data.user_code,
       displayName: data.display_name || data.username || 'ゲスト',
       avatarUrl: data.avatar_url,
+      selectedFrameId: (data as any).selected_frame_id || null,
       bio: data.bio,
       totalExp: data.total_exp || 0,
+      expDailyCounts: normalizedDailyCounts,
       starPoints: data.star_points || 0,
       totalStickers: data.total_stickers || 0,
       totalTrades: data.total_trades || 0,
@@ -497,9 +651,10 @@ export const profileService = {
     const followerIds = followsData.map(f => f.follower_id)
 
     // フォロワーのプロフィール情報を取得
+    // Note: selected_frame_idはマイグレーション038で追加、型定義は将来再生成予定
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, display_name, username, avatar_url, total_exp')
+      .select('*')
       .in('id', followerIds)
 
     if (profilesError || !profiles) {
@@ -519,6 +674,7 @@ export const profileService = {
         id: profile.id,
         name: profile.display_name || profile.username || 'ゲスト',
         avatarUrl: profile.avatar_url,
+        frameId: (profile as any).selected_frame_id || null,
         level,
         title: getLevelTitle(level),
         isFollowing: followStatusMap[profile.id] === 'following' || followStatusMap[profile.id] === 'mutual',
@@ -546,9 +702,10 @@ export const profileService = {
     const followingIds = followsData.map(f => f.following_id)
 
     // フォロー中ユーザーのプロフィール情報を取得
+    // Note: selected_frame_idはマイグレーション038で追加、型定義は将来再生成予定
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, display_name, username, avatar_url, total_exp')
+      .select('*')
       .in('id', followingIds)
 
     if (profilesError || !profiles) {
@@ -571,6 +728,7 @@ export const profileService = {
         id: profile.id,
         name: profile.display_name || profile.username || 'ゲスト',
         avatarUrl: profile.avatar_url,
+        frameId: (profile as any).selected_frame_id || null,
         level,
         title: getLevelTitle(level),
         isFollowing: isOwnList ? true : (followStatusMap[profile.id] === 'following' || followStatusMap[profile.id] === 'mutual'),
@@ -584,6 +742,7 @@ export interface FollowUserData {
   id: string
   name: string
   avatarUrl: string | null
+  frameId: string | null  // キャラクター報酬で解放したフレーム
   level: number
   title: string
   isFollowing: boolean
@@ -595,6 +754,7 @@ export interface OtherUserProfileData {
   name: string
   userCode: string | null
   avatarUrl: string | null
+  frameId: string | null  // キャラクター報酬で解放したフレーム
   level: number
   title: string
   bio: string
@@ -647,6 +807,7 @@ export interface LocalCurrencyData {
 export const currencyService = {
   /**
    * ユーザーの通貨を取得
+   * プロファイルが存在しない場合は作成を試み、NULLの場合はデフォルト値を設定
    */
   async getCurrency(userId: string): Promise<CurrencyData | null> {
     const supabase = getSupabase()
@@ -657,9 +818,70 @@ export const currencyService = {
       .eq('id', userId)
       .single()
 
-    if (error || !data) {
+    if (error) {
       console.error('[CurrencyService] Get currency error:', error)
-      return null
+
+      // プロファイルが存在しない場合（PGRST116 = no rows returned）
+      if (error.code === 'PGRST116') {
+        console.log('[CurrencyService] Profile not found, attempting to create...')
+
+        // プロファイルを作成
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            display_name: 'ゲスト',
+            silchike: 10,
+            preshiru: 0,
+            drops: 0,
+          })
+
+        if (insertError) {
+          console.error('[CurrencyService] Failed to create profile:', insertError)
+          // それでも失敗した場合はデフォルト値を返す（ローカルで動作させる）
+          return {
+            silchike: 10,
+            preshiru: 0,
+            drops: 0,
+          }
+        }
+
+        return {
+          silchike: 10,
+          preshiru: 0,
+          drops: 0,
+        }
+      }
+
+      // その他のエラーでもデフォルト値を返す
+      return {
+        silchike: 10,
+        preshiru: 0,
+        drops: 0,
+      }
+    }
+
+    if (!data) {
+      // データがnullの場合もデフォルト値を返す
+      return {
+        silchike: 10,
+        preshiru: 0,
+        drops: 0,
+      }
+    }
+
+    // NULL値がある場合はデフォルト値で更新
+    const needsUpdate = data.silchike === null || data.preshiru === null || data.drops === null
+    if (needsUpdate) {
+      console.log('[CurrencyService] Currency columns have NULL values, updating with defaults...')
+      await supabase
+        .from('profiles')
+        .update({
+          silchike: data.silchike ?? 10,
+          preshiru: data.preshiru ?? 0,
+          drops: data.drops ?? 0,
+        })
+        .eq('id', userId)
     }
 
     return {
@@ -878,7 +1100,7 @@ export const currencyService = {
   },
 
   /**
-   * プレシル（gems）用：ガチャ消費
+   * プレシルチケ（gems）用：ガチャ消費
    */
   async deductGemsForGacha(
     userId: string,
@@ -915,7 +1137,7 @@ export const currencyService = {
       }
     }
 
-    // プレシルで支払う場合
+    // プレシルチケで支払う場合
     if (current.preshiru >= gemCost) {
       const result = await this.deductCurrency(userId, 'preshiru', gemCost)
       return {
@@ -927,7 +1149,7 @@ export const currencyService = {
       }
     }
 
-    // プレシル不足 → どろっぷで代替可能か確認
+    // プレシルチケ不足 → どろっぷで代替可能か確認
     const canUseDrops = current.drops >= dropCost
     return {
       success: false,
@@ -989,6 +1211,246 @@ export interface UserStatsFromDB {
   mysteryPostsReceived: number
 }
 
+const STATS_RPC_CACHE_KEY = 'pokeseal_stats_rpc_available'
+let statsRpcAvailableCache: boolean | null = null
+
+const readStatsRpcAvailability = (): boolean | null => {
+  if (statsRpcAvailableCache !== null) return statsRpcAvailableCache
+  if (typeof window === 'undefined') return null
+  const stored = window.localStorage.getItem(STATS_RPC_CACHE_KEY)
+  if (stored === 'true') {
+    statsRpcAvailableCache = true
+    return true
+  }
+  if (stored === 'false') {
+    statsRpcAvailableCache = false
+    return false
+  }
+  return null
+}
+
+const writeStatsRpcAvailability = (value: boolean) => {
+  statsRpcAvailableCache = value
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(STATS_RPC_CACHE_KEY, value ? 'true' : 'false')
+  }
+}
+
+const chunkArray = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
+
+const countByChunks = async (
+  supabase: ReturnType<typeof getSupabase>,
+  table: string,
+  column: string,
+  values: string[],
+  chunkSize: number = 100
+): Promise<number> => {
+  if (values.length === 0) return 0
+  let total = 0
+  for (const chunk of chunkArray(values, chunkSize)) {
+    const { count, error } = await supabase
+      .from(table as any)
+      .select('id', { count: 'exact', head: true })
+      .in(column, chunk)
+    if (error) {
+      console.error(`[StatsService] Count ${table} error:`, error)
+      continue
+    }
+    total += count || 0
+  }
+  return total
+}
+
+const getUserStatsFallback = async (
+  userId: string,
+  supabase: ReturnType<typeof getSupabase>
+): Promise<UserStatsFromDB | null> => {
+  try {
+    const tradeFilter = `requester_id.eq.${userId},responder_id.eq.${userId}`
+    const [
+      totalTradesRes,
+      successfulTradesRes,
+      followersRes,
+      followingRes,
+      postsRes,
+      mysterySentRes,
+      mysteryReceivedRes,
+      userStickersRes,
+      stickersRes,
+      loginBonusRes,
+      gachaHistoryRes,
+    ] = await Promise.all([
+      supabase
+        .from('async_trade_sessions')
+        .select('id', { count: 'exact', head: true })
+        .or(tradeFilter),
+      supabase
+        .from('async_trade_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .or(tradeFilter),
+      supabase
+        .from('follows')
+        .select('follower_id', { count: 'exact' })
+        .eq('following_id', userId),
+      supabase
+        .from('follows')
+        .select('following_id', { count: 'exact' })
+        .eq('follower_id', userId),
+      supabase
+        .from('posts')
+        .select('id', { count: 'exact' })
+        .eq('user_id', userId),
+      supabase
+        .from('mystery_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('sender_id', userId),
+      supabase
+        .from('mystery_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', userId),
+      supabase
+        .from('user_stickers')
+        .select('sticker_id, quantity, upgrade_rank')
+        .eq('user_id', userId),
+      supabase
+        .from('stickers')
+        .select('id, series')
+        .neq('series', '')
+        .not('series', 'is', null),
+      supabase
+        .from('login_bonus_history')
+        .select('login_date')
+        .eq('user_id', userId),
+      supabase
+        .from('gacha_history')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId),
+    ])
+
+    if (totalTradesRes.error) {
+      console.error('[StatsService] Total trades error:', totalTradesRes.error)
+    }
+    if (successfulTradesRes.error) {
+      console.error('[StatsService] Successful trades error:', successfulTradesRes.error)
+    }
+    if (followersRes.error) {
+      console.error('[StatsService] Followers error:', followersRes.error)
+    }
+    if (followingRes.error) {
+      console.error('[StatsService] Following error:', followingRes.error)
+    }
+    if (postsRes.error) {
+      console.error('[StatsService] Posts error:', postsRes.error)
+    }
+    if (userStickersRes.error) {
+      console.error('[StatsService] User stickers error:', userStickersRes.error)
+    }
+    if (stickersRes.error) {
+      console.error('[StatsService] Stickers error:', stickersRes.error)
+    }
+    if (loginBonusRes.error) {
+      console.error('[StatsService] Login bonus error:', loginBonusRes.error)
+    }
+    if (gachaHistoryRes.error) {
+      console.error('[StatsService] Gacha history error:', gachaHistoryRes.error)
+    }
+
+    const followers = followersRes.data || []
+    const following = followingRes.data || []
+
+    const followerIds = new Set(followers.map(row => row.follower_id))
+    const followingIds = new Set(following.map(row => row.following_id))
+    let friendsCount = 0
+    followerIds.forEach(id => {
+      if (followingIds.has(id)) friendsCount += 1
+    })
+
+    const posts = postsRes.data || []
+    const postIds = posts.map(post => post.id)
+    const reactionsReceived = await countByChunks(supabase, 'reactions', 'post_id', postIds)
+
+    const userStickers = userStickersRes.data || []
+    const totalStickers = userStickers.reduce((sum, item) => sum + (item.quantity ?? 1), 0)
+    const uniqueStickers = new Set(userStickers.map(item => item.sticker_id)).size
+    const prismStickers = userStickers.filter(item => item.upgrade_rank === 3).length
+
+    const stickerSeriesMap = new Map<string, string>()
+    const seriesTotals = new Map<string, number>()
+    const stickers = stickersRes.data || []
+    for (const sticker of stickers) {
+      if (!sticker.series) continue
+      stickerSeriesMap.set(sticker.id, sticker.series)
+      seriesTotals.set(sticker.series, (seriesTotals.get(sticker.series) ?? 0) + 1)
+    }
+
+    const seriesOwnedMap = new Map<string, Set<string>>()
+    for (const owned of userStickers) {
+      const series = stickerSeriesMap.get(owned.sticker_id)
+      if (!series) continue
+      if (!seriesOwnedMap.has(series)) {
+        seriesOwnedMap.set(series, new Set())
+      }
+      seriesOwnedMap.get(series)!.add(owned.sticker_id)
+    }
+
+    let completedSeries = 0
+    seriesTotals.forEach((total, series) => {
+      const ownedCount = seriesOwnedMap.get(series)?.size ?? 0
+      if (ownedCount > 0 && ownedCount === total) {
+        completedSeries += 1
+      }
+    })
+
+    const loginDaysFromBonus = loginBonusRes.data
+      ? new Set(loginBonusRes.data.map(row => row.login_date)).size
+      : 0
+    const loginDays = loginDaysFromBonus || 1
+    const gachaPulls = gachaHistoryRes.count ?? 0
+
+    return {
+      totalTrades: totalTradesRes.count || 0,
+      successfulTrades: successfulTradesRes.count || 0,
+      friendsCount,
+      followersCount: followersRes.count || followers.length,
+      followingCount: followingRes.count || following.length,
+      reactionsReceived,
+      postsCount: postsRes.count || posts.length,
+      loginDays,
+      completedSeries,
+      totalStickers,
+      uniqueStickers,
+      prismStickers,
+      gachaPulls,
+      mysteryPostsSent: mysterySentRes.count || 0,
+      mysteryPostsReceived: mysteryReceivedRes.count || 0,
+    }
+  } catch (error) {
+    console.error('[StatsService] Fallback stats error:', error)
+    return null
+  }
+}
+
+const isStatsRpcMissing = (error: { code?: string; message?: string }) => {
+  const code = error?.code || ''
+  const message = (error?.message || '').toLowerCase()
+  return (
+    code === 'PGRST202' ||
+    code === 'PGRST404' ||
+    message.includes('function') ||
+    message.includes('schema cache') ||
+    message.includes('get_user_stats')
+  )
+}
+
+const STATS_RPC_ENABLED = process.env.NEXT_PUBLIC_ENABLE_STATS_RPC === 'true'
+
 export const statsService = {
   /**
    * ユーザーの統計情報をSupabaseから取得
@@ -999,7 +1461,16 @@ export const statsService = {
       return null
     }
 
+    const cachedAvailability = readStatsRpcAvailability()
     const supabase = getSupabase()
+
+    if (!STATS_RPC_ENABLED) {
+      return getUserStatsFallback(userId, supabase)
+    }
+
+    if (cachedAvailability === false) {
+      return getUserStatsFallback(userId, supabase)
+    }
 
     try {
       const { data, error } = await supabase.rpc('get_user_stats', {
@@ -1007,6 +1478,10 @@ export const statsService = {
       })
 
       if (error) {
+        if (isStatsRpcMissing(error)) {
+          writeStatsRpcAvailability(false)
+          return getUserStatsFallback(userId, supabase)
+        }
         // RPC関数が未実装の場合やカラム不足はサイレントに処理
         return null
       }
@@ -1015,6 +1490,7 @@ export const statsService = {
         return null
       }
 
+      writeStatsRpcAvailability(true)
       const result = data as Record<string, unknown>
       return {
         totalTrades: (result.total_trades as number) || 0,
@@ -1035,7 +1511,7 @@ export const statsService = {
       }
     } catch (err) {
       console.error('[StatsService] Exception getting user stats:', err)
-      return null
+      return getUserStatsFallback(userId, supabase)
     }
   },
 

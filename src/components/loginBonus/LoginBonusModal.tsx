@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { loginBonusService } from '@/services/loginBonus'
 import type { LoginBonus } from '@/services/loginBonus/loginBonusService'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 interface LoginBonusModalProps {
   isOpen: boolean
@@ -14,14 +15,21 @@ interface LoginBonusModalProps {
 
 // 7日間の報酬定義（UI表示用）
 const BONUS_SCHEDULE = [
-  { day: 1, icon: '🎟️', reward: 'シルチケ ×2', color: '#FFB6D9' },
-  { day: 2, icon: '🎟️', reward: 'シルチケ ×3', color: '#FFB6D9' },
-  { day: 3, icon: '💎', reward: 'プレシル ×1', color: '#A78BFA' },
-  { day: 4, icon: '🎟️', reward: 'シルチケ ×5', color: '#FFB6D9' },
-  { day: 5, icon: '🎨', reward: 'デコアイテム', color: '#FFA500' },
-  { day: 6, icon: '🎟️', reward: 'シルチケ ×10', color: '#FFB6D9' },
-  { day: 7, icon: '⭐', reward: '★4確定チケット', color: '#FFD700' }
+  { day: 1, iconType: 'ticket' as const, reward: 'シルチケ ×2', color: '#FFB6D9' },
+  { day: 2, iconType: 'ticket' as const, reward: 'シルチケ ×3', color: '#FFB6D9' },
+  { day: 3, iconType: 'gem' as const, reward: 'プレシルチケ ×1', color: '#A78BFA' },
+  { day: 4, iconType: 'ticket' as const, reward: 'シルチケ ×5', color: '#FFB6D9' },
+  { day: 5, iconType: 'other' as const, icon: '🎨', reward: 'デコアイテム', color: '#FFA500' },
+  { day: 6, iconType: 'ticket' as const, reward: 'シルチケ ×10', color: '#FFB6D9' },
+  { day: 7, iconType: 'other' as const, icon: '⭐', reward: '★4確定チケット', color: '#FFD700' }
 ]
+
+// アイコンをレンダリングするヘルパー
+const renderBonusIcon = (schedule: typeof BONUS_SCHEDULE[0], size: 'sm' | 'md' | 'lg' | 'xl' = 'lg') => {
+  if (schedule.iconType === 'ticket') return <CurrencyIcon type="ticket" size={size} />
+  if (schedule.iconType === 'gem') return <CurrencyIcon type="gem" size={size} />
+  return <span style={{ fontSize: size === 'xl' ? '48px' : size === 'lg' ? '32px' : '24px' }}>{schedule.icon}</span>
+}
 
 /**
  * ログインボーナスモーダル
@@ -279,11 +287,10 @@ export const LoginBonusModal: React.FC<LoginBonusModalProps> = ({
 
                           {/* アイコン */}
                           <div style={{
-                            fontSize: '24px',
                             marginBottom: '4px',
                             opacity: isClaimed && !isToday ? 0.5 : 1
                           }}>
-                            {schedule.icon}
+                            {renderBonusIcon(schedule, 'md')}
                           </div>
 
                           {/* 報酬 */}
@@ -346,10 +353,9 @@ export const LoginBonusModal: React.FC<LoginBonusModalProps> = ({
                         今日のボーナス
                       </p>
                       <div style={{
-                        fontSize: '48px',
                         marginBottom: '8px'
                       }}>
-                        {BONUS_SCHEDULE[bonus.reward_day - 1]?.icon}
+                        {BONUS_SCHEDULE[bonus.reward_day - 1] && renderBonusIcon(BONUS_SCHEDULE[bonus.reward_day - 1], 'xl')}
                       </div>
                       <h3 style={{
                         margin: 0,

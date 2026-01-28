@@ -88,7 +88,7 @@ interface StickerOption {
 
 const CURRENCY_INFO = {
   silchike: { name: 'シルチケ', icon: '🎫', color: '#8B5CF6' },
-  preshiru: { name: 'プレシル', icon: '💎', color: '#EC4899' },
+  preshiru: { name: 'プレシルチケ', icon: '💎', color: '#EC4899' },
   drop: { name: 'どろっぷ', icon: '💧', color: '#3B82F6' },
 }
 
@@ -577,7 +577,7 @@ export default function AdminPage() {
                       <div className="bg-white/5 rounded-lg p-3 text-center">
                         <div className="text-2xl">💎</div>
                         <div className="text-white font-bold">{selectedUser.preshiru}</div>
-                        <div className="text-white/40 text-xs">プレシル</div>
+                        <div className="text-white/40 text-xs">プレシルチケ</div>
                       </div>
                       <div className="bg-white/5 rounded-lg p-3 text-center">
                         <div className="text-2xl">💧</div>

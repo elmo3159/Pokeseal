@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 // 確認ダイアログの状態
 interface ConfirmDialogState {
@@ -48,6 +49,8 @@ interface GachaViewEnhancedProps {
   onPullMulti: (bannerId: string) => void
   onOpenShop?: () => void
   onInsufficientFunds?: (fundType: 'tickets' | 'stars', required: number, current: number) => void
+  onWatchAd?: () => void
+  remainingAdWatches?: number
 }
 
 // ============================================
@@ -106,47 +109,6 @@ const RainbowGlow: React.FC = () => (
     transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
   />
 )
-
-// ============================================
-// 通貨アイコン（大きめ）- SVGベース
-// ============================================
-const CurrencyIcon: React.FC<{ type: 'ticket' | 'star' | 'gem'; size?: 'sm' | 'md' | 'lg' }> = ({
-  type,
-  size = 'md',
-}) => {
-  const sizes = {
-    sm: { width: 16, height: 16 },
-    md: { width: 24, height: 24 },
-    lg: { width: 32, height: 32 },
-  }
-  const { width, height } = sizes[size]
-
-  if (type === 'ticket') {
-    return (
-      <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
-        <rect x="2" y="6" width="20" height="12" rx="2" fill="#A855F7" stroke="#7C3AED" strokeWidth="1.5"/>
-        <circle cx="2" cy="12" r="2" fill="#FDF2F8"/>
-        <circle cx="22" cy="12" r="2" fill="#FDF2F8"/>
-        <line x1="8" y1="6" x2="8" y2="18" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="2 2"/>
-      </svg>
-    )
-  }
-  if (type === 'star') {
-    return (
-      <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
-      </svg>
-    )
-  }
-  // gem
-  return (
-    <svg width={width} height={height} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2L4 8L12 22L20 8L12 2Z" fill="#60A5FA" stroke="#3B82F6" strokeWidth="1.5"/>
-      <path d="M4 8H20L12 2L4 8Z" fill="#93C5FD"/>
-      <line x1="12" y1="2" x2="12" y2="22" stroke="#3B82F6" strokeWidth="0.5"/>
-    </svg>
-  )
-}
 
 // ============================================
 // マシン周りの浮遊キラキラエフェクト
@@ -423,7 +385,7 @@ const GiantGachaMachine: React.FC<{
         >
           {banner.name}
         </motion.h3>
-        <p className="text-xs sm:text-sm text-purple-300 mt-0.5 line-clamp-1 max-w-[240px]">
+        <p className="text-xs sm:text-sm text-purple-600 mt-0.5 line-clamp-1 max-w-[240px]">
           {banner.description}
         </p>
         {banner.endDate && (
@@ -460,28 +422,28 @@ const MegaGachaPullButton: React.FC<{
     <motion.button
       onClick={onClick}
       disabled={disabled}
-      whileHover={disabled ? {} : { scale: 1.08, y: -4 }}
-      whileTap={disabled ? {} : { scale: 0.95 }}
+      whileHover={disabled ? {} : { scale: 1.03, y: -2 }}
+      whileTap={disabled ? {} : { scale: 0.97 }}
       className={`
         relative overflow-hidden
-        flex flex-col items-center justify-center
-        px-4 sm:px-8 md:px-12 py-3 sm:py-5 md:py-6 rounded-2xl sm:rounded-3xl font-extrabold
-        min-w-[110px] sm:min-w-[140px] md:min-w-[180px]
+        flex items-center justify-center gap-2
+        px-4 py-3.5 rounded-xl font-extrabold
+        flex-1
         transition-all duration-300
         ${
           isPrimary
             ? 'text-white'
-            : 'bg-white text-purple-600 border-2 sm:border-4 border-purple-300'
+            : 'bg-white text-purple-600 border-2 border-purple-300'
         }
         ${disabled ? 'opacity-40 cursor-not-allowed grayscale' : 'cursor-pointer'}
       `}
       style={isPrimary && !disabled ? {
         background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 30%, #F97316 60%, #FBBF24 100%)',
-        boxShadow: '0 8px 32px rgba(139, 92, 246, 0.5), 0 0 60px rgba(236, 72, 153, 0.3)',
+        boxShadow: '0 4px 16px rgba(139, 92, 246, 0.4), 0 0 30px rgba(236, 72, 153, 0.2)',
       } : isPrimary ? {
         background: 'linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)',
       } : {
-        boxShadow: '0 6px 24px rgba(139, 92, 246, 0.25)',
+        boxShadow: '0 3px 12px rgba(139, 92, 246, 0.2)',
       }}
     >
       {/* 虹色シャインエフェクト（プライマリのみ） */}
@@ -490,7 +452,7 @@ const MegaGachaPullButton: React.FC<{
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+              'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
           }}
           animate={{ x: ['-200%', '200%'] }}
           transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
@@ -500,20 +462,20 @@ const MegaGachaPullButton: React.FC<{
       {/* キラキラパーティクル */}
       {isPrimary && !disabled && (
         <div className="absolute inset-0 overflow-hidden">
-          {[...Array(6)].map((_, i) => (
+          {[...Array(4)].map((_, i) => (
             <motion.div
               key={i}
               className="absolute"
-              style={{ left: `${15 + i * 14}%` }}
+              style={{ left: `${20 + i * 20}%` }}
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: '-20%', opacity: [0, 1, 0] }}
               transition={{
                 duration: 1.5,
-                delay: i * 0.25,
+                delay: i * 0.3,
                 repeat: Infinity,
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none">
                 <path d="M12 0L14 10L24 12L14 14L12 24L10 14L0 12L10 10L12 0Z" fill="white"/>
               </svg>
             </motion.div>
@@ -521,39 +483,48 @@ const MegaGachaPullButton: React.FC<{
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col items-center">
-        <div className="flex items-center gap-1 sm:gap-2">
-          <motion.div
-            className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10"
-            animate={isPrimary && !disabled ? { rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] } : {}}
-            transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
-          >
-            {count === 1 ? (
-              <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
-                <rect x="3" y="4" width="18" height="16" rx="3" fill="#8B5CF6" stroke="#6D28D9" strokeWidth="1.5"/>
-                <rect x="6" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-                <rect x="10" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-                <rect x="14" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-                <circle cx="8" cy="12" r="1.5" fill="#EF4444"/>
-                <circle cx="12" cy="12" r="1.5" fill="#22C55E"/>
-                <circle cx="16" cy="12" r="1.5" fill="#3B82F6"/>
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
-                <path d="M12 2L14 8H20L15 12L17 18L12 14L7 18L9 12L4 8H10L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
-                <circle cx="6" cy="4" r="2" fill="#EC4899"/>
-                <circle cx="18" cy="4" r="2" fill="#8B5CF6"/>
-                <circle cx="4" cy="16" r="1.5" fill="#22C55E"/>
-                <circle cx="20" cy="16" r="1.5" fill="#3B82F6"/>
-              </svg>
-            )}
-          </motion.div>
-          <span className="text-lg sm:text-xl md:text-2xl whitespace-nowrap">{label}</span>
-        </div>
-        <div className="flex items-center justify-center gap-1 mt-1 sm:mt-2">
-          <CurrencyIcon type={currency} size="md" />
-          <span className="text-base sm:text-lg md:text-xl font-bold">{cost}</span>
-        </div>
+      {/* アイコン */}
+      <motion.div
+        className="relative z-10 w-6 h-6 flex-shrink-0"
+        animate={isPrimary && !disabled ? { rotate: [0, 10, -10, 0], scale: [1, 1.15, 1] } : {}}
+        transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
+      >
+        {count === 1 ? (
+          /* ガチャカプセルアイコン */
+          <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+            <circle cx="12" cy="12" r="10" fill="url(#capsuleGrad1)" stroke="#8B5CF6" strokeWidth="1.5"/>
+            <path d="M2.5 12h19" stroke="#8B5CF6" strokeWidth="1.5"/>
+            <circle cx="12" cy="12" r="10" fill="url(#capsuleShine)" fillOpacity="0.4"/>
+            <defs>
+              <linearGradient id="capsuleGrad1" x1="12" y1="2" x2="12" y2="22">
+                <stop offset="0%" stopColor="#EC4899"/>
+                <stop offset="45%" stopColor="#EC4899"/>
+                <stop offset="55%" stopColor="#FAFAFA"/>
+                <stop offset="100%" stopColor="#FAFAFA"/>
+              </linearGradient>
+              <radialGradient id="capsuleShine" cx="0.3" cy="0.3" r="0.7">
+                <stop offset="0%" stopColor="white"/>
+                <stop offset="100%" stopColor="transparent"/>
+              </radialGradient>
+            </defs>
+          </svg>
+        ) : (
+          /* キラキラ星アイコン */
+          <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+            <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="0.5"/>
+            <path d="M19 3L19.8 5.5L22 6L19.8 6.5L19 9L18.2 6.5L16 6L18.2 5.5L19 3Z" fill="#EC4899"/>
+            <path d="M5 14L5.6 16L7 16.5L5.6 17L5 19L4.4 17L3 16.5L4.4 16L5 14Z" fill="#8B5CF6"/>
+          </svg>
+        )}
+      </motion.div>
+
+      {/* ラベル */}
+      <span className="relative z-10 text-lg whitespace-nowrap">{label}</span>
+
+      {/* 通貨アイコン + コスト */}
+      <div className="relative z-10 flex items-center gap-0.5 flex-shrink-0">
+        <CurrencyIcon type={currency} size="sm" />
+        <span className="text-sm font-bold">{cost}</span>
       </div>
     </motion.button>
   )
@@ -662,30 +633,7 @@ const BannerTabs: React.FC<{
 // ============================================
 // 確認ダイアログ用の通貨アイコン（大きめ）
 export const ConfirmCurrencyIcon: React.FC<{ type: 'ticket' | 'star' | 'gem' }> = ({ type }) => {
-  const size = 32
-  if (type === 'ticket') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <rect x="2" y="6" width="20" height="12" rx="2" fill="#A855F7" stroke="#7C3AED" strokeWidth="1.5"/>
-        <circle cx="2" cy="12" r="2" fill="#FDF2F8"/>
-        <circle cx="22" cy="12" r="2" fill="#FDF2F8"/>
-        <line x1="8" y1="6" x2="8" y2="18" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="2 2"/>
-      </svg>
-    )
-  }
-  if (type === 'star') {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1"/>
-      </svg>
-    )
-  }
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2L4 8L12 22L20 8L12 2Z" fill="#60A5FA" stroke="#3B82F6" strokeWidth="1.5"/>
-      <path d="M4 8H20L12 2L4 8Z" fill="#93C5FD"/>
-    </svg>
-  )
+  return <CurrencyIcon type={type} size="lg" />
 }
 
 // ガチャ確認ダイアログ
@@ -701,7 +649,7 @@ export const GachaConfirmDialog: React.FC<{
   const currencyNames = {
     ticket: 'シルチケ',
     star: 'どろっぷ',
-    gem: 'プレシル',
+    gem: 'プレシルチケ',
   }
 
   if (!isOpen) return null
@@ -742,16 +690,13 @@ export const GachaConfirmDialog: React.FC<{
         <div className="px-6 py-5">
           {/* 回数表示 */}
           <div className="text-center mb-4">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mx-auto">
-              <rect x="3" y="4" width="18" height="16" rx="3" fill="#8B5CF6" stroke="#6D28D9" strokeWidth="1.5"/>
-              <rect x="6" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-              <rect x="10" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-              <rect x="14" y="8" width="4" height="8" rx="1" fill="#FDE68A"/>
-              <circle cx="8" cy="12" r="1.5" fill="#EF4444"/>
-              <circle cx="12" cy="12" r="1.5" fill="#22C55E"/>
-              <circle cx="16" cy="12" r="1.5" fill="#3B82F6"/>
-            </svg>
-            <p className="text-lg font-bold text-purple-600 mt-1">
+            <img
+              src="/images/Gacha_Tab/Gacha2.png"
+              alt="ガチャマシン"
+              className="mx-auto w-20 h-auto"
+              style={{ filter: 'drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3))' }}
+            />
+            <p className="text-lg font-bold text-purple-600 mt-2">
               {pullType === 'single' ? '1回ガチャ' : '10連ガチャ'}
             </p>
           </div>
@@ -812,7 +757,7 @@ export const GachaConfirmDialog: React.FC<{
 }
 
 // ============================================
-// レート表示（大きめ）
+// レート表示（モーダル形式）
 // ============================================
 // レアリティごとのグラデーション色
 const rateColors: Record<number, string> = {
@@ -832,66 +777,149 @@ const defaultRates: GachaRate[] = [
   { stars: 1, rate: '51.6%' },
 ]
 
-const RatesInfo: React.FC<{ rates?: GachaRate[] }> = ({ rates: bannerRates }) => {
-  const [isOpen, setIsOpen] = useState(false)
-
-  // バナーにratesが設定されていればそれを使用、なければデフォルト
+// 排出レートモーダル
+const RatesModal: React.FC<{
+  isOpen: boolean
+  onClose: () => void
+  rates?: GachaRate[]
+}> = ({ isOpen, onClose, rates: bannerRates }) => {
   const rates = bannerRates || defaultRates
 
-  return (
-    <div>
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-center gap-2 py-3 text-purple-400 text-base font-bold hover:text-purple-600 transition-colors"
-        whileTap={{ scale: 0.98 }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="14" width="4" height="8" rx="1" fill="currentColor"/>
-          <rect x="10" y="10" width="4" height="12" rx="1" fill="currentColor"/>
-          <rect x="17" y="4" width="4" height="18" rx="1" fill="currentColor"/>
-        </svg>
-        <span>排出レートを見る</span>
-        <motion.span animate={{ rotate: isOpen ? 180 : 0 }} className="text-sm">▼</motion.span>
-      </motion.button>
+  if (!isOpen) return null
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+  return (
+    <motion.div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      {/* 背景オーバーレイ */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* モーダル本体 */}
+      <motion.div
+        className="relative bg-white rounded-3xl overflow-hidden shadow-2xl"
+        style={{
+          width: '90%',
+          maxWidth: '360px',
+        }}
+        initial={{ scale: 0.8, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.8, y: 20 }}
+      >
+        {/* ヘッダー */}
+        <div
+          className="relative px-6 py-4"
+          style={{
+            background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 50%, #F97316 100%)',
+          }}
+        >
+          <h3 className="text-xl font-bold text-white text-center">
+            排出レート
+          </h3>
+          {/* 閉じるボタン */}
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
           >
-            <div className="bg-white/90 backdrop-blur-md rounded-3xl p-4 mt-2 border-2 border-purple-200 shadow-xl">
-              <div className="grid grid-cols-5 gap-2">
-                {rates.map((rate) => (
-                  <motion.div
-                    key={rate.stars}
-                    className="flex flex-col items-center"
-                    whileHover={{ scale: 1.1 }}
-                  >
-                    <div className="flex">
-                      {Array.from({ length: rate.stars }).map((_, i) => (
-                        <span key={i} className="text-yellow-400 text-sm" style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))' }}>★</span>
-                      ))}
-                    </div>
-                    <motion.span
-                      className={`
-                        px-2.5 py-1 rounded-xl text-white text-sm font-bold mt-1
-                        bg-gradient-to-r ${rateColors[rate.stars] || rateColors[1]}
-                      `}
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      {rate.rate}
-                    </motion.span>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6L18 18" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* コンテンツ */}
+        <div className="px-6 py-5">
+          <div className="space-y-3">
+            {rates.map((rate) => (
+              <motion.div
+                key={rate.stars}
+                className="flex items-center justify-between p-3 rounded-2xl"
+                style={{
+                  background: rate.stars >= 4
+                    ? 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)'
+                    : rate.stars === 3
+                    ? 'linear-gradient(135deg, #E0E7FF 0%, #C7D2FE 100%)'
+                    : 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
+                }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: (5 - rate.stars) * 0.1 }}
+              >
+                {/* 星表示 */}
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {Array.from({ length: rate.stars }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="text-lg"
+                        style={{
+                          color: rate.stars >= 4 ? '#F59E0B' : rate.stars === 3 ? '#8B5CF6' : '#9CA3AF',
+                          filter: rate.stars >= 4 ? 'drop-shadow(0 0 4px rgba(245,158,11,0.6))' : 'none',
+                        }}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-sm font-bold text-gray-600">
+                    {rate.stars === 5 ? 'ウルトラレア' :
+                     rate.stars === 4 ? 'スーパーレア' :
+                     rate.stars === 3 ? 'レア' :
+                     rate.stars === 2 ? 'アンコモン' : 'コモン'}
+                  </span>
+                </div>
+
+                {/* レート */}
+                <span
+                  className={`
+                    px-3 py-1.5 rounded-xl text-white text-base font-bold
+                    bg-gradient-to-r ${rateColors[rate.stars] || rateColors[1]}
+                  `}
+                  style={{
+                    boxShadow: rate.stars >= 4 ? '0 2px 8px rgba(245,158,11,0.4)' : 'none',
+                  }}
+                >
+                  {rate.rate}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* 注意書き */}
+          <p className="text-center text-xs text-gray-400 mt-4">
+            ※レートは小数点以下で四捨五入されています
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// 排出レートを見るボタン
+const RatesButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+  return (
+    <motion.button
+      onClick={onClick}
+      className="flex items-center justify-center gap-2 px-4 py-2 rounded-full"
+      style={{
+        background: 'rgba(139, 92, 246, 0.1)',
+        border: '1px solid rgba(139, 92, 246, 0.3)',
+      }}
+      whileHover={{ scale: 1.02, background: 'rgba(139, 92, 246, 0.15)' }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="14" width="4" height="8" rx="1" fill="#8B5CF6"/>
+        <rect x="10" y="10" width="4" height="12" rx="1" fill="#8B5CF6"/>
+        <rect x="17" y="4" width="4" height="18" rx="1" fill="#8B5CF6"/>
+      </svg>
+      <span className="text-purple-600 text-sm font-bold">排出レートを見る</span>
+    </motion.button>
   )
 }
 
@@ -905,9 +933,12 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
   onPullMulti,
   onOpenShop,
   onInsufficientFunds,
+  onWatchAd,
+  remainingAdWatches = 0,
 }) => {
   const [selectedBannerId, setSelectedBannerId] = useState(banners[0]?.id || '')
   const [isAnimating, setIsAnimating] = useState(false)
+  const [isRatesModalOpen, setIsRatesModalOpen] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     isOpen: false,
     pullType: null,
@@ -1020,14 +1051,14 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
     >
 
       {/* コンテンツ - ヘッダー下から全画面 */}
-      <div className="relative z-10 flex flex-col h-full px-2 pt-3 pb-24 overflow-x-hidden overflow-y-auto">
+      <div className="flex flex-col h-full px-2 pt-10 pb-[81px]">
         {/* バナー選択 */}
-        <div className="mb-2">
+        <div className="flex-shrink-0 mb-2">
           <BannerTabs banners={banners} selectedId={selectedBannerId} onSelect={setSelectedBannerId} />
         </div>
 
-        {/* 巨大ガチャマシン */}
-        <div className="flex-1 flex items-center justify-center min-h-0 py-1 sm:py-2 overflow-visible">
+        {/* 巨大ガチャマシン - 残りスペースを使用 */}
+        <div className="flex-1 flex items-center justify-center min-h-0 overflow-visible">
           <div className="transform scale-[0.85] sm:scale-95 md:scale-100 origin-center overflow-visible">
             <GiantGachaMachine
               banner={selectedBanner}
@@ -1036,28 +1067,69 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
           </div>
         </div>
 
-        {/* 巨大ガチャボタン - 常にアクティブ（残高不足時はショップへ誘導） */}
-        <div className="flex-shrink-0 flex items-center justify-center gap-2 sm:gap-4 py-2 sm:py-3">
-          <MegaGachaPullButton
-            label="1回！"
-            count={1}
-            cost={selectedBanner.costSingle}
-            currency={selectedBanner.currency}
-            onClick={handlePullSingle}
-          />
-          <MegaGachaPullButton
-            label="10連！"
-            count={10}
-            cost={selectedBanner.costMulti}
-            currency={selectedBanner.currency}
-            isPrimary
-            onClick={handlePullMulti}
-          />
-        </div>
+        {/* ボタン群 - 下部に固定配置 */}
+        <div className="flex-shrink-0 flex flex-col px-4 pb-2">
+          {/* ガチャボタン - 横並び1行 */}
+          <div className="flex items-center gap-3 mb-4">
+            <MegaGachaPullButton
+              label="1回！"
+              count={1}
+              cost={selectedBanner.costSingle}
+              currency={selectedBanner.currency}
+              onClick={handlePullSingle}
+            />
+            <MegaGachaPullButton
+              label="10連！"
+              count={10}
+              cost={selectedBanner.costMulti}
+              currency={selectedBanner.currency}
+              isPrimary
+              onClick={handlePullMulti}
+            />
+          </div>
 
-        {/* レート情報 */}
-        <div className="flex-shrink-0">
-          <RatesInfo rates={selectedBanner?.rates} />
+          {/* 広告視聴でシルチケゲット */}
+          {onWatchAd && (
+            <div className="flex justify-center mb-2">
+              <motion.button
+                onClick={onWatchAd}
+                disabled={remainingAdWatches <= 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: remainingAdWatches > 0
+                    ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
+                    : 'linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)',
+                  boxShadow: remainingAdWatches > 0
+                    ? '0 3px 10px rgba(16, 185, 129, 0.4)'
+                    : 'none',
+                }}
+                whileHover={remainingAdWatches > 0 ? { scale: 1.03 } : {}}
+                whileTap={remainingAdWatches > 0 ? { scale: 0.97 } : {}}
+              >
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="text-xs">▷</span>
+                </div>
+                <span className="font-bold text-sm text-white text-center leading-tight">
+                  {remainingAdWatches > 0
+                    ? <>こうこくをみて<br />シルチケをゲット！</>
+                    : 'きょうのこうこくはおわり'}
+                </span>
+                {remainingAdWatches > 0 && (
+                  <>
+                    <CurrencyIcon type="ticket" size="sm" />
+                    <span className="text-white text-xs font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                      のこり{remainingAdWatches}回
+                    </span>
+                  </>
+                )}
+              </motion.button>
+            </div>
+          )}
+
+          {/* 排出レートを見るボタン */}
+          <div className="flex justify-center">
+            <RatesButton onClick={() => setIsRatesModalOpen(true)} />
+          </div>
         </div>
       </div>
 
@@ -1072,6 +1144,17 @@ export const GachaViewEnhanced: React.FC<GachaViewEnhancedProps> = ({
             currentAmount={getCurrentCurrencyAmount()}
             onConfirm={executeGacha}
             onCancel={closeConfirmDialog}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 排出レートモーダル */}
+      <AnimatePresence>
+        {isRatesModalOpen && (
+          <RatesModal
+            isOpen={isRatesModalOpen}
+            onClose={() => setIsRatesModalOpen(false)}
+            rates={selectedBanner?.rates}
           />
         )}
       </AnimatePresence>

@@ -272,7 +272,7 @@ export function AdminView({
                     <span className="font-bold">{userData.monetization.tickets}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">プレシル</span>
+                    <span className="text-gray-500">プレシルチケ</span>
                     <span className="font-bold">{userData.monetization.gems}</span>
                   </div>
                   <div className="flex justify-between">
@@ -317,7 +317,7 @@ export function AdminView({
                       onClick={() => onGrantCurrency('gems', currencyAmount)}
                       className="flex-1 py-2 bg-blue-500 text-white rounded-lg font-bold text-sm"
                     >
-                      💎 プレシル
+                      💎 プレシルチケ
                     </button>
                     <button
                       onClick={() => onGrantCurrency('stars', currencyAmount)}
@@ -343,7 +343,7 @@ export function AdminView({
                     onClick={() => onGrantCurrency('gems', 100)}
                     className="py-2 bg-blue-100 text-blue-600 rounded-lg font-bold text-sm"
                   >
-                    +100 プレシル
+                    +100 プレシルチケ
                   </button>
                   <button
                     onClick={() => onGrantCurrency('stars', 1000)}

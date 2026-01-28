@@ -3,12 +3,14 @@
 import React from 'react'
 import { ProgressBar } from '@/components/progress/ProgressBar'
 import { RankProgressCard, type RankCounts } from '@/components/upgrade'
+import { Avatar } from '@/components/ui/Avatar'
 
 // ユーザー情報
 export interface UserProfile {
   id: string
   name: string
   avatarUrl?: string
+  frameId?: string | null  // キャラクター報酬で解放したフレーム
   level: number
   exp: number
   expToNextLevel: number
@@ -21,6 +23,7 @@ export interface UserProfile {
 export interface UserStats {
   totalStickers: number
   uniqueStickers: number
+  totalAvailableStickers?: number
   completedSeries: number
   totalTrades: number
   friendsCount: number
@@ -28,6 +31,7 @@ export interface UserStats {
   followingCount: number
   postsCount: number
   reactionsReceived: number
+  statsUnavailable?: boolean
   // アップグレードランク達成数
   rankCounts?: RankCounts
 }
@@ -40,6 +44,7 @@ export interface Achievement {
   description: string
   unlockedAt?: string
   isUnlocked: boolean
+  category?: 'collection' | 'book' | 'gacha' | 'timeline' | 'special'
 }
 
 interface ProfileViewProps {
@@ -216,6 +221,12 @@ const FriendsIcon: React.FC = () => (
     <circle cx="16" cy="8" r="3" fill="#60A5FA" stroke="#3B82F6" strokeWidth="1"/>
     <path d="M2 18C2 15.5 4.5 13 8 13C9.5 13 10.8 13.4 12 14" stroke="#DB2777" strokeWidth="1.5" strokeLinecap="round"/>
     <path d="M22 18C22 15.5 19.5 13 16 13C14.5 13 13.2 13.4 12 14" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+)
+
+const HeartIcon: React.FC = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FBBF24" stroke="#F59E0B" strokeWidth="1.5"/>
   </svg>
 )
 
@@ -423,6 +434,7 @@ const ProfileHeader: React.FC<{
           border: 'none',
           cursor: 'pointer',
         }}
+        title="せってい"
       >
         <SettingsIcon />
       </button>
@@ -508,51 +520,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             }}
           >
             {/* アバター部分 - frame_avatar_ring.pngを360pxで表示 */}
-            <div style={{ position: 'relative', marginBottom: '4px', width: '293px', height: '293px' }}>
-              {/* アバター画像（フレームの下に配置・中央に） */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '90px',
-                  height: '90px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(to bottom right, #E9D5FF, #FBCFE8)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  zIndex: 0,
-                }}
-              >
-                {profile.avatarUrl ? (
-                  <img
-                    src={profile.avatarUrl}
-                    alt={profile.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <UserIcon size={48} />
-                )}
-              </div>
-              {/* アバターリングフレーム画像 - 360pxで表示 */}
-              <img
-                src="/images/frame_avatar_ring.png"
-                alt=""
-                style={{
-                  position: 'absolute',
-                  zIndex: 10,
-                  pointerEvents: 'none',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '360px',
-                  height: '360px',
-                  objectFit: 'contain',
-                }}
+            <div style={{
+              position: 'relative',
+              marginBottom: '4px',
+              width: '293px',
+              height: '293px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              {/* アバター（Avatarコンポーネント使用、キャラクター報酬フレーム対応） */}
+              <Avatar
+                src={profile.avatarUrl}
+                alt={profile.name}
+                size="lg"
+                frameId={profile.frameId}
               />
+              {/* アバターリングフレーム画像 - 360pxで表示（キャラ報酬フレームがない場合のみ） */}
+              {!profile.frameId && (
+                <img
+                  src="/images/frame_avatar_ring.png"
+                  alt=""
+                  style={{
+                    position: 'absolute',
+                    zIndex: 10,
+                    pointerEvents: 'none',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '360px',
+                    height: '360px',
+                    objectFit: 'contain',
+                  }}
+                />
+              )}
             </div>
 
             {/* ユーザー名と編集ボタン */}
@@ -659,12 +660,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 frameImage="/images/stat_card_frame_red.png"
               />
               <StatCard
-                icon={<BookIcon />}
-                label="コンプ"
-                value={stats.completedSeries}
-                frameImage="/images/stat_card_frame_yellow.png"
-              />
-              <StatCard
                 icon={<TradeIcon />}
                 label="交換"
                 value={stats.totalTrades}
@@ -676,6 +671,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 value={stats.friendsCount}
                 frameImage="/images/stat_card_frame_blue.png"
                 onClick={onViewFriends}
+              />
+              <StatCard
+                icon={<HeartIcon />}
+                label="いいね"
+                value={stats.reactionsReceived}
+                frameImage="/images/stat_card_frame_yellow.png"
               />
             </div>
 

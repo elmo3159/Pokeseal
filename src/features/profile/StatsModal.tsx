@@ -132,8 +132,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   onClose,
   stats,
 }) => {
-  // コレクション率を計算（仮: uniqueStickers / 165 * 100）
-  const collectionRate = Math.round((stats.uniqueStickers / 165) * 100)
+  const totalAvailable = stats.totalAvailableStickers ?? stats.uniqueStickers
+  const safeTotal = totalAvailable > 0 ? totalAvailable : 1
+  const collectionRate = Math.min(100, Math.round((stats.uniqueStickers / safeTotal) * 100))
 
   return (
     <AnimatePresence>
@@ -256,6 +257,21 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                 gap: '20px',
               }}
             >
+              {stats.statsUnavailable && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid #FBCFE8',
+                    color: '#9B6FD0',
+                    fontSize: '12px',
+                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                  }}
+                >
+                  いま すうじが 0 に みえる ことが あるよ。あとで もういちど ひらいてね。
+                </div>
+              )}
               {/* コレクション率サマリー */}
               <div
                 style={{
@@ -324,7 +340,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     fontFamily: "'M PLUS Rounded 1c', sans-serif",
                   }}
                 >
-                  {stats.uniqueStickers} / 165 しゅるい
+                  {stats.uniqueStickers} / {totalAvailable} しゅるい
                 </p>
               </div>
 
@@ -345,13 +361,6 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     value={stats.uniqueStickers}
                     description="ちがうしゅるいのシール"
                     color="linear-gradient(135deg, #FFB347 0%, #FFCC33 100%)"
-                  />
-                  <StatItem
-                    icon={<BookIcon size={24} color="#FFFFFF" />}
-                    label="コンプリート"
-                    value={stats.completedSeries}
-                    description="あつめおわったシリーズ"
-                    color="linear-gradient(135deg, #4ADE80 0%, #22C55E 100%)"
                   />
                 </div>
               </div>

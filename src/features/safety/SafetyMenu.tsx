@@ -47,7 +47,7 @@ export const SafetyMenu: React.FC<SafetyMenuProps> = ({
 
       {/* ドロップダウンメニュー */}
       {isOpen && (
-        <div className="absolute right-0 top-10 z-50 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-w-[160px] animate-[scaleIn_0.1s_ease-out]">
+        <div className="absolute right-0 top-10 z-[2000] bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-w-[160px] animate-[scaleIn_0.1s_ease-out]">
           <div className="py-1">
             {/* 通報ボタン */}
             <button

@@ -37,6 +37,7 @@ const DAILY_BONUS_NOTIFICATION_ID = 70000
 class NotificationService {
   private initialized = false
   private currentUserId: string | null = null
+  private onNotificationTap?: (payload: { type: NotificationType; data?: Record<string, unknown> }) => void
   private notificationSettings: {
     tradeRequests: boolean
     friendRequests: boolean
@@ -288,9 +289,15 @@ class NotificationService {
   private handleNotificationTap(data?: Record<string, unknown>): void {
     if (!data) return
 
-    // タイプに応じてナビゲーション（将来的に実装）
-    // TODO: 適切な画面へナビゲーション
-    // 例: 交換リクエストならトレード画面を開く
+    const type = (data.type as NotificationType) || 'trade_request'
+    this.onNotificationTap?.({ type, data })
+  }
+
+  /**
+   * 通知タップ時のハンドラを登録
+   */
+  setOnNotificationTap(handler?: (payload: { type: NotificationType; data?: Record<string, unknown> }) => void): void {
+    this.onNotificationTap = handler
   }
 
   /**

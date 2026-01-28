@@ -2,14 +2,15 @@
 
 import React, { useMemo } from 'react'
 import {
-  RankLevel,
+  type UpgradeRank,
+  UPGRADE_RANKS,
   getRankEffect,
   getRankColor,
   rankNamesKids
 } from '@/domain/stickerRank'
 
 interface RankEffectOverlayProps {
-  rank: RankLevel
+  rank: UpgradeRank
   children: React.ReactNode
   showBadge?: boolean
   size?: 'sm' | 'md' | 'lg'
@@ -68,8 +69,8 @@ const RainbowBorder: React.FC = () => {
   )
 }
 
-// レジェンドオーラ（ランク5用）
-const LegendaryAura: React.FC<{ size: 'sm' | 'md' | 'lg' }> = ({ size }) => {
+// プリズムオーラ（PRISM用 - 最高ランク）
+const PrismAura: React.FC<{ size: 'sm' | 'md' | 'lg' }> = ({ size }) => {
   const scale = size === 'sm' ? 0.8 : size === 'md' ? 1 : 1.2
 
   return (
@@ -100,16 +101,16 @@ const LegendaryAura: React.FC<{ size: 'sm' | 'md' | 'lg' }> = ({ size }) => {
       {/* キラキラ */}
       <SparkleParticles size={size} />
 
-      {/* 王冠エフェクト */}
+      {/* プリズムマーク */}
       <div className="absolute -top-2 left-1/2 -translate-x-1/2 animate-bounce" style={{ animationDuration: '2s' }}>
-        <span style={{ fontSize: size === 'sm' ? '12px' : '16px' }}>👑</span>
+        <span style={{ fontSize: size === 'sm' ? '12px' : '16px' }}>🌈</span>
       </div>
     </>
   )
 }
 
 // ランクバッジ
-const RankBadge: React.FC<{ rank: RankLevel; size: 'sm' | 'md' | 'lg' }> = ({ rank, size }) => {
+const RankBadge: React.FC<{ rank: UpgradeRank; size: 'sm' | 'md' | 'lg' }> = ({ rank, size }) => {
   const color = getRankColor(rank)
   const badgeSize = size === 'sm' ? 'text-xs px-1.5 py-0.5' : size === 'md' ? 'text-xs px-2 py-0.5' : 'text-sm px-2 py-1'
 
@@ -118,8 +119,8 @@ const RankBadge: React.FC<{ rank: RankLevel; size: 'sm' | 'md' | 'lg' }> = ({ ra
       className={`absolute -top-1 -right-1 rounded-full font-bold z-10 ${badgeSize}`}
       style={{
         backgroundColor: color,
-        color: rank >= 4 ? '#000' : '#fff',
-        boxShadow: rank === 5 ? '0 0 8px rgba(255, 105, 180, 0.8)' : '0 2px 4px rgba(0,0,0,0.2)'
+        color: rank >= UPGRADE_RANKS.GOLD ? '#000' : '#fff',
+        boxShadow: rank === UPGRADE_RANKS.PRISM ? '0 0 8px rgba(255, 105, 180, 0.8)' : '0 2px 4px rgba(0,0,0,0.2)'
       }}
     >
       {rankNamesKids[rank]}
@@ -142,7 +143,7 @@ export const RankEffectOverlay: React.FC<RankEffectOverlayProps> = ({
         {children}
       </div>
 
-      {/* ランク2: グローエフェクト */}
+      {/* SILVER (1): グローエフェクト */}
       {effect === 'glow' && (
         <div
           className="absolute inset-0 rounded-xl pointer-events-none"
@@ -153,33 +154,19 @@ export const RankEffectOverlay: React.FC<RankEffectOverlayProps> = ({
         />
       )}
 
-      {/* ランク3: キラキラパーティクル */}
+      {/* GOLD (2): キラキラパーティクル + 虹ボーダー */}
       {effect === 'sparkle' && (
-        <>
-          <div
-            className="absolute inset-0 rounded-xl pointer-events-none"
-            style={{
-              boxShadow: `0 0 15px ${getRankColor(rank)}60`,
-              border: `2px solid ${getRankColor(rank)}80`
-            }}
-          />
-          <SparkleParticles size={size} />
-        </>
-      )}
-
-      {/* ランク4: 虹色ボーダー */}
-      {effect === 'rainbow' && (
         <>
           <RainbowBorder />
           <SparkleParticles size={size} />
         </>
       )}
 
-      {/* ランク5: レジェンドオーラ */}
-      {effect === 'legendary' && <LegendaryAura size={size} />}
+      {/* PRISM (3): プリズムオーラ（最高ランク） */}
+      {effect === 'prism' && <PrismAura size={size} />}
 
-      {/* ランクバッジ */}
-      {showBadge && rank > 1 && <RankBadge rank={rank} size={size} />}
+      {/* ランクバッジ（NORMAL以外で表示） */}
+      {showBadge && rank > UPGRADE_RANKS.NORMAL && <RankBadge rank={rank} size={size} />}
     </div>
   )
 }

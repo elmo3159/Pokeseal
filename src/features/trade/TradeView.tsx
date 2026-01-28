@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   HandshakeIcon,
   UserIcon,
   SparkleIcon,
 } from '@/components/icons/TradeIcons'
+import { Avatar } from '@/components/ui/Avatar'
 import { AsyncTradeListView, AsyncTradeInviteModal } from '@/features/async-trade'
 import { asyncTradeService, TradeSession, TradeRoomDetails, TradeMessage, TradeRequest, PresetMessageKey, TRADE_PRESET_MESSAGES } from '@/services/asyncTrade/asyncTradeService'
 import { TradeSessionFull, TradeUser, TradeBookPageFull } from './TradeSessionFull'
@@ -27,6 +28,7 @@ export interface Friend {
   id: string
   name: string
   avatarUrl?: string
+  frameId?: string | null  // キャラクター報酬で解放したフレーム
   isOnline: boolean
   lastActive?: string
 }
@@ -38,7 +40,7 @@ export interface TradeHistory {
   partnerAvatarUrl?: string
   givenStickers: { name: string; rarity: number }[]
   receivedStickers: { name: string; rarity: number }[]
-  tradedAt: string
+  tradedAt: string | null
 }
 
 interface TradeViewProps {
@@ -48,12 +50,15 @@ interface TradeViewProps {
   onStartMatching: () => void
   onTradeWithFriend: (friendId: string) => void
   onViewHistory: (historyId: string) => void
+  onTradeCompleted?: () => void
   // 非同期交換で TradeSessionFull に渡すデータ
   myUser?: TradeUser
   myPages?: TradeBookPageFull[]
   myCoverDesignId?: string
   // セッション状態変更コールバック（ヘッダー/フッター制御用）
   onAsyncSessionChange?: (inSession: boolean) => void
+  // メッセージタブのバッジカウント
+  asyncBadgeCount?: number
 }
 
 // マッチングボタン - 茶色・ベージュ系
@@ -81,9 +86,9 @@ const MatchingButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
       <div className="relative flex items-center justify-center gap-3">
         <span className="animate-bounce"><HandshakeIcon size={32} color="white" /></span>
         <div className="flex flex-col items-start">
-          <span className="text-2xl">マッチングスタート！</span>
+          <span className="text-2xl">まっちんぐすたーと！</span>
           <span className="text-sm font-normal opacity-90">
-            ランダムなともだちとこうかん
+            らんだむなともだちとこうかん
           </span>
         </div>
       </div>
@@ -108,16 +113,12 @@ const FriendCard: React.FC<{
     >
       {/* アバター */}
       <div className="relative">
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #E8D5C4 0%, #D4C4B0 100%)' }}
-        >
-          {friend.avatarUrl ? (
-            <img src={friend.avatarUrl} alt={friend.name} className="w-full h-full rounded-full object-cover" />
-          ) : (
-            <UserIcon size={28} color="#8B5A2B" />
-          )}
-        </div>
+        <Avatar
+          src={friend.avatarUrl}
+          alt={friend.name}
+          size="md"
+          frameId={friend.frameId}
+        />
         {/* オンライン状態 */}
         <div className={`
           absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white
@@ -128,10 +129,10 @@ const FriendCard: React.FC<{
       {/* 情報 */}
       <div className="flex-1 min-w-0">
         <h4 className="font-bold truncate" style={{ color: '#8B5A2B' }}>{friend.name}</h4>
-        <p className="text-xs" style={{ color: '#A67C52' }}>
-          {friend.isOnline ? 'オンライン' : friend.lastActive || 'オフライン'}
-        </p>
-      </div>
+            <p className="text-xs" style={{ color: '#A67C52' }}>
+              {friend.isOnline ? 'おんらいん' : friend.lastActive || 'おふらいん'}
+            </p>
+          </div>
 
       {/* 交換ボタン */}
       <button
@@ -200,7 +201,7 @@ const HistoryCard: React.FC<{
             {history.partnerName}
           </span>
           <span className="text-xs" style={{ color: '#A67C52' }}>
-            {formatDate(history.tradedAt)}
+            {history.tradedAt ? formatDate(history.tradedAt) : '---'}
           </span>
         </div>
         <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: '#B8956B' }}>
@@ -247,10 +248,11 @@ const TabButton: React.FC<{
   emoji: string
   isActive: boolean
   onClick: () => void
-}> = ({ label, emoji, isActive, onClick }) => (
+  badgeCount?: number
+}> = ({ label, emoji, isActive, onClick, badgeCount }) => (
   <button
     onClick={onClick}
-    className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all"
+    className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all relative"
     style={{
       background: isActive ? 'white' : 'transparent',
       color: isActive ? '#8B5A2B' : '#A67C52',
@@ -260,6 +262,14 @@ const TabButton: React.FC<{
   >
     <span className="mr-1">{emoji}</span>
     {label}
+    {badgeCount != null && badgeCount > 0 && (
+      <span
+        className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-white font-bold"
+        style={{ fontSize: '10px', background: '#E74C3C', lineHeight: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
+      >
+        {badgeCount > 99 ? '99+' : badgeCount}
+      </span>
+    )}
   </button>
 )
 
@@ -289,10 +299,12 @@ export const TradeView: React.FC<TradeViewProps> = ({
   onStartMatching,
   onTradeWithFriend,
   onViewHistory,
+  onTradeCompleted,
   myUser,
   myPages,
   myCoverDesignId,
   onAsyncSessionChange,
+  asyncBadgeCount,
 }) => {
   const [activeTab, setActiveTab] = useState<TradeTab>('realtime')
   const [showAllFriends, setShowAllFriends] = useState(false)
@@ -312,11 +324,25 @@ export const TradeView: React.FC<TradeViewProps> = ({
   const [partnerConfirmed, setPartnerConfirmed] = useState(false)
   const [tradeCompleted, setTradeCompleted] = useState(false)
   const [isFriend, setIsFriend] = useState(false) // 相互フォロー状態
+  const [isFollowingPartner, setIsFollowingPartner] = useState(false)
+  const tradeCompletedHandledRef = useRef(false)
 
   // セッション状態変更を親に通知
   useEffect(() => {
     onAsyncSessionChange?.(!!asyncSessionId)
   }, [asyncSessionId, onAsyncSessionChange])
+
+  useEffect(() => {
+    if (!tradeCompleted || tradeCompletedHandledRef.current) return
+    tradeCompletedHandledRef.current = true
+    onTradeCompleted?.()
+  }, [tradeCompleted, onTradeCompleted])
+
+  useEffect(() => {
+    if (!tradeCompleted) {
+      tradeCompletedHandledRef.current = false
+    }
+  }, [tradeCompleted])
 
   const onlineFriends = friends.filter(f => f.isOnline)
   const displayFriends = showAllFriends ? friends : friends.slice(0, 4)
@@ -345,14 +371,19 @@ export const TradeView: React.FC<TradeViewProps> = ({
       if (room.session.partner) {
         const partnerId = room.session.partner.id
 
-        // パートナーのプロフィールとフォロー状態を並列取得
-        const [partnerProfile, followStatus] = await Promise.all([
+        // パートナーのプロフィールとフォロー状態と交換数を並列取得
+        const [partnerProfile, followStatus, tradeCountResult] = await Promise.all([
           profileService.getProfile(partnerId),
           profileService.getFollowStatus(userId, partnerId),
+          getSupabase().from('async_trade_sessions')
+            .select('id', { count: 'exact', head: true })
+            .or(`requester_id.eq.${partnerId},responder_id.eq.${partnerId}`)
+            .eq('status', 'completed'),
         ])
 
         // フレンド状態（相互フォロー）を設定
         setIsFriend(followStatus === 'mutual')
+        setIsFollowingPartner(followStatus === 'following' || followStatus === 'mutual')
 
         // パートナー情報を設定（プロフィールがあればそのデータを使用）
         const level = partnerProfile ? calculateLevel(partnerProfile.totalExp) : 1
@@ -363,7 +394,8 @@ export const TradeView: React.FC<TradeViewProps> = ({
           level: level,
           bio: partnerProfile?.bio || '',
           totalStickers: partnerProfile?.totalStickers || 0,
-          totalTrades: partnerProfile?.totalTrades || 0,
+          totalTrades: tradeCountResult?.count || partnerProfile?.totalTrades || 0,
+          frameId: partnerProfile?.selectedFrameId || room.session.partner.selectedFrameId || null,
         })
 
         // パートナーのシール帳を取得
@@ -377,8 +409,13 @@ export const TradeView: React.FC<TradeViewProps> = ({
             decoItems: page.decoItems || [],
           }))
           setPartnerPages(pPages)
-          // themeIdがない場合はデフォルトのカバーデザインを使用
-          setPartnerCoverDesignId(partnerBookData.themeId || getDefaultCoverDesignId())
+          // シール帳からシール数をカウントして更新
+          const stickerCount = pPages.reduce((sum, p) => sum + (p.stickers?.length || 0), 0)
+          if (stickerCount > 0) {
+            setPartnerUser(prev => prev ? { ...prev, totalStickers: stickerCount } : prev)
+          }
+          // coverDesignIdがない場合はデフォルトのカバーデザインを使用
+          setPartnerCoverDesignId(partnerBookData.coverDesignId || getDefaultCoverDesignId())
         } else {
           // シール帳がない場合もデフォルトカバーを使用
           setPartnerCoverDesignId(getDefaultCoverDesignId())
@@ -744,13 +781,13 @@ export const TradeView: React.FC<TradeViewProps> = ({
     if (!tradeRoom) return []
     return tradeRoom.messages.map(m => ({
       id: m.id,
-      stamp_id: m.messageType === 'preset' ? m.content : null,
+      stamp_id: (m.messageType === 'preset' || m.messageType === 'stamp') ? m.content : null,
       user_id: m.senderId,
       created_at: m.createdAt,
       message_type: (m.messageType === 'sticker_added' || m.messageType === 'sticker_removed' || m.messageType === 'system')
         ? 'text' as const
         : m.messageType as 'stamp' | 'text' | 'preset',
-      content: m.displayText || m.content || null,
+      content: (m.messageType === 'preset' || m.messageType === 'stamp') ? m.content : (m.displayText || m.content || null),
     }))
   }, [tradeRoom])
 
@@ -797,6 +834,7 @@ export const TradeView: React.FC<TradeViewProps> = ({
             emoji="💬"
             isActive={activeTab === 'async'}
             onClick={() => setActiveTab('async')}
+            badgeCount={asyncBadgeCount}
           />
         </div>
       )}
@@ -830,6 +868,7 @@ export const TradeView: React.FC<TradeViewProps> = ({
                 console.log('[AsyncTrade] Follow partner:', partnerId)
               }}
               isFriend={isFriend}
+              isFollowingPartner={isFollowingPartner}
               // Supabase連携用props
               supabaseMessages={supabaseMessages}
               onSendStamp={handleSendStamp}
@@ -859,6 +898,7 @@ export const TradeView: React.FC<TradeViewProps> = ({
               userId={userId}
               onSelectSession={handleSelectSession}
               onInviteUser={() => setShowInviteModal(true)}
+              onAcceptInvitation={(sessionId) => handleSelectSession(sessionId)}
             />
           ) : (
             <div className="flex items-center justify-center h-full">
@@ -873,7 +913,7 @@ export const TradeView: React.FC<TradeViewProps> = ({
               <SectionHeader icon={<SparkleIcon size={20} color="#D4A574" />} title="ランダムこうかん" />
               <MatchingButton onClick={onStartMatching} />
               <p className="text-xs text-center mt-2" style={{ color: '#A67C52' }}>
-                ボタンをおすと、せかいのだれかとマッチング！
+                おすと ともだちが みつかるよ
               </p>
             </section>
 
@@ -927,14 +967,28 @@ export const TradeView: React.FC<TradeViewProps> = ({
                   }}
                 >
                   <div className="text-4xl mb-2">👋</div>
-                  <p className="text-sm" style={{ color: '#8B5A2B' }}>
-                    まだフレンドがいません
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: '#A67C52' }}>
-                    マッチングでともだちをつくろう！
-                  </p>
-                </div>
-              )}
+          <p className="text-sm" style={{ color: '#8B5A2B' }}>
+            まだともだちがいないよ
+          </p>
+          <p className="text-xs mt-1" style={{ color: '#A67C52' }}>
+            まずは まっちんぐ してみよう
+          </p>
+          <button
+            onClick={onStartMatching}
+            className="mt-3 px-5 py-2 rounded-full text-sm font-bold transition-all active:scale-95"
+            style={{
+              background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(184, 149, 107, 0.35)',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            }}
+          >
+            まっちんぐする
+          </button>
+        </div>
+      )}
             </section>
 
             {/* 交換履歴セクション */}
@@ -972,11 +1026,25 @@ export const TradeView: React.FC<TradeViewProps> = ({
                   }}
                 >
                   <div className="text-3xl mb-2">📭</div>
-                  <p className="text-sm" style={{ color: '#A67C52' }}>
-                    まだこうかんしていません
-                  </p>
-                </div>
-              )}
+          <p className="text-sm" style={{ color: '#A67C52' }}>
+            まだこうかんしていないよ
+          </p>
+          <button
+            onClick={onStartMatching}
+            className="mt-3 px-5 py-2 rounded-full text-sm font-bold transition-all active:scale-95"
+            style={{
+              background: 'linear-gradient(135deg, #C4956A 0%, #B8956B 100%)',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(184, 149, 107, 0.35)',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            }}
+          >
+            まっちんぐする
+          </button>
+        </div>
+      )}
             </section>
           </div>
         )}

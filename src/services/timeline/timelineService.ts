@@ -1,13 +1,13 @@
 // タイムラインサービス - 投稿・リアクション管理
 import { getSupabase } from '@/services/supabase'
-import type { Post, Reaction, Profile } from '@/types/database'
+import type { Post, Reaction, Profile, Json } from '@/types/database'
 import { dailyMissionService } from '@/services/dailyMissions'
 
 export type ReactionType = Reaction['type']
 export type Visibility = Post['visibility']
 
 // 投稿と関連情報
-export interface PostWithDetails extends Post {
+export interface PostWithDetails extends Omit<Post, 'page_snapshot'> {
   author: Profile
   reactions: {
     type: ReactionType
@@ -15,6 +15,46 @@ export interface PostWithDetails extends Post {
     isReacted: boolean
   }[]
   isFollowing: boolean
+  page_snapshot?: PageSnapshot | null  // 投稿時点のページスナップショット
+}
+
+// ページスナップショットの型（投稿時点のシール・デコアイテム配置を保存）
+export interface PageSnapshot {
+  placedStickers: Array<{
+    id: string
+    stickerId: string
+    sticker: {
+      id: string
+      name: string
+      image_url: string
+      rarity?: number
+      character?: string
+    }
+    x: number
+    y: number
+    rotation: number
+    scale: number
+    zIndex: number
+    upgradeRank?: number
+  }>
+  placedDecoItems?: Array<{
+    id: string
+    decoItemId: string
+    decoItem: {
+      id: string
+      name: string
+      image_url: string
+    }
+    x: number
+    y: number
+    rotation: number
+    scale: number
+    width: number
+    height: number
+    zIndex: number
+  }>
+  backgroundColor?: string
+  themeConfig?: Record<string, unknown> | null
 }
 
 // 投稿作成データ
@@ -24,6 +64,7 @@ export interface CreatePostData {
   caption?: string
   hashtags?: string[]
   visibility?: Visibility
+  pageSnapshot?: PageSnapshot  // 投稿時点のページスナップショット
 }
 
 export const timelineService = {
@@ -135,7 +176,7 @@ export const timelineService = {
         .select('id')
         .eq('follower_id', viewerId)
         .eq('following_id', targetUserId)
-        .single()
+        .maybeSingle()
 
       if (mutualFollow) {
         query = query.in('visibility', ['public', 'friends'])
@@ -194,7 +235,7 @@ export const timelineService = {
         .select('id')
         .eq('follower_id', viewerId)
         .eq('following_id', post.user_id)
-        .single()
+        .maybeSingle()
 
       isFollowing = !!followRecord
     }
@@ -204,9 +245,11 @@ export const timelineService = {
       author: post.author,
       reactions: types.map(type => ({
         type,
-        ...reactionCounts.get(type)!
+        ...(reactionCounts.get(type) ?? { count: 0, isReacted: false })
       })),
-      isFollowing
+      isFollowing,
+      // page_snapshotをPageSnapshot型として明示的にキャスト
+      page_snapshot: post.page_snapshot as PageSnapshot | null | undefined
     }
   },
 
@@ -222,7 +265,8 @@ export const timelineService = {
         image_url: data.imageUrl || null,
         caption: data.caption || null,
         hashtags: data.hashtags || [],
-        visibility: data.visibility || 'public'
+        visibility: data.visibility || 'public',
+        page_snapshot: (data.pageSnapshot || null) as Json  // 投稿時点のページスナップショットを保存
       })
       .select()
       .single()
@@ -437,7 +481,7 @@ export const timelineService = {
     }
   },
 
-  // コメント一覧取得
+  // コメント一覧取得（ツリー構造対応）
   async getComments(
     postId: string,
     limit: number = 50
@@ -445,6 +489,8 @@ export const timelineService = {
     id: string
     content: string
     created_at: string
+    parent_id: string | null
+    reply_count: number
     user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
   }[]> {
     const supabase = getSupabase()
@@ -455,6 +501,8 @@ export const timelineService = {
         id,
         content,
         created_at,
+        parent_id,
+        reply_count,
         user:profiles(id, username, display_name, avatar_url)
       `)
       .eq('post_id', postId)
@@ -471,6 +519,89 @@ export const timelineService = {
       id: c.id,
       content: c.content,
       created_at: c.created_at,
+      parent_id: c.parent_id || null,
+      reply_count: c.reply_count || 0,
+      user: c.user
+    }))
+  },
+
+  // 返信を追加
+  async addReply(
+    postId: string,
+    userId: string,
+    content: string,
+    parentId: string
+  ): Promise<{ id: string; content: string; created_at: string; parent_id: string } | null> {
+    const supabase = getSupabase()
+
+    // parent_id はマイグレーション041で追加されたカラム（型定義がまだ更新されていない）
+    const { data, error } = await (supabase
+      .from('post_comments') as any)
+      .insert({
+        post_id: postId,
+        user_id: userId,
+        content,
+        parent_id: parentId
+      })
+      .select('id, content, created_at, parent_id')
+      .single()
+
+    if (error) {
+      console.error('Add reply error:', error)
+      return null
+    }
+
+    // デイリーミッション進捗を更新
+    await dailyMissionService.updateProgress(userId, 'comment', 1)
+
+    return {
+      id: data.id,
+      content: data.content,
+      created_at: data.created_at || new Date().toISOString(),
+      parent_id: data.parent_id
+    }
+  },
+
+  // 特定コメントへの返信一覧を取得
+  async getReplies(
+    commentId: string,
+    limit: number = 50
+  ): Promise<{
+    id: string
+    content: string
+    created_at: string
+    parent_id: string
+    reply_count: number
+    user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+  }[]> {
+    const supabase = getSupabase()
+
+    const { data, error } = await supabase
+      .from('post_comments')
+      .select(`
+        id,
+        content,
+        created_at,
+        parent_id,
+        reply_count,
+        user:profiles(id, username, display_name, avatar_url)
+      `)
+      .eq('parent_id', commentId)
+      .order('created_at', { ascending: true })
+      .limit(limit)
+
+    if (error || !data) {
+      console.error('Get replies error:', error)
+      return []
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return data.map((c: any) => ({
+      id: c.id,
+      content: c.content,
+      created_at: c.created_at,
+      parent_id: c.parent_id,
+      reply_count: c.reply_count || 0,
       user: c.user
     }))
   },

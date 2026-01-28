@@ -49,6 +49,8 @@ export function FloatingEditSticker({
   // 自動スクロール用
   const scrollAnimationRef = useRef<number | null>(null)
   const lastPositionRef = useRef({ x: 0, y: 0 })
+  const dragFrameRef = useRef<number | null>(null)
+  const pendingDragRef = useRef<{ x: number; y: number; clientX: number; clientY: number } | null>(null)
 
   const stickerSize = 60 * sticker.scale
 
@@ -68,7 +70,8 @@ export function FloatingEditSticker({
     const bookLeft = containerRect.left + horizontalOffset
 
     // 垂直方向: BookView内のflex構造による余白を考慮
-    const topOffset = 8
+    // bookContainerRef は pt-4 (16px)
+    const topOffset = 16
     const bookTop = containerRect.top + topOffset
 
     return {
@@ -90,17 +93,13 @@ export function FloatingEditSticker({
 
     // シールの相対位置から絶対位置を計算
     // sticker.x は 0〜1 でそのページ内の相対位置
-    // 見開き時、右ページのシールは左ページ幅分のオフセットが必要
     let absoluteX: number
     if (isSpreadView && pageSide === 'right') {
-      // 右ページ: 本の左端 + 左ページ幅 + (シールのX座標 * 右ページ幅)
       absoluteX = bounds.left + pageWidth + (sticker.x * pageWidth) - stickerSize / 2
     } else {
-      // 左ページまたは単ページ: 本の左端 + (シールのX座標 * ページ幅)
       absoluteX = bounds.left + (sticker.x * pageWidth) - stickerSize / 2
     }
     const absoluteY = bounds.top + (sticker.y * pageHeight) - stickerSize / 2
-
     setPosition({ x: absoluteX, y: absoluteY })
   }, [getActualBookBounds, sticker.x, sticker.y, pageWidth, pageHeight, isSpreadView, pageSide, stickerSize])
 
@@ -117,6 +116,9 @@ export function FloatingEditSticker({
       // スクロールアニメーションもクリーンアップ
       if (scrollAnimationRef.current) {
         cancelAnimationFrame(scrollAnimationRef.current)
+      }
+      if (dragFrameRef.current) {
+        cancelAnimationFrame(dragFrameRef.current)
       }
     }
   }, [])
@@ -217,6 +219,57 @@ export function FloatingEditSticker({
     }
   }, [getActualBookBounds, position])
 
+  const flushDragFrame = useCallback(() => {
+    dragFrameRef.current = null
+    const pending = pendingDragRef.current
+    if (!pending) return
+    pendingDragRef.current = null
+
+    const { x: newX, y: newY, clientX, clientY } = pending
+    setPosition({ x: newX, y: newY })
+
+    // 自動スクロール用に現在位置を保存（クライアント座標）
+    lastPositionRef.current = { x: clientX, y: clientY }
+
+    // 相対座標を計算してコールバック（シールの中心位置を基準に）
+    const bounds = bookBoundsRef.current
+    if (bounds) {
+      const stickerCenterX = newX + stickerSize / 2
+      const stickerCenterY = newY + stickerSize / 2
+
+      let relativeX: number
+      if (isSpreadView) {
+        const spreadRelativeX = (stickerCenterX - bounds.left) / bounds.width
+        const newPageSide: 'left' | 'right' = spreadRelativeX >= 0.5 ? 'right' : 'left'
+
+        if (newPageSide !== currentPageSideRef.current) {
+          currentPageSideRef.current = newPageSide
+          onPageSideChange?.(newPageSide)
+        }
+
+        if (newPageSide === "right") {
+          relativeX = (spreadRelativeX - 0.5) * 2
+        } else {
+          relativeX = spreadRelativeX * 2
+        }
+      } else {
+        relativeX = (stickerCenterX - bounds.left) / bounds.width
+      }
+
+      const relativeY = (stickerCenterY - bounds.top) / bounds.height
+      const halfStickerW = stickerSize / 2 / pageWidth
+      const halfStickerH = stickerSize / 2 / pageHeight
+      const minX = Math.max(0, halfStickerW)
+      const maxX = Math.min(1, 1 - halfStickerW)
+      const minY = Math.max(0, halfStickerH)
+      const maxY = Math.min(1, 1 - halfStickerH)
+      const clampedX = Math.max(minX, Math.min(maxX, relativeX))
+      const clampedY = Math.max(minY, Math.min(maxY, relativeY))
+
+      onDrag(clampedX, clampedY)
+    }
+  }, [isSpreadView, onDrag, onPageSideChange, stickerSize, pageWidth, pageHeight])
+
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return
     e.stopPropagation()
@@ -225,7 +278,10 @@ export function FloatingEditSticker({
     const offset = dragOffsetRef.current
     const newX = e.clientX - offset.x
     const newY = e.clientY - offset.y
-    setPosition({ x: newX, y: newY })
+    pendingDragRef.current = { x: newX, y: newY, clientX: e.clientX, clientY: e.clientY }
+    if (!dragFrameRef.current) {
+      dragFrameRef.current = requestAnimationFrame(flushDragFrame)
+    }
 
     // 自動スクロール用に現在位置を保存（クライアント座標）
     lastPositionRef.current = { x: e.clientX, y: e.clientY }
@@ -244,55 +300,18 @@ export function FloatingEditSticker({
       }
     }
 
-    // 相対座標を計算してコールバック（シールの中心位置を基準に）
-    const bounds = bookBoundsRef.current
-    if (bounds) {
-      // シールの中心位置を計算（左上角 + サイズの半分）
-      const stickerCenterX = newX + stickerSize / 2
-      const stickerCenterY = newY + stickerSize / 2
-
-      // 見開き時は全体幅（600px）に対する相対座標を計算してから、
-      // 単一ページ座標（0-1 で 300px）に変換する
-      let relativeX: number
-      if (isSpreadView) {
-        // 見開き全体に対する相対座標
-        const spreadRelativeX = (stickerCenterX - bounds.left) / bounds.width
-
-        // 現在どちらのページにあるか判定（0.5 を境界として）
-        const newPageSide: 'left' | 'right' = spreadRelativeX >= 0.5 ? 'right' : 'left'
-
-        // ページを跨いだ場合は通知
-        if (newPageSide !== currentPageSideRef.current) {
-          currentPageSideRef.current = newPageSide
-          onPageSideChange?.(newPageSide)
-        }
-
-        // 現在のページに基づいて座標を計算
-        if (newPageSide === 'right') {
-          // 右ページ: spreadX の 0.5-1.0 を pageX の 0-1 に変換
-          relativeX = (spreadRelativeX - 0.5) * 2
-        } else {
-          // 左ページ: spreadX の 0-0.5 を pageX の 0-1 に変換
-          relativeX = spreadRelativeX * 2
-        }
-      } else {
-        // 単ページ時はそのまま
-        relativeX = (stickerCenterX - bounds.left) / bounds.width
-      }
-
-      const relativeY = (stickerCenterY - bounds.top) / bounds.height
-
-      // 範囲内に制限（端ギリギリまで配置可能）
-      const clampedX = Math.max(0.05, Math.min(0.95, relativeX))
-      const clampedY = Math.max(0.05, Math.min(0.95, relativeY))
-
-      onDrag(clampedX, clampedY)
-    }
-  }, [isDragging, stickerSize, onDrag, isSpreadView, onPageSideChange])
+  }, [isDragging, handleEdgeScroll, flushDragFrame])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return
     e.stopPropagation()
+
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = null
+      flushDragFrame()
+    }
+    pendingDragRef.current = null
 
     // 自動スクロールを停止
     if (scrollAnimationRef.current) {
@@ -313,7 +332,7 @@ export function FloatingEditSticker({
     setIsDragging(false)
     bookBoundsRef.current = null
     onDragEnd?.()
-  }, [isDragging, onDragEnd])
+  }, [isDragging, onDragEnd, flushDragFrame])
 
   const imageUrl = sticker.sticker.imageUrl
   const icon = '🌟' // フォールバック
@@ -322,7 +341,7 @@ export function FloatingEditSticker({
     <div
       ref={stickerRef}
       className={`
-        fixed cursor-grab select-none z-[60]
+        fixed cursor-grab select-none
         ${isDragging ? 'cursor-grabbing' : ''}
         ring-2 ring-purple-500 ring-opacity-75 rounded-lg
       `}
@@ -331,7 +350,11 @@ export function FloatingEditSticker({
         top: position.y,
         width: stickerSize,
         height: stickerSize,
-        transform: `rotate(${sticker.rotation}deg) ${isDragging ? 'scale(1.1)' : ''}`,
+        // iOS Safari対策: 3Dコンテキストより前面に表示するためtranslateZを追加
+        transform: 'translateZ(10000px)',
+        transformStyle: 'preserve-3d',
+        zIndex: 100000,
+        willChange: 'transform',
         touchAction: 'none',
         // 常に不透明（ページ上のシールは非表示にしているため）
         opacity: 1,
@@ -339,25 +362,51 @@ export function FloatingEditSticker({
           ? 'drop-shadow(0 8px 16px rgba(139, 92, 246, 0.4))'
           : 'drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3))',
         transition: isDragging ? 'none' : 'filter 0.15s ease-out',
+        overflow: 'visible',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={sticker.sticker.name}
-          className="w-full h-full object-contain"
-          draggable={false}
-        />
-      ) : (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          transform: `rotate(${sticker.rotation}deg) ${isDragging ? 'scale(1.1)' : ''}`,
+        }}
+      >
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={sticker.sticker.name}
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ fontSize: `${stickerSize * 0.6}px` }}
+          >
+            {icon}
+          </div>
+        )}
+      </div>
+
+      {/* うごかすハンドル（下） */}
+      {!isDragging && (
         <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ fontSize: `${stickerSize * 0.6}px` }}
+          className="absolute left-1/2 top-full -translate-x-1/2 mt-2 px-3 py-1.5 rounded-full text-xs font-bold cursor-grab active:cursor-grabbing"
+          style={{
+            background: 'linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)',
+            color: 'white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            whiteSpace: 'nowrap',
+          }}
+          onPointerDown={handlePointerDown}
         >
-          {icon}
+          うごかす
         </div>
       )}
 

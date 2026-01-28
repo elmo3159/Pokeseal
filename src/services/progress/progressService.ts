@@ -114,12 +114,12 @@ function getLevelUpRewards(level: number): Reward[] {
     })
   }
 
-  // 10レベルごとにプレシル
+  // 10レベルごとにプレシルチケ
   if (level % 10 === 0) {
     rewards.push({
       type: 'star_points',
       amount: 50,
-      name: 'プレシル×3'
+      name: 'プレシルチケ×3'
     })
   }
 

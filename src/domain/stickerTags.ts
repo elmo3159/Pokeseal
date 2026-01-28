@@ -62,14 +62,14 @@ export interface StickerSearchFilter {
   upgradeRanks: number[] // アップグレードランクフィルター（0=ノーマル, 1=シルバー, 2=ゴールド, 3=プリズム）
 }
 
-// デフォルトのフィルター（持っているシールのみ表示がデフォルト）
+// デフォルトのフィルター（すべて表示がデフォルト）
 export const defaultSearchFilter: StickerSearchFilter = {
   query: '',
   series: null,
   rarities: [],
   tags: [],
   types: [],
-  ownedOnly: true, // デフォルトで所持シールのみ表示
+  ownedOnly: false, // デフォルトですべて表示
   upgradeRanks: [],
 }
 

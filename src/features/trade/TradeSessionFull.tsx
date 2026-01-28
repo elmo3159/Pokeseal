@@ -9,6 +9,7 @@ import type { BookPage, PageTheme } from '../sticker-book/BookView'
 import { getCoverDesignById, type CoverDesign } from '@/domain/theme'
 import type { PlacedDecoItem } from '@/domain/decoItems'
 import { filterContent, isKidSafe, getFilterReason, FilterResult } from '@/utils/contentFilter'
+import { Avatar } from '@/components/ui/Avatar'
 import {
   UserIcon,
   StarIcon,
@@ -51,6 +52,7 @@ export interface TradeUser {
   id: string
   name: string
   avatarUrl?: string
+  frameId?: string | null
   level: number
   bio?: string
   totalStickers?: number
@@ -175,6 +177,7 @@ interface TradeSessionFullProps {
   onEndNegotiation?: () => void // 交渉終了（交渉をキャンセルする）
   onFollowPartner?: (partnerId: string) => void
   isFriend?: boolean           // 相互フォロー状態
+  isFollowingPartner?: boolean // フォロー済みか
   // Supabase連携用
   supabaseMessages?: SupabaseTradeMessage[]
   onSendStamp?: (stampId: string) => Promise<void>
@@ -196,17 +199,24 @@ const ChatBubble: React.FC<{
   message: TradeMessage
   isMe: boolean
   partnerName: string
-}> = ({ message, isMe, partnerName }) => {
-  const isStamp = message.type === 'stamp'
+  partnerAvatarUrl?: string
+  partnerFrameId?: string | null
+}> = ({ message, isMe, partnerAvatarUrl, partnerFrameId }) => {
+  const isStamp = (message.type === 'stamp' || message.type === 'preset') && !!(STAMPS[message.content as StampType])
   const content = isStamp
-    ? STAMPS[message.content as StampType]?.emoji || message.content
+    ? STAMPS[message.content as StampType].emoji
     : message.content
 
   return (
     <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
       {!isMe && (
-        <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center mr-1 flex-shrink-0">
-          <UserIcon size={16} color="#A855F7" />
+        <div className="mr-1 flex-shrink-0">
+          <Avatar
+            src={partnerAvatarUrl}
+            alt="partner"
+            size="xs"
+            frameId={partnerFrameId}
+          />
         </div>
       )}
       <div
@@ -219,11 +229,6 @@ const ChatBubble: React.FC<{
         `}
       >
         {content}
-        {isStamp && (
-          <span className="text-[10px] block text-center opacity-70">
-            {STAMPS[message.content as StampType]?.label}
-          </span>
-        )}
       </div>
     </div>
   )
@@ -236,7 +241,9 @@ const ChatArea: React.FC<{
   messages: TradeMessage[]
   myUserId: string
   partnerName: string
-}> = ({ messages, myUserId, partnerName }) => {
+  partnerAvatarUrl?: string
+  partnerFrameId?: string | null
+}> = ({ messages, myUserId, partnerName, partnerAvatarUrl, partnerFrameId }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -263,6 +270,8 @@ const ChatArea: React.FC<{
             message={msg}
             isMe={msg.senderId === myUserId}
             partnerName={partnerName}
+            partnerAvatarUrl={partnerAvatarUrl}
+            partnerFrameId={partnerFrameId}
           />
         ))
       )}
@@ -277,7 +286,9 @@ const ChatAreaExpanded: React.FC<{
   messages: TradeMessage[]
   myUserId: string
   partnerName: string
-}> = ({ messages, myUserId, partnerName }) => {
+  partnerAvatarUrl?: string
+  partnerFrameId?: string | null
+}> = ({ messages, myUserId, partnerName, partnerAvatarUrl, partnerFrameId }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -305,6 +316,8 @@ const ChatAreaExpanded: React.FC<{
               message={msg}
               isMe={msg.senderId === myUserId}
               partnerName={partnerName}
+              partnerAvatarUrl={partnerAvatarUrl}
+              partnerFrameId={partnerFrameId}
             />
           ))}
         </div>
@@ -801,6 +814,183 @@ const CompactWishlist: React.FC<{
 }
 
 // ============================================
+// 重なりシール選択ポップアップ
+// ============================================
+const StickerPickerPopup: React.FC<{
+  stickers: PlacedSticker[]
+  selectedStickers: string[]
+  onSelect: (stickerId: string) => void
+  onClose: () => void
+  position: { x: number; y: number }
+  containerRect: DOMRect
+  disabled?: boolean
+  maxSelections: number
+}> = ({ stickers, selectedStickers, onSelect, onClose, position, containerRect, disabled, maxSelections }) => {
+  const popupRef = useRef<HTMLDivElement>(null)
+  const canSelectMore = selectedStickers.length < maxSelections
+
+  // ポップアップ位置を画面内に収める（fixed positioning for portal）
+  const getPopupStyle = (): React.CSSProperties => {
+    const popupWidth = 200
+    const popupMaxHeight = 240
+    let left = position.x
+    let top = position.y + 12
+
+    // 右端はみ出し防止
+    if (left + popupWidth > window.innerWidth) {
+      left = window.innerWidth - popupWidth - 8
+    }
+    if (left < 8) left = 8
+    // 下端はみ出し → 上に表示
+    if (top + popupMaxHeight > window.innerHeight) {
+      top = position.y - popupMaxHeight - 12
+    }
+    if (top < 8) top = 8
+
+    return {
+      position: 'fixed',
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${popupWidth}px`,
+      maxHeight: `${popupMaxHeight}px`,
+      zIndex: 99999,
+    }
+  }
+
+  return createPortal(
+    <>
+      {/* 背景オーバーレイ */}
+      <div
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99998,
+          background: 'rgba(0,0,0,0.15)',
+        }}
+      />
+      {/* ポップアップ本体 */}
+      <div
+        ref={popupRef}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          ...getPopupStyle(),
+          background: 'white',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1)',
+          border: '2px solid #E9D5FF',
+          overflow: 'hidden',
+          animation: 'stickerPickerIn 0.15s ease-out',
+        }}
+      >
+        <div style={{
+          padding: '8px 12px',
+          background: 'linear-gradient(135deg, #F3E8FF, #FCE7F3)',
+          borderBottom: '1px solid #E9D5FF',
+          fontSize: '12px',
+          fontWeight: 600,
+          color: '#6B21A8',
+          textAlign: 'center',
+        }}>
+          どのシール？
+        </div>
+        <div style={{ overflowY: 'auto', maxHeight: '192px' }}>
+          {stickers.map((sticker) => {
+            const isSelected = selectedStickers.includes(sticker.id)
+            const isDisabled = disabled || (!isSelected && !canSelectMore)
+            return (
+              <button
+                key={sticker.id}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!isDisabled) {
+                    onSelect(sticker.id)
+                    onClose()
+                  }
+                }}
+                disabled={isDisabled}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: 'none',
+                  borderBottom: '1px solid #F3E8FF',
+                  background: isSelected ? '#FDF2F8' : 'white',
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  opacity: isDisabled && !isSelected ? 0.5 : 1,
+                  transition: 'background 0.1s',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  flexShrink: 0,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: '#F9FAFB',
+                  border: isSelected ? '2px solid #EC4899' : '1px solid #E5E7EB',
+                }}>
+                  {sticker.sticker.imageUrl && (
+                    <img
+                      src={sticker.sticker.imageUrl}
+                      alt={sticker.sticker.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                      draggable={false}
+                    />
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#6B21A8',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {sticker.sticker.name}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#A78BFA' }}>
+                    {'★'.repeat(sticker.sticker.rarity || 1)}
+                  </div>
+                </div>
+                {isSelected && (
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: '#EC4899',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    flexShrink: 0,
+                  }}>
+                    ✓
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <style>{`
+        @keyframes stickerPickerIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </>,
+    document.body
+  )
+}
+
+// ============================================
 // シール帳ページコンポーネント（修正版 - シール位置修正）
 // ============================================
 const TradeBookPageComponent = React.forwardRef<
@@ -817,6 +1007,14 @@ const TradeBookPageComponent = React.forwardRef<
 >(({ page, selectedStickers, onStickerSelect, maxSelections, disabled, coverDesign, pageWidth = BASE_PAGE_WIDTH }, ref) => {
   const canSelectMore = selectedStickers.length < maxSelections
   const stickers = page.stickers || []
+  const pageContainerRef = useRef<HTMLDivElement>(null)
+
+  // 重なりシール選択ポップアップの状態
+  const [overlappingPopup, setOverlappingPopup] = useState<{
+    stickers: PlacedSticker[]
+    position: { x: number; y: number }
+    containerRect: DOMRect
+  } | null>(null)
 
   // ページ背景（ユーザーテーマを反映）
   const getPageBackground = (theme?: PageTheme) => {
@@ -832,12 +1030,54 @@ const TradeBookPageComponent = React.forwardRef<
     return 'bg-gradient-to-br from-purple-400 to-pink-400'
   }
 
-  // シールのタップハンドラ
+  // タップ位置に重なっているシールを全て取得
+  const getOverlappingStickers = useCallback((tappedSticker: PlacedSticker): PlacedSticker[] => {
+    const pageHeight = BASE_PAGE_HEIGHT
+    const tappedSize = getProportionalStickerSize(tappedSticker.scale, pageWidth)
+    const tappedCenterX = tappedSticker.x * pageWidth
+    const tappedCenterY = tappedSticker.y * pageHeight
+
+    return stickers.filter(s => {
+      if (s.id === tappedSticker.id) return true
+      const sSize = getProportionalStickerSize(s.scale, pageWidth)
+      const sCenterX = s.x * pageWidth
+      const sCenterY = s.y * pageHeight
+      const overlapX = Math.abs(tappedCenterX - sCenterX) < (tappedSize + sSize) / 2
+      const overlapY = Math.abs(tappedCenterY - sCenterY) < (tappedSize + sSize) / 2
+      return overlapX && overlapY
+    })
+  }, [stickers, pageWidth])
+
+  // シールのタップハンドラ（重なり検出付き）
   const handleStickerTap = useCallback((e: React.MouseEvent | React.TouchEvent, stickerId: string) => {
     e.stopPropagation()
     e.preventDefault()
-    onStickerSelect(stickerId)
-  }, [onStickerSelect])
+
+    const tappedSticker = stickers.find(s => s.id === stickerId)
+    if (!tappedSticker) return
+
+    const overlapping = getOverlappingStickers(tappedSticker)
+
+    if (overlapping.length <= 1) {
+      // 重なりなし → 従来通り即選択
+      onStickerSelect(stickerId)
+    } else {
+      // 重なりあり → ポップアップ表示
+      const clientX = 'touches' in e ? e.touches[0]?.clientX ?? 0 : (e as React.MouseEvent).clientX
+      const clientY = 'touches' in e ? e.touches[0]?.clientY ?? 0 : (e as React.MouseEvent).clientY
+      const container = pageContainerRef.current
+      if (container) {
+        setOverlappingPopup({
+          stickers: overlapping.sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0)),
+          position: { x: clientX, y: clientY },
+          containerRect: container.getBoundingClientRect(),
+        })
+      } else {
+        // fallback: 即選択
+        onStickerSelect(stickerId)
+      }
+    }
+  }, [onStickerSelect, stickers, getOverlappingStickers])
 
   return (
     <div
@@ -895,7 +1135,7 @@ const TradeBookPageComponent = React.forwardRef<
         )
       ) : (
         // 通常ページ - シール配置エリアは padding なしで全面使用
-        <div className={`w-full h-full relative bg-gradient-to-br ${getPageBackground(page.theme)}`}>
+        <div ref={pageContainerRef} className={`w-full h-full relative bg-gradient-to-br ${getPageBackground(page.theme)}`}>
           {/* ページ背景パターン */}
           {page.theme?.pattern && (
             <div
@@ -978,6 +1218,23 @@ const TradeBookPageComponent = React.forwardRef<
               )
             })}
           </div>
+
+          {/* 重なりシール選択ポップアップ */}
+          {overlappingPopup && (
+            <StickerPickerPopup
+              stickers={overlappingPopup.stickers}
+              selectedStickers={selectedStickers}
+              onSelect={(id) => {
+                onStickerSelect(id)
+                setOverlappingPopup(null)
+              }}
+              onClose={() => setOverlappingPopup(null)}
+              position={overlappingPopup.position}
+              containerRect={overlappingPopup.containerRect}
+              disabled={disabled}
+              maxSelections={maxSelections}
+            />
+          )}
 
           {stickers.length === 0 && (
             <div className="w-full h-full flex items-center justify-center text-purple-300 text-xs">
@@ -1177,6 +1434,51 @@ const SelectablePageComponent = React.forwardRef<
   }
 >(({ page, coverDesign, pageWidth, pageHeight, selectedStickers, onStickerSelect }, ref) => {
   const stickers = page.stickers || []
+  const [overlappingPopup, setOverlappingPopup] = useState<{
+    stickers: PlacedSticker[]
+    position: { x: number; y: number }
+    containerRect: DOMRect
+  } | null>(null)
+  const pageContainerRef = useRef<HTMLDivElement>(null)
+
+  // 重なりシール検出
+  const getOverlappingStickers = useCallback((tappedSticker: PlacedSticker): PlacedSticker[] => {
+    const tappedSize = 60 * tappedSticker.scale
+    const tappedCenterX = tappedSticker.x * pageWidth
+    const tappedCenterY = tappedSticker.y * pageHeight
+
+    return stickers.filter(s => {
+      if (s.id === tappedSticker.id) return true
+      const sSize = 60 * s.scale
+      const sCenterX = s.x * pageWidth
+      const sCenterY = s.y * pageHeight
+      const overlapX = Math.abs(tappedCenterX - sCenterX) < (tappedSize + sSize) / 2
+      const overlapY = Math.abs(tappedCenterY - sCenterY) < (tappedSize + sSize) / 2
+      return overlapX && overlapY
+    })
+  }, [stickers, pageWidth, pageHeight])
+
+  const handleStickerTap = useCallback((e: React.MouseEvent, stickerId: string) => {
+    e.stopPropagation()
+    const tappedSticker = stickers.find(s => s.id === stickerId)
+    if (!tappedSticker) return
+
+    const overlapping = getOverlappingStickers(tappedSticker)
+    if (overlapping.length <= 1) {
+      onStickerSelect(stickerId)
+    } else {
+      const container = pageContainerRef.current
+      if (container) {
+        setOverlappingPopup({
+          stickers: overlapping.sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0)),
+          position: { x: e.clientX, y: e.clientY },
+          containerRect: container.getBoundingClientRect(),
+        })
+      } else {
+        onStickerSelect(stickerId)
+      }
+    }
+  }, [onStickerSelect, stickers, getOverlappingStickers])
 
   // ページ背景（ユーザーテーマを反映）
   const getPageBackground = (theme?: PageTheme) => {
@@ -1259,6 +1561,7 @@ const SelectablePageComponent = React.forwardRef<
       ) : (
         // 通常ページ - 選択可能なシール表示
         <div
+          ref={pageContainerRef}
           className={`relative bg-gradient-to-br ${getPageBackground(page.theme)}`}
           style={{ width: pageWidth, height: pageHeight }}
         >
@@ -1309,11 +1612,7 @@ const SelectablePageComponent = React.forwardRef<
                     backfaceVisibility: 'hidden',
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    console.log('[SelectablePage] Clicked sticker:', sticker.id, sticker.sticker.name, 'pos:', sticker.x, sticker.y, 'zIndex:', sticker.zIndex)
-                    onStickerSelect(sticker.id)
-                  }}
+                  onClick={(e) => handleStickerTap(e, sticker.id)}
                 >
                   <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
                     {sticker.sticker.imageUrl ? (
@@ -1352,6 +1651,22 @@ const SelectablePageComponent = React.forwardRef<
               )
             })}
           </div>
+
+          {/* 重なりシール選択ポップアップ */}
+          {overlappingPopup && (
+            <StickerPickerPopup
+              stickers={overlappingPopup.stickers}
+              selectedStickers={selectedStickers}
+              onSelect={(id) => {
+                onStickerSelect(id)
+                setOverlappingPopup(null)
+              }}
+              onClose={() => setOverlappingPopup(null)}
+              position={overlappingPopup.position}
+              containerRect={overlappingPopup.containerRect}
+              maxSelections={5}
+            />
+          )}
 
           {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
           {page.decoItems && page.decoItems.length > 0 && (
@@ -1986,6 +2301,50 @@ const MyBookSelectablePage = React.forwardRef<
   }
 >(({ page, coverDesign, pageWidth, pageHeight, selectedStickers, partnerSelectedStickers, onStickerSelect }, ref) => {
   const stickers = page.stickers || []
+  const [overlappingPopup, setOverlappingPopup] = useState<{
+    stickers: PlacedSticker[]
+    position: { x: number; y: number }
+    containerRect: DOMRect
+  } | null>(null)
+  const myPageContainerRef = useRef<HTMLDivElement>(null)
+
+  const getMyOverlappingStickers = useCallback((tappedSticker: PlacedSticker): PlacedSticker[] => {
+    const tappedSize = 60 * tappedSticker.scale
+    const tappedCenterX = tappedSticker.x * pageWidth
+    const tappedCenterY = tappedSticker.y * pageHeight
+
+    return stickers.filter(s => {
+      if (s.id === tappedSticker.id) return true
+      const sSize = 60 * s.scale
+      const sCenterX = s.x * pageWidth
+      const sCenterY = s.y * pageHeight
+      const overlapX = Math.abs(tappedCenterX - sCenterX) < (tappedSize + sSize) / 2
+      const overlapY = Math.abs(tappedCenterY - sCenterY) < (tappedSize + sSize) / 2
+      return overlapX && overlapY
+    })
+  }, [stickers, pageWidth, pageHeight])
+
+  const handleMyBookStickerTap = useCallback((e: React.MouseEvent, stickerId: string) => {
+    e.stopPropagation()
+    const tappedSticker = stickers.find(s => s.id === stickerId)
+    if (!tappedSticker) return
+
+    const overlapping = getMyOverlappingStickers(tappedSticker)
+    if (overlapping.length <= 1) {
+      onStickerSelect(stickerId)
+    } else {
+      const container = myPageContainerRef.current
+      if (container) {
+        setOverlappingPopup({
+          stickers: overlapping.sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0)),
+          position: { x: e.clientX, y: e.clientY },
+          containerRect: container.getBoundingClientRect(),
+        })
+      } else {
+        onStickerSelect(stickerId)
+      }
+    }
+  }, [onStickerSelect, stickers, getMyOverlappingStickers])
 
   const getPageBackground = (theme?: PageTheme) => {
     if (!theme?.backgroundColor) return 'from-pink-50 to-purple-50'
@@ -2057,6 +2416,7 @@ const MyBookSelectablePage = React.forwardRef<
         )
       ) : (
         <div
+          ref={myPageContainerRef}
           className={`relative bg-gradient-to-br ${getPageBackground(page.theme)}`}
           style={{ width: pageWidth, height: pageHeight }}
         >
@@ -2105,11 +2465,7 @@ const MyBookSelectablePage = React.forwardRef<
                     backfaceVisibility: 'hidden',
                     transform: `translate(-50%, -50%) rotate(${sticker.rotation}deg)`,
                   }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    console.log('[SelectablePage] Clicked sticker:', sticker.id, sticker.sticker.name, 'pos:', sticker.x, sticker.y, 'zIndex:', sticker.zIndex)
-                    onStickerSelect(sticker.id)
-                  }}
+                  onClick={(e) => handleMyBookStickerTap(e, sticker.id)}
                 >
                   <StickerAura upgradeRank={upgradeRank} style={{ width: '100%', height: '100%' }}>
                     {sticker.sticker.imageUrl ? (
@@ -2158,6 +2514,22 @@ const MyBookSelectablePage = React.forwardRef<
               )
             })}
           </div>
+
+          {/* 重なりシール選択ポップアップ */}
+          {overlappingPopup && (
+            <StickerPickerPopup
+              stickers={overlappingPopup.stickers}
+              selectedStickers={selectedStickers}
+              onSelect={(id) => {
+                onStickerSelect(id)
+                setOverlappingPopup(null)
+              }}
+              onClose={() => setOverlappingPopup(null)}
+              position={overlappingPopup.position}
+              containerRect={overlappingPopup.containerRect}
+              maxSelections={5}
+            />
+          )}
 
           {/* デコアイテム配置 - BookViewのPageDecosと同じ構造 */}
           {page.decoItems && page.decoItems.length > 0 && (
@@ -2529,23 +2901,12 @@ const PostTradeProfileScreen: React.FC<{
           boxSizing: 'border-box',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '50%',
-              backgroundColor: '#f3e8ff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid #d8b4fe',
-              overflow: 'hidden',
-            }}>
-              {partner.avatarUrl ? (
-                <img src={partner.avatarUrl} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
-              ) : (
-                <UserIcon size={28} color="#A855F7" />
-              )}
-            </div>
+            <Avatar
+              src={partner.avatarUrl}
+              alt={partner.name}
+              size="md"
+              frameId={partner.frameId}
+            />
             <div>
               <p style={{ fontWeight: 'bold', color: '#6b21a8', margin: 0 }}>{partner.name}</p>
               <p style={{ fontSize: '12px', color: '#a855f7', margin: 0 }}>Lv.{partner.level}</p>
@@ -2636,6 +2997,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   onEndNegotiation,
   onFollowPartner,
   isFriend: isFriendProp,
+  isFollowingPartner: isFollowingProp,
   // Supabase連携用
   supabaseMessages,
   onSendStamp,
@@ -2662,7 +3024,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
   const partnerConfirmed = partnerReady ?? localPartnerConfirmed
   const [showComplete, setShowComplete] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
-  const [isFollowing, setIsFollowing] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(isFollowingProp || false)
   const [showEnlargedBook, setShowEnlargedBook] = useState(false)  // 相手のシール帳拡大表示
   const [showMyEnlargedBook, setShowMyEnlargedBook] = useState(false)  // 自分のシール帳拡大表示
   const [cooldownRemaining, setCooldownRemaining] = useState(0)  // メッセージクールダウン（秒）
@@ -2856,17 +3218,14 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
   const handleSendStamp = useCallback(
     async (type: StampType) => {
-      // Supabase連携がある場合はSupabaseに送信
       if (onSendStamp) {
         try {
           await onSendStamp(type)
-          // UIは即座に更新（Supabaseからのリアルタイム通知でも更新される）
-          addMessage('stamp', type, myUser.id)
+          // Supabase Realtime / supabaseMessages経由でUIに反映される
         } catch (e) {
           console.error('[TradeSession] Failed to send stamp:', e)
         }
       } else {
-        // デモモード（Supabase連携なし）
         addMessage('stamp', type, myUser.id)
       }
     },
@@ -2875,11 +3234,9 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
   const handleSendPreset = useCallback(
     async (text: string) => {
-      // Supabase連携がある場合はSupabaseに送信
       if (onSendText) {
         try {
           await onSendText(text)
-          addMessage('preset', text, myUser.id)
         } catch (e) {
           console.error('[TradeSession] Failed to send preset:', e)
         }
@@ -2892,11 +3249,9 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
   const handleSendText = useCallback(
     async (text: string) => {
-      // Supabase連携がある場合はSupabaseに送信
       if (onSendText) {
         try {
           await onSendText(text)
-          addMessage('text', text, myUser.id)
         } catch (e) {
           console.error('[TradeSession] Failed to send text:', e)
         }
@@ -2935,7 +3290,7 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
     // supabaseMessagesからTradeMessage形式に変換
     const convertedMessages: TradeMessage[] = supabaseMessages.map((msg) => {
       const msgType = msg.message_type || 'stamp'
-      const content = msgType === 'stamp' ? msg.stamp_id : msg.content
+      const content = (msgType === 'stamp' || msgType === 'preset') ? (msg.stamp_id || msg.content) : msg.content
 
       return {
         id: msg.id,
@@ -3148,13 +3503,12 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
 
         {/* 中央: 相手のプロフィール */}
         <div className="flex-1 flex items-center justify-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center overflow-hidden border-2 border-white/50">
-            {partnerUser.avatarUrl ? (
-              <img src={partnerUser.avatarUrl} className="w-full h-full object-cover" />
-            ) : (
-              <UserIcon size={20} color="white" />
-            )}
-          </div>
+          <Avatar
+            src={partnerUser.avatarUrl}
+            alt={partnerUser.name}
+            size="xs"
+            frameId={partnerUser.frameId}
+          />
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="text-white font-bold text-sm">{partnerUser.name}</span>
@@ -3217,6 +3571,8 @@ export const TradeSessionFull: React.FC<TradeSessionFullProps> = ({
               messages={messages}
               myUserId={myUser.id}
               partnerName={partnerUser.name}
+              partnerAvatarUrl={partnerUser.avatarUrl}
+              partnerFrameId={partnerUser.frameId}
             />
           </div>
         </div>

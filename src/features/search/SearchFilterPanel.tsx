@@ -34,16 +34,16 @@ function getAllCharacterInfos(): CharacterInfo[] {
   const charactersMap = new Map<string, CharacterInfo>()
 
   for (const sticker of ALL_STICKERS) {
-    if (!charactersMap.has(sticker.character)) {
+    const existing = charactersMap.get(sticker.character)
+    if (existing) {
+      existing.stickerCount++
+    } else {
       charactersMap.set(sticker.character, {
         name: sticker.character,
         rarity: sticker.rarity,
         imageUrl: sticker.imageUrl,
         stickerCount: 1
       })
-    } else {
-      const existing = charactersMap.get(sticker.character)!
-      existing.stickerCount++
     }
   }
 

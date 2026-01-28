@@ -20,11 +20,12 @@ interface StickerTrayProps {
   stickers: Sticker[]
   onStickerSelect?: (sticker: Sticker) => void
   selectedStickerId?: string | null
+  onGoGacha?: () => void
+  hidden?: boolean
 }
 
 // フィルターオプション
 type RarityFilter = 'all' | 1 | 2 | 3 | 4 | 5
-type TypeFilter = 'all' | 'normal' | 'puffy' | 'sparkle'
 
 // 高さの定義
 const COLLAPSED_HEIGHT = 130 // コンパクト表示（画像のみ）の高さ
@@ -40,10 +41,12 @@ export function StickerTray({
   stickers,
   onStickerSelect,
   selectedStickerId,
+  onGoGacha,
+  hidden = false,
 }: StickerTrayProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollTopRef = useRef(0)
   const [rarityFilter, setRarityFilter] = useState<RarityFilter>('all')
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [isExpanded, setIsExpanded] = useState(false)
 
   // パフォーマンス改善: 表示数の制限
@@ -82,11 +85,9 @@ export function StickerTray({
   const filteredStickers = useMemo(() => {
     return stickers.filter((sticker) => {
       if (rarityFilter !== 'all' && sticker.rarity !== rarityFilter) return false
-      if (typeFilter !== 'all' && sticker.type !== typeFilter) return false
       return true
     })
-  }, [stickers, rarityFilter, typeFilter])
-
+  }, [stickers, rarityFilter])
   // 表示するシール（パフォーマンス改善のため件数制限）
   const displayedStickers = useMemo(() => {
     const limit = isExpanded ? displayCount : COLLAPSED_DISPLAY_COUNT
@@ -104,7 +105,11 @@ export function StickerTray({
   // フィルター変更時に表示数をリセット
   useEffect(() => {
     setDisplayCount(INITIAL_DISPLAY_COUNT)
-  }, [rarityFilter, typeFilter])
+    scrollTopRef.current = 0
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [rarityFilter])
 
   // シール選択時にトレイを閉じる
   const handleStickerClick = (sticker: Sticker) => {
@@ -194,6 +199,26 @@ export function StickerTray({
     }
   }, [isDragging, isExpanded, expandedHeight])
 
+  // スクロール位置を保存
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return
+    scrollTopRef.current = scrollRef.current.scrollTop
+  }, [])
+
+  // 非表示から戻ったらスクロール位置を復元
+  useEffect(() => {
+    if (hidden) return
+    if (!scrollRef.current) return
+    requestAnimationFrame(() => {
+      if (!scrollRef.current) return
+      scrollRef.current.scrollTop = scrollTopRef.current
+    })
+  }, [hidden, isExpanded, displayCount, filteredStickers.length])
+
+  if (hidden) {
+    return null
+  }
+
   return (
     <>
       {/* 展開時のオーバーレイ背景 */}
@@ -265,7 +290,7 @@ export function StickerTray({
               opacity: isExpanded ? 0 : 0.8,
             }}
           >
-            👇 シールをおしてね ↕️ 開閉
+            👇 しーるをおしてね ひらく/とじる
           </p>
         </div>
 
@@ -304,41 +329,6 @@ export function StickerTray({
                 </button>
               ))}
             </div>
-
-            {/* 種類フィルター */}
-            <div className="flex gap-1.5 flex-wrap">
-              {(
-                [
-                  { key: 'all', label: 'すべて' },
-                  { key: 'normal', label: 'ふつう' },
-                  { key: 'puffy', label: 'ぷっくり' },
-                  { key: 'sparkle', label: 'キラキラ' },
-                ] as { key: TypeFilter; label: string }[]
-              ).map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setTypeFilter(key)}
-                  className="px-2.5 py-1 rounded-full text-xs transition-all duration-300 whitespace-nowrap"
-                  style={{
-                    fontFamily: "'M PLUS Rounded 1c', sans-serif",
-                    fontWeight: 500,
-                    backgroundColor:
-                      typeFilter === key
-                        ? 'rgba(249, 168, 212, 0.25)'
-                        : 'rgba(255, 255, 255, 0.6)',
-                    color:
-                      typeFilter === key
-                        ? '#DB2777'
-                        : '#F9A8D4',
-                    boxShadow: typeFilter === key
-                      ? '0 2px 8px rgba(244, 114, 182, 0.15)'
-                      : 'none',
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -351,17 +341,58 @@ export function StickerTray({
             scrollbarWidth: 'thin',
             paddingBottom: isExpanded ? '80px' : '8px',
           }}
+          onScroll={handleScroll}
         >
           {filteredStickers.length === 0 ? (
-            <div
-              className="flex items-center justify-center w-full py-8"
-              style={{
-                color: '#A78BFA',
-                fontFamily: "'M PLUS Rounded 1c', sans-serif",
-              }}
-            >
-              <p className="text-sm">シールがありません</p>
-            </div>
+            isExpanded ? (
+              <div
+                className="flex items-center justify-center w-full py-8"
+                style={{
+                  color: '#A78BFA',
+                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                }}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-sm">しーるがないよ</p>
+                  {onGoGacha && (
+                    <button
+                      onClick={onGoGacha}
+                      className="px-4 py-2 rounded-full text-sm font-bold transition-all active:scale-95"
+                      style={{
+                        background: 'linear-gradient(135deg, #F472B6 0%, #A78BFA 100%)',
+                        color: 'white',
+                        boxShadow: '0 4px 12px rgba(167, 139, 250, 0.3)',
+                      }}
+                    >
+                      がちゃへ
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div
+                className="flex items-center justify-between w-full py-2"
+                style={{
+                  color: '#A78BFA',
+                  fontFamily: "'M PLUS Rounded 1c', sans-serif",
+                }}
+              >
+                <p className="text-sm">しーるがないよ</p>
+                {onGoGacha && (
+                  <button
+                    onClick={onGoGacha}
+                    className="px-3 py-1.5 rounded-full text-sm font-bold transition-all active:scale-95"
+                    style={{
+                      background: 'linear-gradient(135deg, #F472B6 0%, #A78BFA 100%)',
+                      color: 'white',
+                      boxShadow: '0 3px 10px rgba(167, 139, 250, 0.3)',
+                    }}
+                  >
+                    がちゃへ
+                  </button>
+                )}
+              </div>
+            )
           ) : isExpanded ? (
             // 展開時: グリッド表示
             <>
@@ -375,7 +406,7 @@ export function StickerTray({
               >
                 <span className="text-lg">👇</span>
                 <span className="text-sm font-medium">
-                  はりたいシールをおしてね ({displayedStickers.length}/{filteredStickers.length}件)
+                  はりたい しーるを おしてね ({displayedStickers.length}/{filteredStickers.length}こ)
                 </span>
                 <span className="text-lg">👇</span>
               </div>

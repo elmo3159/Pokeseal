@@ -83,9 +83,10 @@ interface TabBarProps {
   activeTab: TabId
   onTabChange: (tabId: TabId) => void
   transparent?: boolean // 背景を透過させるかどうか（現在は使用しない）
+  badgeCounts?: Partial<Record<TabId, number>>
 }
 
-export function TabBar({ activeTab, onTabChange }: TabBarProps) {
+export function TabBar({ activeTab, onTabChange, badgeCounts }: TabBarProps) {
   // ボタンサイズを画面幅に応じて計算
   // iPhone 12: 390px幅、タブ幅=52px、円=40px (iPhone 12基準)
   // スケール係数: clamp(最小, 理想, 最大)
@@ -103,21 +104,25 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* レイヤー1: リボン背景画像（最背面） */}
+      {/* レイヤー1: リボン背景画像（最前面、クリックは通過） */}
       <img
         src="/images/tabbar_ribbon.png"
         alt=""
-        className="absolute inset-0 w-full h-full"
+        className="absolute left-1/2 bottom-0 h-full pointer-events-none"
         style={{
-          objectFit: 'fill', // 画像を引き伸ばしてコンテナに合わせる
-          zIndex: 0,
+          transform: 'translateX(-50%)',
+          objectFit: 'contain',
+          zIndex: 20,
         }}
       />
 
       {/* レイヤー2: 色付き円背景（リボンの穴に配置） */}
       <div
-        className="absolute inset-0 flex items-start justify-evenly w-full"
+        className="absolute left-1/2 top-0 flex items-start justify-evenly"
         style={{
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '448px',
           zIndex: 1,
           paddingTop,
           paddingLeft: paddingX,
@@ -150,11 +155,14 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
         })}
       </div>
 
-      {/* レイヤー3: アイコン＋テキスト（最前面） */}
+      {/* レイヤー3: アイコン＋テキスト（リボンより前面に表示） */}
       <div
-        className="absolute inset-0 flex items-start justify-evenly w-full"
+        className="absolute left-1/2 top-0 flex items-start justify-evenly"
         style={{
-          zIndex: 10,
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '448px',
+          zIndex: 30,
           paddingTop,
           paddingLeft: paddingX,
           paddingRight: paddingX,
@@ -166,12 +174,32 @@ export function TabBar({ activeTab, onTabChange }: TabBarProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className="flex flex-col items-center justify-start transition-all duration-300"
+              className="flex flex-col items-center justify-start transition-all duration-300 relative"
               style={{
                 width: buttonWidth,
                 transform: isActive ? 'scale(1.1)' : 'scale(1)',
               }}
             >
+              {/* バッジ */}
+              {badgeCounts?.[tab.id] != null && badgeCounts[tab.id]! > 0 && (
+                <div
+                  className="absolute flex items-center justify-center rounded-full text-white font-bold"
+                  style={{
+                    top: '-2px',
+                    right: '2px',
+                    minWidth: '18px',
+                    height: '18px',
+                    padding: '0 4px',
+                    fontSize: '10px',
+                    background: '#E74C3C',
+                    zIndex: 40,
+                    lineHeight: 1,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  {badgeCounts[tab.id]! > 99 ? '99+' : badgeCounts[tab.id]}
+                </div>
+              )}
               {/* アイコン */}
               <div
                 className="flex items-center justify-center transition-all duration-300"

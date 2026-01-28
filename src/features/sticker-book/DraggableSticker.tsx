@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Sticker } from './StickerTray'
 
 interface DraggableStickerProps {
@@ -11,12 +12,15 @@ interface DraggableStickerProps {
   bookWidth?: number  // 1ページの幅
   bookHeight?: number // 本の実際の高さ
   isSpreadView?: boolean // 見開き状態かどうか（見開きなら幅は2倍）
+  isSinglePage?: boolean // 表紙/裏表紙など1ページ表示かどうか
   scrollContainerRef?: React.RefObject<HTMLDivElement | null> // スクロールコンテナへの参照
 }
 
 // 自動スクロールの設定
 const SCROLL_EDGE_THRESHOLD = 60 // 画面端からこのピクセル以内でスクロール開始
 const SCROLL_SPEED = 8 // スクロール速度（ピクセル/フレーム）
+const ACTUAL_STICKER_SIZE = 60 // 実際に貼られる時のサイズ
+const PREVIEW_STICKER_SIZE = 90 // プレビュー時の大きめサイズ
 
 export function DraggableSticker({
   sticker,
@@ -26,6 +30,7 @@ export function DraggableSticker({
   bookWidth = 300,
   bookHeight = 420,
   isSpreadView = false,
+  isSinglePage = false,
   scrollContainerRef,
 }: DraggableStickerProps) {
   const [rotation, setRotation] = useState(0)
@@ -33,11 +38,18 @@ export function DraggableSticker({
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isOverBook, setIsOverBook] = useState(false)
   const [showInitial, setShowInitial] = useState(true)
+  const [imageError, setImageError] = useState(false)
   const stickerRef = useRef<HTMLDivElement>(null)
   const initialPos = useRef({ x: 0, y: 0 })
   const activePointerId = useRef<number | null>(null)
   const scrollAnimationRef = useRef<number | null>(null)
   const lastPositionRef = useRef({ x: 0, y: 0 })
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+
+  // シールが変わったら画像エラーをリセット
+  useEffect(() => {
+    setImageError(false)
+  }, [sticker.imageUrl])
 
   // 本の実際の領域を計算
   // bookRefは正確な幅を持つコンテナを指すので、getBoundingClientRect()で直接位置を取得
@@ -46,7 +58,8 @@ export function DraggableSticker({
     const containerRect = bookRef.current.getBoundingClientRect()
 
     // 見開き状態では2ページ分の幅、そうでなければ1ページ分
-    const actualBookWidth = isSpreadView ? bookWidth * 2 : bookWidth
+    const isDoublePage = isSpreadView && !isSinglePage
+    const actualBookWidth = isDoublePage ? bookWidth * 2 : bookWidth
 
     // 重要: containerRectの実際の幅を使用して、コンテナ内での本の位置を計算
     // bookContainerRefの幅とactualBookWidthが異なる場合があるため
@@ -59,8 +72,8 @@ export function DraggableSticker({
     const bookRight = bookLeft + actualBookWidth
 
     // 垂直方向: BookView内のflex構造による余白を考慮
-    // BookViewは flex-col items-center で、上部にmt-2(8px)程度の余白
-    const topOffset = 8
+    // bookContainerRef は pt-4 (16px)
+    const topOffset = 16
     const bookTop = containerRect.top + topOffset
     const bookBottom = bookTop + bookHeight
 
@@ -75,6 +88,7 @@ export function DraggableSticker({
       bookLeft,
       bookRight,
       isSpreadView,
+      isSinglePage,
     })
 
     return {
@@ -87,12 +101,17 @@ export function DraggableSticker({
     }
   }, [bookRef, bookHeight, bookWidth, isSpreadView])
 
-  // 画面中央に初期配置
+  // 画面の中央に初期配置（見たままの中心）
   useEffect(() => {
-    const centerX = window.innerWidth / 2
-    const centerY = window.innerHeight / 2 - 100
-    setPosition({ x: centerX, y: centerY })
-    initialPos.current = { x: centerX, y: centerY }
+    const placeAtCenter = () => {
+      const centerX = window.innerWidth / 2
+      // 画面の中心より少し上に出す（UIと重ならないように）
+      const centerY = window.innerHeight * 0.4
+      setPosition({ x: centerX, y: centerY })
+      initialPos.current = { x: centerX, y: centerY }
+    }
+
+    requestAnimationFrame(placeAtCenter)
   }, [])
 
   // アンマウント時にポインターキャプチャを確実に解放
@@ -150,16 +169,22 @@ export function DraggableSticker({
     e.preventDefault()
     setIsDragging(true)
     setShowInitial(false)
+    // つかんだ位置のズレを保持（指の位置に一気に移動しないように）
+    dragOffsetRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    }
     activePointerId.current = e.pointerId
     stickerRef.current?.setPointerCapture(e.pointerId)
-  }, [])
+  }, [position])
 
   // ポインターを動かす - ドラッグ中
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return
 
-    const newX = e.clientX
-    const newY = e.clientY
+    const offset = dragOffsetRef.current
+    const newX = e.clientX - offset.x
+    const newY = e.clientY - offset.y
     setPosition({ x: newX, y: newY })
     lastPositionRef.current = { x: newX, y: newY }
 
@@ -228,9 +253,15 @@ export function DraggableSticker({
         isSpreadView,
       })
 
-      // 範囲内に収める（端ギリギリまで配置可能）
-      const clampedX = Math.max(0.05, Math.min(0.95, relativeX))
-      const clampedY = Math.max(0.05, Math.min(0.95, relativeY))
+      // 範囲内に収める（シールがページ外に出ないように）
+      const halfStickerW = ACTUAL_STICKER_SIZE / 2 / bookBounds.width
+      const halfStickerH = ACTUAL_STICKER_SIZE / 2 / bookBounds.height
+      const minX = Math.max(0, halfStickerW)
+      const maxX = Math.min(1, 1 - halfStickerW)
+      const minY = Math.max(0, halfStickerH)
+      const maxY = Math.min(1, 1 - halfStickerH)
+      const clampedX = Math.max(minX, Math.min(maxX, relativeX))
+      const clampedY = Math.max(minY, Math.min(maxY, relativeY))
 
       onPlace(clampedX, clampedY, rotation)
     } else {
@@ -252,12 +283,18 @@ export function DraggableSticker({
   }
 
   // シール帳上では実際のサイズ(60px)、それ以外では大きめ(90px)で表示
-  const actualStickerSize = 60 // 実際に貼られる時のサイズ
-  const previewStickerSize = 90 // プレビュー時の大きめサイズ
-  const currentSize = isOverBook ? actualStickerSize : previewStickerSize
+  const currentSize = isOverBook ? ACTUAL_STICKER_SIZE : PREVIEW_STICKER_SIZE
 
-  return (
-    <div className="fixed inset-0 z-50 pointer-events-none">
+  const overlay = (
+    <div
+      className="fixed inset-0 pointer-events-none"
+      style={{
+        zIndex: 100000,
+        // iOS Safari対策: 3Dコンテキストより前面に表示するためtranslateZを追加
+        transform: 'translateZ(10000px)',
+        transformStyle: 'preserve-3d',
+      }}
+    >
       {/* 背景オーバーレイ */}
       <div
         className="absolute inset-0 bg-black/20 pointer-events-auto"
@@ -270,44 +307,74 @@ export function DraggableSticker({
         className={`
           absolute pointer-events-auto cursor-grab select-none
           ${isDragging ? 'cursor-grabbing' : ''}
-          ${showInitial ? 'animate-bounce-in' : ''}
         `}
         style={{
           // GPU アクセラレーションのため translate3d を使用
           // left/top ではなく transform で位置を設定することでレイアウト再計算を回避
           left: 0,
           top: 0,
-          transform: `translate3d(${position.x - currentSize / 2}px, ${position.y - currentSize / 2}px, 0) rotate(${rotation}deg)`,
+          transform: `translate3d(${position.x - currentSize / 2}px, ${position.y - currentSize / 2}px, 0)`,
           width: currentSize,
           height: currentSize,
           touchAction: 'none',
+          overflow: 'visible',
           // will-change で GPU レイヤーを事前に確保
           willChange: isDragging ? 'transform' : 'auto',
-          filter: isDragging ? 'drop-shadow(0 8px 16px rgba(139, 92, 246, 0.4))' : 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))',
           // ドラッグ中は transition を無効化して遅延を防ぐ
           transition: isDragging ? 'none' : 'width 0.15s ease-out, height 0.15s ease-out, filter 0.15s ease-out',
           // シール帳上では緑の枠で「ここに貼られる」を明示
-          outline: isOverBook ? '3px solid #4ADE80' : 'none',
-          outlineOffset: '2px',
-          borderRadius: isOverBook ? '8px' : '0',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
-        {sticker.imageUrl ? (
-          <img
-            src={sticker.imageUrl}
-            alt={sticker.name}
-            className="w-full h-full object-contain"
-            draggable={false}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl">
-            🌟
-          </div>
-        )}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            transform: `rotate(${rotation}deg)`,
+            filter: isDragging ? 'drop-shadow(0 8px 16px rgba(139, 92, 246, 0.4))' : 'drop-shadow(0 4px 8px rgba(0,0,0,0.2))',
+            outline: isOverBook ? '3px solid #4ADE80' : 'none',
+            outlineOffset: '2px',
+            borderRadius: isOverBook ? '8px' : '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {sticker.imageUrl && !imageError ? (
+            <img
+              src={sticker.imageUrl}
+              alt={sticker.name}
+              className="w-full h-full object-contain"
+              draggable={false}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-4xl bg-white/90 rounded-xl border border-purple-200 shadow-sm">
+              ✨
+            </div>
+          )}
+        </div>
+
+        {/* うごかすハンドル（下） */}
+        <div
+          className="absolute left-1/2 top-full -translate-x-1/2 mt-2 px-3 py-1.5 rounded-full text-xs font-bold cursor-grab active:cursor-grabbing"
+          style={{
+            background: 'linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%)',
+            color: 'white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            fontFamily: "'M PLUS Rounded 1c', sans-serif",
+            whiteSpace: 'nowrap',
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          うごかす
+        </div>
       </div>
 
       {/* コントロールパネル（下部） */}
@@ -486,6 +553,8 @@ export function DraggableSticker({
       `}</style>
     </div>
   )
+
+  return createPortal(overlay, document.body)
 }
 
 export default DraggableSticker

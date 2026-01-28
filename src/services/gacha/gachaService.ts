@@ -6,6 +6,16 @@ import type { Sticker } from '@/types/database'
 
 export type GachaType = 'normal' | 'premium' | 'event' | 'collab'
 
+// プレミアムガチャ用のレアリティ別重み倍率
+// ⭐5=4%, ⭐4=11%, ⭐3=20%, ⭐2=30%, ⭐1=35% を実現
+const PREMIUM_WEIGHT_MULTIPLIERS: Record<number, number> = {
+  5: 4.0,   // 1% → 4%
+  4: 2.2,   // 5% → 11%
+  3: 1.4,   // 14% → 20%
+  2: 1.0,   // 30% → 30%
+  1: 0.7,   // 50% → 35%
+}
+
 export interface GachaResult {
   sticker: Sticker
   userSticker: UserStickerWithDetails
@@ -35,7 +45,7 @@ export const gachaService = {
     if (type === 'normal') {
       query = query.eq('is_limited', false)
     } else if (type === 'premium') {
-      // プレミアムは全シール対象だがレア度高めを優遇（重みはマスターデータ側で調整）
+      // プレミアムは全シール対象（重み補正は別途適用）
     } else if (type === 'event' || type === 'collab') {
       query = query.eq('is_limited', true)
     }
@@ -47,11 +57,20 @@ export const gachaService = {
       return null
     }
 
-    const totalWeight = data.reduce((sum: number, s: Sticker) => sum + (s.gacha_weight || 0), 0)
+    // プレミアムガチャの場合、レアリティ別に重みを補正
+    let stickers = data
+    if (type === 'premium') {
+      stickers = data.map((s: Sticker) => ({
+        ...s,
+        gacha_weight: Math.round((s.gacha_weight || 0) * (PREMIUM_WEIGHT_MULTIPLIERS[s.rarity] || 1))
+      }))
+    }
+
+    const totalWeight = stickers.reduce((sum: number, s: Sticker) => sum + (s.gacha_weight || 0), 0)
 
     return {
       type,
-      stickers: data,
+      stickers,
       totalWeight
     }
   },

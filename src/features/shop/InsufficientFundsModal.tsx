@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { getRemainingAdWatches, UserMonetization, GACHA_COSTS } from '@/domain/monetization'
+import { CurrencyIcon } from '@/components/ui/CurrencyIcon'
 
 type FundType = 'tickets' | 'gems' | 'stars'
 
@@ -46,17 +47,17 @@ export function InsufficientFundsModal({
   const getCurrencyName = (type: FundType) => {
     switch (type) {
       case 'tickets': return 'シルチケ'
-      case 'gems': return 'プレシル'
+      case 'gems': return 'プレシルチケ'
       case 'stars': return 'どろっぷ'
     }
   }
 
-  // 通貨アイコンを取得
-  const getCurrencyIcon = (type: FundType) => {
+  // 通貨タイプを変換
+  const getCurrencyType = (type: FundType): 'ticket' | 'gem' | 'star' => {
     switch (type) {
-      case 'tickets': return '🎫'
-      case 'gems': return '💎'
-      case 'stars': return '💧'
+      case 'tickets': return 'ticket'
+      case 'gems': return 'gem'
+      case 'stars': return 'star'
     }
   }
 
@@ -82,7 +83,7 @@ export function InsufficientFundsModal({
               : 'linear-gradient(90deg, #F87171 0%, #FBBF24 100%)',
           }}
         >
-          <div className="text-3xl mb-1">{getCurrencyIcon(fundType)}</div>
+          <div className="mb-1"><CurrencyIcon type={getCurrencyType(fundType)} size="xl" /></div>
           <h2
             className="text-white font-bold text-lg"
             style={{ fontFamily: "'M PLUS Rounded 1c', sans-serif" }}
@@ -121,7 +122,7 @@ export function InsufficientFundsModal({
 
           {/* 選択肢 */}
           <div className="space-y-3">
-            {/* どろっぷで引く（チケット/プレシル不足時、どろっぷ残高がある場合） */}
+            {/* どろっぷで引く（シルチケ/プレシルチケ不足時、どろっぷ残高がある場合） */}
             {canUseDropsInstead && onUseDrops && (fundType === 'tickets' || fundType === 'gems') && (
               <button
                 onClick={onUseDrops}
@@ -140,10 +141,10 @@ export function InsufficientFundsModal({
                   おすすめ！
                 </div>
                 <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl"
+                  className="w-12 h-12 rounded-full flex items-center justify-center"
                   style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)' }}
                 >
-                  💧
+                  <CurrencyIcon type="star" size="lg" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-amber-800 text-base">どろっぷで ひく</p>
@@ -195,10 +196,10 @@ export function InsufficientFundsModal({
                 }}
               >
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{ background: '#8B5CF6' }}
                 >
-                  💧
+                  <CurrencyIcon type="star" size="md" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-purple-700">どろっぷを かう</p>

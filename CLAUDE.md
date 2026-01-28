@@ -135,16 +135,16 @@ function PillButton({ label, color, onClick }: Props) {
 
 | 名称 | アイコン | 用途 | 獲得方法 |
 |------|---------|------|----------|
-| シルチケ | 🎫 | 通常ガチャ | デイリーボーナス、ミッション、広告視聴 |
-| プレシル | 💎 | プレミアムガチャ | サブスク特典、イベント報酬 |
-| どろっぷ | 💧 | ガチャ・アイテム購入 | 課金購入 |
+| シルチケ | 🎫 | 通常ガチャ（1枚=1回） | デイリーボーナス、ミッション、広告視聴 |
+| プレシルチケ | 💎 | プレミアムガチャ（1枚=1回） | サブスク特典、イベント報酬 |
+| どろっぷ | 💧 | 課金通貨（シルチケ・プレシルチケ・アイテム購入） | 課金購入 |
 
-**消費優先度:** シルチケ/プレシル → どろっぷ（チケット不足時にどろっぷ使用を案内）
+**消費優先度:** シルチケ/プレシルチケ → どろっぷ（チケット不足時にどろっぷ使用を案内）
 
 ## 8\. 関連ドキュメント
 
   * **課金プラン概要:** `docs/monetization-plan.md` を参照
-    - シルチケ・プレシル・どろっぷの詳細仕様
+    - シルチケ・プレシルチケ・どろっぷの詳細仕様
     - サブスクリプションプラン（ライト/プラス/デラックス）
     - 広告リワードシステム
     - デイリーミッション
@@ -339,3 +339,137 @@ export const RANK_NAMES = {
   [UPGRADE_RANKS.PRISM]: 'プリズム',
 } as const
 ```
+
+## 11. キャラクター表紙システム
+
+シリーズコンプリート報酬としてアンロックされるキャラクター別シール帳表紙。
+
+### 11.1 ファイル配置
+
+```
+public/covers/
+├── もっちも/          # デフォルト表紙（全員所持）
+│   ├── cover.png     # 表紙画像
+│   └── back.png      # 裏表紙画像
+├── サニたん/
+│   ├── cover.png
+│   └── back.png
+├── チャックン/
+│   ├── cover.png
+│   └── back.png
+├── ポリ/
+│   ├── cover.png
+│   └── back.png
+└── [新キャラ名]/      # 新規追加時
+    ├── cover.png
+    └── back.png
+```
+
+### 11.2 画像仕様
+
+| 項目 | 仕様 |
+|------|------|
+| 表紙サイズ | 320 × 480 px（3:4比率） |
+| 裏表紙サイズ | 320 × 480 px（3:4比率） |
+| 形式 | PNG（透過可）または JPEG |
+| 背表紙 | 自動生成（`spineColor`で指定） |
+
+### 11.3 新キャラ表紙の追加手順
+
+**Step 1: 画像を配置**
+```
+public/covers/[キャラ名]/cover.png
+public/covers/[キャラ名]/back.png
+```
+
+**Step 2: `src/domain/theme.ts` の `defaultCoverDesigns` 配列に追加**
+
+```typescript
+{
+  id: 'cover-[英語ID]',           // 例: 'cover-sunny'
+  name: '[キャラ名]',              // 例: 'サニたん'
+  description: '[説明文]',         // 例: 'サニたんの元気いっぱいシール帳'
+  previewEmoji: '[絵文字]',        // 例: '☀️'
+  coverImage: '/covers/[キャラ名]/cover.png',
+  backCoverImage: '/covers/[キャラ名]/back.png',
+  spineColor: '#[色コード]',       // 背表紙の色
+  spineGradientTo: '#[色コード]',  // 背表紙グラデーション終点（任意）
+  category: 'cute' | 'cool' | 'basic' | 'seasonal',
+  isOwned: false,                  // デフォルトは未所持
+  obtainMethod: 'achievement',     // 'default' | 'achievement' | 'gacha' | 'event' | 'starpoints'
+  unlockCondition: '[キャラ]シリーズ20種コンプリート',
+}
+```
+
+### 11.4 CoverDesign インターフェース
+
+```typescript
+// src/domain/theme.ts
+interface CoverDesign {
+  id: string                    // 一意のID
+  name: string                  // 表示名
+  description: string           // 説明
+  previewEmoji: string          // プレビュー用絵文字
+  coverImage: string            // 表紙画像パス（空=テーマカラー使用）
+  backCoverImage: string        // 裏表紙画像パス
+  spineColor: string            // 背表紙の色
+  spineGradientTo?: string      // 背表紙グラデーション終点
+  category: 'basic' | 'cute' | 'cool' | 'seasonal'
+  isOwned: boolean              // 所持フラグ
+  obtainMethod: 'default' | 'gacha' | 'event' | 'achievement' | 'starpoints'
+  starPointCost?: number        // スターポイント交換時のコスト
+  unlockCondition?: string      // アンロック条件の説明
+}
+```
+
+### 11.5 表紙選択UI
+
+- **場所:** シール帳タブ → ページ編集モーダル（📝ボタン）→「ひょうし」タブ
+- **ファイル:** `src/features/sticker-book/PageEditModal.tsx`
+- **未所持表紙:** カラー表示 + 🔒マーク（現在はテスト用に全選択可能）
+
+### 11.6 関連ファイル
+
+| ファイル | 役割 |
+|---------|------|
+| `src/domain/theme.ts` | 表紙デザイン定義・取得関数 |
+| `src/features/sticker-book/PageEditModal.tsx` | 表紙選択UI |
+| `src/features/sticker-book/BookView.tsx` | 表紙表示 |
+| `src/utils/persistence.ts` | `coverDesignId` の保存・読込 |
+
+### 11.7 デフォルト表紙
+
+- **ID:** `cover-mochimo`（もっちも）
+- **全ユーザーが初期状態で所持**
+- 初回起動時に自動適用
+
+新しいフレームを追加する手順
+
+  1. public/icon_frame/[キャラ名]/icon_frame.png に画像を配置
+  2. characterRewards.ts の FRAME_METADATA にメタデータを追加
+
+  'キャラクター名': {
+    frameWidth: 画像幅,
+    frameHeight: 画像高さ,
+    iconCenterX: アイコン中心X,
+    iconCenterY: アイコン中心Y,
+    iconDiameter: アイコン直径,
+    },
+
+
+    テスト用に設定しました。プロフィール編集画面 → フレーム選択 で以下の4つのフレームが選択できるようになっています：
+
+  - チャックン
+  - トイラン
+  - ねこマカロン
+  - ルミナ・スターダスト
+
+  http://localhost:3000 でプロフィール編集（✏️アイコン）からフレームを選択して確認できます。   
+
+  ---
+  本番に戻す方法：
+  src/features/profile/ProfileEditModal.tsx の loadUnlockedFrames 関数で、コメントを元に戻すだ けです：
+
+  // テスト用コードを削除して:
+  const frames = await characterRewardService.getUnlockedFrames(user.id)
+  setUnlockedFrames(frames)

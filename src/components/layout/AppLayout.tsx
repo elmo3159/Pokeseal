@@ -21,6 +21,7 @@ interface AppLayoutProps {
   backgroundImage?: string // カスタム背景画像（ホームタブ用）
   currency?: HeaderCurrency // 通貨表示（右上）
   onOpenShop?: () => void // ショップを開くコールバック
+  tabBadgeCounts?: Partial<Record<TabId, number>>
 }
 
 export function AppLayout({
@@ -37,6 +38,7 @@ export function AppLayout({
   backgroundImage,
   currency,
   onOpenShop,
+  tabBadgeCounts,
 }: AppLayoutProps) {
   const handleTabChange = (tabId: TabId) => {
     if (onTabChange) {
@@ -85,7 +87,8 @@ export function AppLayout({
         top: '10px',
         left: '0',
         right: '0',
-        bottom: `${tabBarHeight - 10}px`, // タブバーと少し重なり、背景が自然に見える
+        // タブバー非表示時は下部余白を削除
+        bottom: showTabBar ? `${tabBarHeight - 10}px` : '0',
       }
     }
     // ホームタブも特殊（余白なし）
@@ -94,7 +97,8 @@ export function AppLayout({
         top: '38px',
         left: '0',
         right: '0',
-        bottom: `${tabBarHeight + 30}px`,
+        // タブバー非表示時は下部余白を削除（編集モード等）
+        bottom: showTabBar ? `${tabBarHeight + 30}px` : '0',
       }
     }
     // ガチャタブ（ヘッダー下から開始、タブバーの後ろまで背景を伸ばす）
@@ -112,7 +116,26 @@ export function AppLayout({
         top: `${topBarHeight}px`,
         left: '16px',
         right: '16px',
-        bottom: `${tabBarHeight + 5}px`, // タブバーに近づける
+        // タブバー非表示時は下部余白を削除
+        bottom: showTabBar ? `${tabBarHeight + 5}px` : '0',
+      }
+    }
+    // タイムラインタブ（タブバーのぎりぎり上まで表示を広げる）
+    if (activeTab === 'timeline') {
+      return {
+        top: `${topBarHeight}px`,
+        left: '0',
+        right: '0',
+        bottom: showTabBar ? `${tabBarHeight}px` : '0',
+      }
+    }
+    // 交換タブ（タブバーのぎりぎり上まで表示を広げる）
+    if (activeTab === 'trade') {
+      return {
+        top: `${topBarHeight}px`,
+        left: '16px',
+        right: '16px',
+        bottom: showTabBar ? `${tabBarHeight}px` : '0',
       }
     }
     // その他のタブ
@@ -120,7 +143,7 @@ export function AppLayout({
       top: `${topBarHeight}px`,
       left: '16px',
       right: '16px',
-      bottom: `${tabBarHeight + 30}px`,
+      bottom: showTabBar ? `${tabBarHeight + 30}px` : '0',
     }
   }
 
@@ -171,7 +194,7 @@ export function AppLayout({
         style={{
           position: 'absolute',
           ...contentStyles,
-          overflowY: activeTab === 'home' ? 'hidden' : 'auto',
+          overflowY: activeTab === 'home' || activeTab === 'collection' ? 'hidden' : 'auto',
           overflowX: 'hidden',
           touchAction: activeTab === 'home' ? 'pan-x' : 'auto',
           WebkitOverflowScrolling: 'touch',
@@ -192,7 +215,7 @@ export function AppLayout({
             zIndex: 50,
           }}
         >
-          <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
+          <TabBar activeTab={activeTab} onTabChange={handleTabChange} badgeCounts={tabBadgeCounts} />
         </div>
       )}
     </div>
