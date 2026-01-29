@@ -1,0 +1,117 @@
+# ポケシル (Pokeseal) - Codemagic CI/CD 設定
+#
+# 初心者向けシンプル設定（iOS TestFlight テスト用）
+#
+# 事前準備:
+# 1. Apple Developer Program に登録（¥12,980/年）
+# 2. App Store Connect でアプリ作成
+# 3. App Store Connect API キーを Codemagic に登録
+# 4. Codemagic で自動コード署名を有効化
+
+workflows:
+  # ============================================
+  # iOS TestFlight ビルド（テスト用）
+  # ============================================
+  ios-testflight:
+    name: iOS TestFlight Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+
+    # 自動ビルドのトリガー設定（必要に応じてコメント解除）
+    # triggering:
+    #   events:
+    #     - push
+    #   branch_patterns:
+    #     - pattern: 'main'
+    #       include: true
+
+    integrations:
+      # Codemagic ダッシュボードで設定した App Store Connect 連携を使用
+      app_store_connect: Pokeseal API Key  # ← Step 3-2 で設定した名前に合わせる
+
+    environment:
+      # ビルド環境
+      node: 20.11.0
+      xcode: 15.4
+      cocoapods: 1.15.2
+
+      # 自動コード署名（Codemagic が証明書を自動管理）
+      ios_signing:
+        distribution_type: app_store  # TestFlight 配信用
+        bundle_identifier: com.pokeseal.app
+
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        APP_STORE_APP_ID: "YOUR_APP_ID"  # App Store Connect のアプリIDに置き換え
+
+    # キャッシュ（ビルド高速化）
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $CM_BUILD_DIR/node_modules
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      # 1. Node.js 依存関係インストール
+      - name: Install npm dependencies
+        script: |
+          npm ci
+
+      # 2. Next.js ビルド（静的エクスポート）
+      - name: Build Next.js
+        script: |
+          npm run build
+
+      # 3. Capacitor 同期（iOS）
+      - name: Sync Capacitor iOS
+        script: |
+          npx cap sync ios
+
+      # 4. CocoaPods インストール
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install
+
+      # 5. Xcode プロジェクトに署名設定を適用
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+
+      # 6. ビルド番号を自動インクリメント
+      - name: Increment build number
+        script: |
+          cd ios/App
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" || echo "0")
+          agvtool new-version -all $((LATEST_BUILD_NUMBER + 1))
+
+      # 7. IPA ファイルをビルド
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    # ビルド成果物
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    # TestFlight に自動アップロード
+    publishing:
+      app_store_connect:
+        auth: integration  # 上で設定した integrations を使用
+        submit_to_testflight: true
+        submit_to_app_store: false  # App Store には出さない（テストのみ）
+
+        # TestFlight のベータグループに自動配信（オプション）
+        # beta_groups:
+        #   - Internal Testers
+
+      # ビルド結果をメールで通知
+      email:
+        recipients:
+          - YOUR_EMAIL@example.com  # ← あなたのメールアドレスに置き換え
+        notify:
+          success: true
+          failure: true
